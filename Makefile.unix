@@ -1,0 +1,30 @@
+SYS:=$(shell uname)
+
+CXX:=g++
+CXXFLAGS:=-W -Wall -Werror -g -O2
+IFLAGS:=-Iinclude
+OBJEXT:=.o
+EXEEXT:=
+TARGET:=-o 
+EXETARGET:=-o 
+
+nativefile=$(1)
+
+define checkdir
+@mkdir -p $(dir $@)
+endef
+
+LIBS:=-lpthread
+
+ifeq ($(SYS),SunOS)
+LIBS:=$(LIBS) -lsocket -lnsl
+endif
+
+ifneq ($(SYS),Darwin)
+LIBS:=$(LIBS) -lrt
+endif
+
+define buildexe
+$(CXX) $(EXETARGET)$@ $(CXXFLAGS) $(CXXFLAGS-$(subst $(PREFIX),,$(basename $@))) $(IFLAGS) $(filter %$(OBJEXT),$^) $(foreach file,$(LIBS-$(patsubst $(PREFIX)%$(EXEEXT),%,$@)),$(LIBFILE-$(file))) $(LIBS)
+endef
+
