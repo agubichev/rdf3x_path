@@ -1,0 +1,3 @@
+src_infra_util:=		\
+	infra/util/Hash.cpp
+

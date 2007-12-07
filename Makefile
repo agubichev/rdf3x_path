@@ -13,12 +13,13 @@ all: $(PREFIX)buildrdfstore$(EXEEXT)
 
 #############################################################################
 # Collect all sources
+include infra/LocalMakefile
 include makeutil/LocalMakefile
 
-exesources:=tools/buildrdfstore/buildrdfstore.cpp
+exesources:=tools/buildrdfstore/buildrdfstore.cpp infra/util/Hash.cpp
 exeobjs:=$(addprefix $(PREFIX),$(exesources:.cpp=$(OBJEXT)))
 
-source:=$(exesources)
+source:=$(exesources) $(src_infra)
 
 #############################################################################
 # Dependencies
