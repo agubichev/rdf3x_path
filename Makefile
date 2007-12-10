@@ -15,11 +15,9 @@ all: $(PREFIX)buildrdfstore$(EXEEXT)
 # Collect all sources
 include infra/LocalMakefile
 include makeutil/LocalMakefile
+include tools/LocalMakefile
 
-exesources:=tools/buildrdfstore/buildrdfstore.cpp infra/util/Hash.cpp
-exeobjs:=$(addprefix $(PREFIX),$(exesources:.cpp=$(OBJEXT)))
-
-source:=$(exesources) $(src_infra)
+source:=$(src_infra) $(src_tools)
 
 #############################################################################
 # Dependencies
@@ -44,5 +42,3 @@ $(PREFIX)%$(OBJEXT): %.cpp $(PREFIX)makeutil/getdep$(EXEEXT)
 #############################################################################
 # Executable
 
-$(PREFIX)buildrdfstore$(EXEEXT): $(exeobjs)
-	$(buildexe)

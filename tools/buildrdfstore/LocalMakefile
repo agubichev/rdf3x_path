@@ -1,0 +1,6 @@
+src_tools_buildrdfstore:=			\
+	tools/buildrdfstore/buildrdfstore.cpp
+
+$(PREFIX)buildrdfstore$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_buildrdfstore:.cpp=$(OBJEXT))) $(PREFIX)infra/util/Hash$(OBJEXT)
+	$(buildexe)
+
