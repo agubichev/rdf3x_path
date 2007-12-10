@@ -1,0 +1,3 @@
+src_infra_osdep:=				\
+	infra/osdep/MemoryMappedFile.cpp
+

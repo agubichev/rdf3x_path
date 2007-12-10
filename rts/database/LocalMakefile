@@ -1,0 +1,3 @@
+src_rts_database:=	\
+	rts/database/Database.cpp
+

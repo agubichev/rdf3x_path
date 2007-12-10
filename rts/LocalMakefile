@@ -1,0 +1,5 @@
+include rts/buffer/LocalMakefile
+include rts/database/LocalMakefile
+
+src_rts:=$(src_rts_buffer) $(src_rts_database)
+
