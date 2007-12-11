@@ -5,6 +5,20 @@
 //---------------------------------------------------------------------------
 class BufferManager;
 //---------------------------------------------------------------------------
+/// A request to access a buffer page. Used by segments to "return" references.
+struct BufferRequest
+{
+   /// The buffer manager
+   BufferManager& bufferManager;
+   /// The requested page
+   unsigned page;
+   /// Shared access?
+   bool shared;
+
+   /// Constructor
+   BufferRequest(BufferManager& bufferManager,unsigned page,bool shared) : bufferManager(bufferManager),page(page),shared(shared) {}
+};
+//---------------------------------------------------------------------------
 /// A reference to a page in the database buffer.
 /// The page remains accessible during the lifetime of the BufferReference object.
 class BufferReference
@@ -23,7 +37,12 @@ class BufferReference
    public:
    /// Constructor
    BufferReference() : page(0) {}
+   /// Constructor from a request
+   BufferReference(const BufferRequest& request);
    /// Note: Currently there is no destructor as all pages are accessible all the time. This might change!
+
+   /// Remap the reference to a different page
+   BufferReference& operator=(const BufferRequest& request);
 
    /// Access the page
    const void* getPage() const { return page; }

@@ -1,0 +1,4 @@
+src_rts_segment:=				\
+	rts/segment/Segment.cpp			\
+	rts/segment/DictionarySegment.cpp
+
