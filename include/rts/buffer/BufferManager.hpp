@@ -43,6 +43,8 @@ class BufferReference
 
    /// Remap the reference to a different page
    BufferReference& operator=(const BufferRequest& request);
+   /// Reset the reference
+   void reset() { page=0; }
 
    /// Access the page
    const void* getPage() const { return page; }

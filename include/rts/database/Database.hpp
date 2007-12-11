@@ -2,6 +2,7 @@
 #define H_rts_database_Database
 //---------------------------------------------------------------------------
 class BufferManager;
+class FactsSegment;
 class DictionarySegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
@@ -17,13 +18,10 @@ class Database
    private:
    /// The database buffer
    BufferManager* bufferManager;
+   /// The fact segments
+   FactsSegment* facts[6];
    /// The dictionary segment
    DictionarySegment* dictionary;
-
-   /// Begin of the facts tables in all orderings
-   unsigned factStarts[6];
-   /// Root of the fact indices in all orderings
-   unsigned factIndices[6];
 
    Database(const Database&);
    void operator=(const Database&);

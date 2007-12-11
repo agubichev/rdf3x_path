@@ -43,9 +43,6 @@ bool DictionarySegment::lookup(const std::string& text,unsigned& id)
    // Determine the hash value
    unsigned hash=Hash::hash(text);
 
-   if (lookupOnPage(tableStart,text,hash,id))
-      return true;
-
    // Traverse the B-Tree
    BufferReference ref(readShared(indexRoot));
    while (true) {
@@ -70,7 +67,7 @@ bool DictionarySegment::lookup(const std::string& text,unsigned& id)
          if (left==right)
             return false;
       } else {
-         // A leaf node Perform a binary search on the exact value.
+         // A leaf node. Perform a binary search on the exact value.
          unsigned left=0,right=readUint32Aligned(page+8);
          while (left!=right) {
             unsigned middle=(left+right)/2;

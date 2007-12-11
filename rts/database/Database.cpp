@@ -1,11 +1,14 @@
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferManager.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "rts/segment/FactsSegment.hpp"
 //---------------------------------------------------------------------------
 Database::Database()
    : bufferManager(0),dictionary(0)
    // Constructor
 {
+   for (unsigned index=0;index<6;index++)
+      facts[index]=0;
 }
 //---------------------------------------------------------------------------
 Database::~Database()
@@ -32,6 +35,7 @@ bool Database::open(const char* fileName)
       // Check the header
       if ((readUint32(page)==(('R'<<24)|('D'<<16)|('F'<<8)))&&(readUint32(page+4)==1)) {
          // Read the page infos
+         unsigned factStarts[6],factIndices[6];
          for (unsigned index=0;index<6;index++) {
             factStarts[index]=readUint32(page+8+index*8);
             factIndices[index]=readUint32(page+8+index*8+4);
@@ -41,6 +45,8 @@ bool Database::open(const char* fileName)
          unsigned stringIndex=readUint32(page+64);
 
          // Construct the segments
+         for (unsigned index=0;index<6;index++)
+            facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index]);
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
@@ -56,6 +62,10 @@ bool Database::open(const char* fileName)
 void Database::close()
    // Close the current database
 {
+   for (unsigned index=0;index<6;index++) {
+      delete facts[index];
+      facts[index]=0;
+   }
    delete dictionary;
    dictionary=0;
    delete bufferManager;
