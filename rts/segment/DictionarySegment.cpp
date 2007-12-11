@@ -68,7 +68,7 @@ bool DictionarySegment::lookup(const std::string& text,unsigned& id)
             return false;
       } else {
          // A leaf node. Perform a binary search on the exact value.
-         unsigned left=0,right=readUint32Aligned(page+8);
+         unsigned left=0,right=readUint32Aligned(page+4);
          while (left!=right) {
             unsigned middle=(left+right)/2;
             unsigned hashAtMiddle=readLeafHash(page,middle);
