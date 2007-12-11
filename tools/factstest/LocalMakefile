@@ -1,0 +1,6 @@
+src_tools_factstest:=			\
+	tools/factstest/factstest.cpp
+
+$(PREFIX)factstest$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_factstest:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+

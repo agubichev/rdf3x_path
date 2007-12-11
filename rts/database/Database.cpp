@@ -45,8 +45,9 @@ bool Database::open(const char* fileName)
          unsigned stringIndex=readUint32(page+64);
 
          // Construct the segments
-         for (unsigned index=0;index<6;index++)
+         for (unsigned index=0;index<6;index++) {
             facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index]);
+         }
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
@@ -70,6 +71,12 @@ void Database::close()
    dictionary=0;
    delete bufferManager;
    bufferManager=0;
+}
+//---------------------------------------------------------------------------
+FactsSegment& Database::getFacts(DataOrder order)
+   // Get the facts
+{
+   return *(facts[order]);
 }
 //---------------------------------------------------------------------------
 DictionarySegment& Database::getDictionary()

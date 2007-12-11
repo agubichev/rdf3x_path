@@ -16,6 +16,9 @@ class FactsSegment : public Segment
    /// Lookup the first page contains entries >= the start condition
    bool lookup(unsigned start1,unsigned start2,unsigned start3,BufferReference& ref);
 
+   FactsSegment(const FactsSegment&);
+   void operator=(const FactsSegment&);
+
    public:
    /// Constructor
    FactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot);

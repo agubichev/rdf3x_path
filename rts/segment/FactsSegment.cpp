@@ -39,7 +39,7 @@ bool FactsSegment::lookup(unsigned start1,unsigned start2,unsigned start3,Buffer
             unsigned middle1=readInner1(page,middle),middle2=readInner2(page,middle),middle3=readInner3(page,middle);
             if (greater(start1,start2,start3,middle1,middle2,middle3)) {
                left=middle+1;
-            } else if ((!middle)||(greater(start1,start2,start3,readInner1(page,middle-1),readInner2(page,middle-2),readInner3(page,middle-3)))) {
+            } else if ((!middle)||(greater(start1,start2,start3,readInner1(page,middle-1),readInner2(page,middle-1),readInner3(page,middle-1)))) {
                ref=readShared(readInnerPage(page,middle));
                break;
             } else {
@@ -128,6 +128,7 @@ bool FactsSegment::Scan::next()
          if (!nextPage)
             return false;
          current=seg->readShared(nextPage);
+         pos=headerSize;
          continue;
       }
       // First entry on the page?

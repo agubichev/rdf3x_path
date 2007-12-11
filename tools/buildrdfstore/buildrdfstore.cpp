@@ -283,25 +283,25 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
          case 0: // subject,predicate,object
             break;
          case 1: // subject,object,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter)
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).predicate);
             break;
          case 2: // object,predicate,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter)
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).subject);
             break;
          case 3: // object,subject,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter) {
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).subject);
                std::swap((*iter).object,(*iter).predicate);
             }
             break;
          case 4: // predicate,subject,object
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter)
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).subject,(*iter).predicate);
             break;
          case 5: // predicate,object,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter) {
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).subject,(*iter).predicate);
                std::swap((*iter).object,(*iter).predicate);
             }
@@ -319,25 +319,25 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
          case 0: // subject,predicate,object
             break;
          case 1: // subject,object,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter)
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).predicate);
             break;
          case 2: // object,predicate,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter)
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).subject);
             break;
          case 3: // object,subject,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter) {
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).predicate);
                std::swap((*iter).object,(*iter).subject);
             }
             break;
          case 4: // predicate,subject,object
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter)
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).subject,(*iter).predicate);
             break;
          case 5: // predicate,object,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.begin();iter!=limit;++iter) {
+            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).predicate);
                std::swap((*iter).subject,(*iter).predicate);
             }

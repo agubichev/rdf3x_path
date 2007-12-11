@@ -12,7 +12,7 @@ class Database
    /// Supported data orders
    enum DataOrder {
       Order_Subject_Predicate_Object=0,Order_Subject_Object_Predicate,Order_Object_Predicate_Subject,
-      Order_Object_Subject_Predicate,Order_Predicate_Subject_Object,Order_Predicate_Object_Subkect
+      Order_Object_Subject_Predicate,Order_Predicate_Subject_Object,Order_Predicate_Object_Subject
    };
 
    private:
@@ -37,6 +37,8 @@ class Database
    /// Close the current database
    void close();
 
+   /// Get a facts table
+   FactsSegment& getFacts(DataOrder order);
    /// Get the dictionary
    DictionarySegment& getDictionary();
 };
