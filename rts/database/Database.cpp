@@ -1,8 +1,9 @@
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferManager.hpp"
+#include "rts/segment/DictionarySegment.hpp"
 //---------------------------------------------------------------------------
 Database::Database()
-   : bufferManager(0)
+   : bufferManager(0),dictionary(0)
    // Constructor
 {
 }
@@ -29,15 +30,18 @@ bool Database::open(const char* fileName)
       const unsigned char* page=static_cast<const unsigned char*>(directory.getPage());
 
       // Check the header
-      if (readUint32(page)==(('R'<<24)|('D'<<16)|('F'<<8))) {
+      if ((readUint32(page)==(('R'<<24)|('D'<<16)|('F'<<8)))&&(readUint32(page+4)==1)) {
          // Read the page infos
          for (unsigned index=0;index<6;index++) {
-            factStarts[index]=readUint32(page+4+index*8);
-            factIndices[index]=readUint32(page+4+index*8+4);
+            factStarts[index]=readUint32(page+8+index*8);
+            factIndices[index]=readUint32(page+8+index*8+4);
          }
-         stringStart=readUint32(page+52);
-         stringMapping=readUint32(page+56);
-         stringIndex=readUint32(page+50);
+         unsigned stringStart=readUint32(page+56);
+         unsigned stringMapping=readUint32(page+60);
+         unsigned stringIndex=readUint32(page+64);
+
+         // Construct the segments
+         dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
       }
@@ -52,7 +56,15 @@ bool Database::open(const char* fileName)
 void Database::close()
    // Close the current database
 {
+   delete dictionary;
+   dictionary=0;
    delete bufferManager;
    bufferManager=0;
+}
+//---------------------------------------------------------------------------
+DictionarySegment& Database::getDictionary()
+   // Get the dictionary
+{
+   return *dictionary;
 }
 //---------------------------------------------------------------------------

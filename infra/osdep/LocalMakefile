@@ -1,3 +1,4 @@
 src_infra_osdep:=				\
-	infra/osdep/MemoryMappedFile.cpp
+	infra/osdep/MemoryMappedFile.cpp	\
+	infra/osdep/Timestamp.cpp
 

@@ -41,6 +41,16 @@ struct OrderTripple {
    }
 };
 //---------------------------------------------------------------------------
+void writePage(ofstream& out,unsigned page,const void* data)
+   // Write a page to the file
+{
+   if (static_cast<unsigned>(out.tellp())!=(page*pageSize)) {
+      std::cout << "internal error: tried to write page " << page << " (ofs " << (page*pageSize) << ") at position " << out.tellp() << std::endl;
+      throw;
+   }
+   out.write(static_cast<const char*>(data),pageSize);
+}
+//---------------------------------------------------------------------------
 bool readFacts(vector<Tripple>& facts,const char* fileName)
    // Read the facts table
 {
@@ -140,7 +150,7 @@ unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripp
             writeUint32(buffer,page+1);
             for (unsigned index=bufferPos;index<pageSize;index++)
                buffer[index]=0xFF;
-            out.write(reinterpret_cast<char*>(buffer),pageSize);
+            writePage(out,page,buffer);
             Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
             boundaries.push_back(pair<Tripple,unsigned>(t,page));
             ++page;
@@ -185,7 +195,7 @@ unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripp
    writeUint32(buffer,0);
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,page,buffer);
    Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
     boundaries.push_back(pair<Tripple,unsigned>(t,page));
    ++page;
@@ -209,7 +219,7 @@ unsigned packInner(ofstream& out,const vector<pair<Tripple,unsigned> >& data,vec
          writeUint32(buffer+12,0);
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
-         out.write(reinterpret_cast<char*>(buffer),pageSize);
+         writePage(out,page,buffer);
          boundaries.push_back(pair<Tripple,unsigned>((*(iter-1)).first,page));
          ++page;
          bufferPos=headerSize; bufferCount=0;
@@ -228,7 +238,7 @@ unsigned packInner(ofstream& out,const vector<pair<Tripple,unsigned> >& data,vec
    writeUint32(buffer+12,0);
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,page,buffer);
    boundaries.push_back(pair<Tripple,unsigned>(data.back().first,page));
    ++page;
 
@@ -390,7 +400,7 @@ unsigned readAndPackStrings(ofstream& out,Directory& directory,vector<StringEntr
             buffer[index]=0;
          writeUint32(buffer,page+1);
          writeUint32(buffer+4,bufferCount);
-         out.write(reinterpret_cast<char*>(buffer),pageSize);
+         writePage(out,page,buffer);
          ++page;
          bufferPos=headerSize; bufferCount=0;
       }
@@ -403,6 +413,7 @@ unsigned readAndPackStrings(ofstream& out,Directory& directory,vector<StringEntr
       writeUint32(buffer+bufferPos,s.length()); bufferPos+=4;
       for (unsigned index=0;index<s.length();index++)
          buffer[bufferPos++]=s[index];
+      ++bufferCount;
 
       // ...and remember its position
       StringEntry e;
@@ -416,7 +427,7 @@ unsigned readAndPackStrings(ofstream& out,Directory& directory,vector<StringEntr
       buffer[index]=0;
    writeUint32(buffer,0);
    writeUint32(buffer+4,bufferCount);
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,page,buffer);
    ++page;
 
    return page;
@@ -439,7 +450,7 @@ unsigned writeStringMapping(ofstream& out,Directory& directory,vector<StringEntr
    for (vector<StringEntry>::const_iterator iter=strings.begin(),limit=strings.end();iter!=limit;++iter) {
       // Is the page full?
       if (bufferPos==pageSize) {
-         out.write(reinterpret_cast<char*>(buffer),pageSize);
+         writePage(out,page,buffer);
          ++page;
          bufferPos=0;
       }
@@ -459,7 +470,7 @@ unsigned writeStringMapping(ofstream& out,Directory& directory,vector<StringEntr
    // Write the last page
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,page,buffer);
    ++page;
 
    return page;
@@ -491,7 +502,7 @@ unsigned writeStringLeaves(ofstream& out,const vector<StringEntry>& strings,vect
             buffer[index]=0;
          writeUint32(buffer,page+1);
          writeUint32(buffer+4,bufferCount);
-         out.write(reinterpret_cast<char*>(buffer),pageSize);
+         writePage(out,page,buffer);
          boundaries.push_back(pair<unsigned,unsigned>((*(iter-1)).hash,page));
          ++page;
          bufferPos=headerSize; bufferCount=0;
@@ -509,7 +520,7 @@ unsigned writeStringLeaves(ofstream& out,const vector<StringEntry>& strings,vect
       buffer[index]=0;
    writeUint32(buffer,0);
    writeUint32(buffer+4,bufferCount);
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,page,buffer);
    boundaries.push_back(pair<unsigned,unsigned>(strings.back().hash,page));
    ++page;
 
@@ -532,7 +543,7 @@ unsigned writeStringInner(ofstream& out,const vector<pair<unsigned,unsigned> >& 
          writeUint32(buffer+12,0);
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
-         out.write(reinterpret_cast<char*>(buffer),pageSize);
+         writePage(out,page,buffer);
          boundaries.push_back(pair<unsigned,unsigned>((*(iter-1)).first,page));
          ++page;
          bufferPos=headerSize; bufferCount=0;
@@ -549,7 +560,7 @@ unsigned writeStringInner(ofstream& out,const vector<pair<unsigned,unsigned> >& 
    writeUint32(buffer+12,0);
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,page,buffer);
    boundaries.push_back(pair<unsigned,unsigned>(data.back().first,page));
    ++page;
 
@@ -564,7 +575,7 @@ unsigned writeStringIndex(ofstream& out,Directory& directory,vector<StringEntry>
 
    // Write the leaf nodes
    vector<pair<unsigned,unsigned> > boundaries;
-   writeStringLeaves(out,strings,boundaries,page);
+   page=writeStringLeaves(out,strings,boundaries,page);
 
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
@@ -610,7 +621,7 @@ void writeDirectory(ofstream& out,Directory& directory)
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    out.seekp(0,ios_base::beg);
-   out.write(reinterpret_cast<char*>(buffer),pageSize);
+   writePage(out,0,buffer);
 }
 //---------------------------------------------------------------------------
 }

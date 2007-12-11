@@ -2,6 +2,7 @@
 #define H_rts_database_Database
 //---------------------------------------------------------------------------
 class BufferManager;
+class DictionarySegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
 class Database
@@ -16,17 +17,13 @@ class Database
    private:
    /// The database buffer
    BufferManager* bufferManager;
+   /// The dictionary segment
+   DictionarySegment* dictionary;
 
    /// Begin of the facts tables in all orderings
    unsigned factStarts[6];
    /// Root of the fact indices in all orderings
    unsigned factIndices[6];
-   /// Begin of the string table
-   unsigned stringStart;
-   /// Begin of the string mapping
-   unsigned stringMapping;
-   /// Root of the string index
-   unsigned stringIndex;
 
    Database(const Database&);
    void operator=(const Database&);
@@ -41,6 +38,9 @@ class Database
    bool open(const char* fileName);
    /// Close the current database
    void close();
+
+   /// Get the dictionary
+   DictionarySegment& getDictionary();
 };
 //---------------------------------------------------------------------------
 #endif

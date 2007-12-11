@@ -8,14 +8,22 @@ static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { 
 static inline unsigned readLeafHash(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+8+8*slot); }
 static inline unsigned readLeafPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+8+8*slot+4); }
 //---------------------------------------------------------------------------
+DictionarySegment::DictionarySegment(BufferManager& bufferManager,unsigned tableStart,unsigned mappingStart,unsigned indexRoot)
+   : Segment(bufferManager),tableStart(tableStart),mappingStart(mappingStart),indexRoot(indexRoot)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
 bool DictionarySegment::lookupOnPage(unsigned pageNo,const std::string& text,unsigned hash,unsigned& id)
    // Lookup an id for a given string on a certain page in the raw string table
 {
    BufferReference ref(readShared(pageNo));
    const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
-   unsigned count=readUint32Aligned(page+4),pos=8;
+   unsigned count=1000+readUint32Aligned(page+4),pos=8;
 
    for (unsigned index=0;index<count;index++) {
+      if (pos+12>BufferManager::pageSize)
+         break;
       unsigned len=readUint32(page+pos+8);
       if ((readUint32(page+pos+4)==hash)&&(len==text.length())) {
          // Check if the string is really identical
@@ -34,6 +42,9 @@ bool DictionarySegment::lookup(const std::string& text,unsigned& id)
 {
    // Determine the hash value
    unsigned hash=Hash::hash(text);
+
+   if (lookupOnPage(tableStart,text,hash,id))
+      return true;
 
    // Traverse the B-Tree
    BufferReference ref(readShared(indexRoot));

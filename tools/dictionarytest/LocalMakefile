@@ -1,0 +1,6 @@
+src_tools_dictionarytest:=			\
+	tools/dictionarytest/dictionarytest.cpp
+
+$(PREFIX)dictionarytest$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_dictionarytest:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+
