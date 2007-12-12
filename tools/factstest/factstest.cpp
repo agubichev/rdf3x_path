@@ -35,9 +35,15 @@ int main(int argc,char* argv[])
    Timestamp t1;
    FactsSegment& facts=db.getFacts(Database::Order_Predicate_Subject_Object);
    FactsSegment::Scan scan;
-   unsigned results=0;
+   unsigned results=0,groups=0,currentGroup=0;
+   std::string groupName;
    if (scan.first(facts,id,0,0)) {
       while (scan.getValue1()==id) {
+         if ((!groups)||(scan.getValue2()!=currentGroup)) {
+            currentGroup=scan.getValue2();
+            dict.lookupById(currentGroup,groupName);
+            groups++;
+         }
          ++results;
          if (!scan.next())
             break;
@@ -46,7 +52,7 @@ int main(int argc,char* argv[])
    Timestamp t2;
 
    // Timing
-   std::cout << "Got " << results << " matching facts" << std::endl
+   std::cout << "Got " << results << " matching facts in " << groups << " groups" << std::endl
              << "Duration: " << (t2-t1) << std::endl;
 }
 //---------------------------------------------------------------------------
