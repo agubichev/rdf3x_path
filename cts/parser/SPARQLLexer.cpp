@@ -42,6 +42,29 @@ SPARQLLexer::Token SPARQLLexer::getNext()
             continue;
          // Simple tokens
          case ':': return Colon;
+         case ';': return Semicolon;
+         case ',': return Comma;
+         case '.': return Dot;
+         case '*': return Star;
+         case '_': return Underscore;
+         case '{': return LCurly;
+         case '}': return RCurly;
+         // Brackets
+         case '[':
+            // Skip whitespaces
+            while (pos!=input.end()) {
+               switch (*pos) {
+                  case ' ': case '\t': case '\n': case '\r': case '\f': ++pos; continue;
+               }
+               break;
+            }
+            // Check for a closing ]
+            if ((pos!=input.end())&&((*pos)==']')) {
+               ++pos;
+               return Anon;
+            }
+            return LBracket;
+         case ']': return RBracket;
          // IRI Ref
          case '<':
             tokenStart=pos;

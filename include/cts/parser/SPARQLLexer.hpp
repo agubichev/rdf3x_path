@@ -8,7 +8,7 @@ class SPARQLLexer
 {
    public:
    /// Possible tokens
-   enum Token { None, Error, Eof, IRI, String, Variable, Identifier, Colon };
+   enum Token { None, Error, Eof, IRI, String, Variable, Identifier, Colon, Semicolon, Comma, Dot, Star, Underscore, LCurly, RCurly, LBracket, RBracket, Anon };
 
    private:
    /// The input
