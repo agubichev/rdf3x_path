@@ -1,6 +1,7 @@
 include rts/buffer/LocalMakefile
 include rts/database/LocalMakefile
+include rts/operator/LocalMakefile
 include rts/segment/LocalMakefile
 
-src_rts:=$(src_rts_buffer) $(src_rts_database) $(src_rts_segment)
+src_rts:=$(src_rts_buffer) $(src_rts_database) $(src_rts_operator) $(src_rts_segment)
 

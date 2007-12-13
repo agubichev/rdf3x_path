@@ -1,0 +1,4 @@
+src_rts_operator:=			\
+	rts/operator/Operator.cpp	\
+	rts/operator/IndexScan.cpp
+
