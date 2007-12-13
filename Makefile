@@ -14,12 +14,13 @@ all: $(PREFIX)buildrdfstore$(EXEEXT)
 #############################################################################
 # Collect all sources
 
+include cts/LocalMakefile
 include infra/LocalMakefile
 include makeutil/LocalMakefile
 include rts/LocalMakefile
 include tools/LocalMakefile
 
-source:=$(src_infra) $(src_rts) $(src_tools)
+source:=$(src_cts) $(src_infra) $(src_rts) $(src_tools)
 
 #############################################################################
 # Dependencies

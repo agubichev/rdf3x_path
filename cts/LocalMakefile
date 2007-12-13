@@ -1,0 +1,4 @@
+include cts/parser/LocalMakefile
+
+src_cts:=$(src_cts_parser)
+
