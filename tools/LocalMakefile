@@ -1,8 +1,9 @@
 include tools/buildrdfstore/LocalMakefile
+include tools/evalsparql/LocalMakefile
 include tools/dictionarytest/LocalMakefile
 include tools/dumpredland/LocalMakefile
 include tools/dumpyago/LocalMakefile
 include tools/factstest/LocalMakefile
 
-src_tools:=$(src_tools_buildrdfstore) $(src_tools_dictionarytest) $(src_tools_dumpredland) $(src_tools_dumpyago) $(src_tools_factstest)
+src_tools:=$(src_tools_buildrdfstore) $(src_tools_evalsparql) $(src_tools_dictionarytest) $(src_tools_dumpredland) $(src_tools_dumpyago) $(src_tools_factstest)
 

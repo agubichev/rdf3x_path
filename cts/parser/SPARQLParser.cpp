@@ -96,6 +96,7 @@ void SPARQLParser::parseProjection()
       } else {
          if (first)
             throw ParserException("projection required after select");
+         lexer.unget(token);
          break;
       }
       first=false;
@@ -255,7 +256,7 @@ void SPARQLParser::parseGroupGraphPattern()
 
       if (token==SPARQLLexer::LCurly) {
          parseGroupGraphPattern();
-      } else if ((token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)) {
+      } else if ((token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
          lexer.unget(token);
          parseGraphPattern();
       } else if (token==SPARQLLexer::RCurly) {

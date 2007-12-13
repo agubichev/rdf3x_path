@@ -48,6 +48,13 @@ class QueryGraph
 
    /// Add an entry to the output projection
    void addProjection(unsigned id) { projection.push_back(id); }
+
+   /// Iterator over the nodes
+   typedef std::vector<Node>::const_iterator nodes_iterator;
+   /// Iterator over the nodes
+   nodes_iterator nodesBegin() const { return nodes.begin(); }
+   /// Iterator over the nodes
+   nodes_iterator nodesEnd() const { return nodes.end(); }
 };
 //---------------------------------------------------------------------------
 #endif
