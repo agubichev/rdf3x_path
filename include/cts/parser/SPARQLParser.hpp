@@ -88,6 +88,20 @@ class SPARQLParser
 
    /// Parse the input. Throws an exception in the case of an error
    void parse();
+
+   /// Iterator over the patterns
+   typedef std::vector<Pattern>::const_iterator pattern_iterator;
+   /// Iterator over the patterns
+   pattern_iterator patternsBegin() const { return patterns.begin(); }
+   /// Iterator over the patterns
+   pattern_iterator patternsEnd() const { return patterns.end(); }
+
+   /// Iterator over the projection clause
+   typedef std::vector<unsigned>::const_iterator projection_iterator;
+   /// Iterator over the projection
+   projection_iterator projectionBegin() const { return projection.begin(); }
+   /// Iterator over the projection
+   projection_iterator projectionEnd() const { return projection.end(); }
 };
 //---------------------------------------------------------------------------
 #endif

@@ -192,14 +192,21 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(std::map<std::string,uns
       result.value=lexer.getTokenValue();
    } else if (token==SPARQLLexer::Identifier) {
       std::string prefix=lexer.getTokenValue();
-      if (lexer.getNext()!=SPARQLLexer::Colon)
-         throw ParserException("':' expected after '"+prefix+"'");
-      if (!prefixes.count(prefix))
-         throw ParserException("unknown prefix '"+prefix+"'");
-      if (lexer.getNext()!=SPARQLLexer::Identifier)
-         throw ParserException("identifier expected after ':'");
-      result.type=Element::IRI;
-      result.value=prefixes[prefix]+lexer.getTokenValue();
+      // Handle the keyword 'a'
+      if (prefix=="a") {
+         result.type=Element::IRI;
+         result.value="http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+      } else {
+         // prefix:suffix
+         if (lexer.getNext()!=SPARQLLexer::Colon)
+            throw ParserException("':' expected after '"+prefix+"'");
+         if (!prefixes.count(prefix))
+            throw ParserException("unknown prefix '"+prefix+"'");
+         if (lexer.getNext()!=SPARQLLexer::Identifier)
+            throw ParserException("identifier expected after ':'");
+         result.type=Element::IRI;
+         result.value=prefixes[prefix]+lexer.getTokenValue();
+      }
    } else {
       throw ParserException("invalid pattern element");
    }

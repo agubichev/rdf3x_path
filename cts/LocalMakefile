@@ -1,4 +1,6 @@
+include cts/infra/LocalMakefile
 include cts/parser/LocalMakefile
+include cts/semana/LocalMakefile
 
-src_cts:=$(src_cts_parser)
+src_cts:=$(src_cts_infra) $(src_cts_parser) $(src_cts_semana)
 
