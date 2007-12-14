@@ -169,15 +169,11 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
 static unsigned mapString(map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& s)
    // Map a string to an id
 {
-   if (stringMap.count(s)) {
-      return stringMap[s];
-   } else {
-      unsigned hash=Hash::hash(s);
-      if (hashMap.count(hash))
-         return hashMap[hash];
-      cout << "Bug! '" << s << "' not found in string table!" << endl;
-      return 0;
-   }
+   unsigned hash=Hash::hash(s);
+   unsigned id=hashMap[hash];
+   if (id==0)
+      return stringMap[s]; else
+      return id;
 }
 //---------------------------------------------------------------------------
 static bool dumpFile(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName)
