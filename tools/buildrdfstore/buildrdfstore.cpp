@@ -149,7 +149,7 @@ unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripp
          if (bufferPos>headerSize) {
             writeUint32(buffer,page+1);
             for (unsigned index=bufferPos;index<pageSize;index++)
-               buffer[index]=0xFF;
+               buffer[index]=0;
             writePage(out,page,buffer);
             Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
             boundaries.push_back(pair<Tripple,unsigned>(t,page));
