@@ -1,8 +1,12 @@
+#include "cts/codegen/CodeGen.hpp"
 #include "cts/infra/QueryGraph.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
 #include "cts/parser/SPARQLParser.hpp"
 #include "cts/semana/SemanticAnalysis.hpp"
+#include "infra/osdep/Timestamp.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/runtime/Runtime.hpp"
+#include "rts/operator/Operator.hpp"
 #include <iostream>
 #include <fstream>
 //---------------------------------------------------------------------------
@@ -21,7 +25,7 @@ static std::string readInput(std::istream& in)
    return result;
 }
 //---------------------------------------------------------------------------
-static void evalQuery(Database& db,const std::string& query)
+static void evalQuery(Database& db,const std::string& query,bool silent)
    // Evaluate a query
 {
    QueryGraph queryGraph;
@@ -48,15 +52,35 @@ static void evalQuery(Database& db,const std::string& query)
          return;
       }
    }
+
+   // Build a physical plan
+   Runtime runtime(db);
+   Operator* plan=CodeGen::translate(runtime,queryGraph,silent);
+
+   // plan->print();
+
+   // And execute it
+   Timestamp start;
+   if (plan->first()) {
+      while (plan->next());
+   }
+   Timestamp stop;
+   std::cout << "Execution time: " << (stop-start) << " ms" << std::endl;
+
+
+   delete plan;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    // Check the arguments
    if (argc<2) {
-      std::cout << "usage: " << argv[0] << " <database> [sparqlfile]" << std::endl;
+      std::cout << "usage: " << argv[0] << " <database> [sparqlfile] [--silent]" << std::endl;
       return 1;
    }
+   bool silent=false;
+   if ((argc>3)&&(std::string(argv[3])=="--silent"))
+      silent=true;
 
    // Open the database
    Database db;
@@ -79,6 +103,6 @@ int main(int argc,char* argv[])
    }
 
    // And evaluate it
-   evalQuery(db,query);
+   evalQuery(db,query,silent);
 }
 //---------------------------------------------------------------------------

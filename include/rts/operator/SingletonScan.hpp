@@ -1,20 +1,16 @@
-#ifndef H_rts_operator_NestedLoopJoin
-#define H_rts_operator_NestedLoopJoin
+#ifndef H_rts_operator_SingletonScan
+#define H_rts_operator_SingletonScan
 //---------------------------------------------------------------------------
 #include "rts/operator/Operator.hpp"
 //---------------------------------------------------------------------------
-/// A nested loop join
-class NestedLoopJoin : public Operator
+/// A scan over a single empty tuple
+class SingletonScan : public Operator
 {
-   private:
-   /// The input
-   Operator* left,*right;
-
    public:
    /// Constructor
-   NestedLoopJoin(Operator* left,Operator* right);
+   SingletonScan();
    /// Destructor
-   ~NestedLoopJoin();
+   ~SingletonScan();
 
    /// Produce the first tuple
    bool first();

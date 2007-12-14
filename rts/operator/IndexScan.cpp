@@ -154,9 +154,13 @@ void IndexScan::print(unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<IndexScan " << order << std::endl;
-   indent(level+1); std::cout << "@" << static_cast<void*>(value1) << (bound1?"*":"")
-                              << " @" << static_cast<void*>(value2) << (bound2?"*":"")
-                              << "@" << static_cast<void*>(value3) << (bound3?"*":"") << std::endl;
+   indent(level+1);
+   printRegister(value1); if (bound1) std::cout << "*";
+   std::cout << " ";
+   printRegister(value2); if (bound2) std::cout << "*";
+   std::cout << " ";
+   printRegister(value2); if (bound2) std::cout << "*";
+   std::cout << std::endl;
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
