@@ -4,8 +4,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <set>
-#include <deque>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -78,8 +76,10 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
    string s;
    unsigned line=0;
    unsigned nextId=stringMap.size();
-   set<string> recentlySeen;
-   deque<string> recentlySeenList;
+   static const unsigned recentlySeenSize = 1<<17;
+   vector<string> recentlySeen;
+   if (firstPass)
+      recentlySeen.resize(recentlySeenSize);
    while (true) {
       getline(in,s);
       if (!in.good()) break;
@@ -125,20 +125,14 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
          for (unsigned index=0;index<2;index++) {
             const string& s=index?object:subject;
             unsigned hash=Hash::hash(s);
+            unsigned slot=hash%recentlySeenSize;
             if (hashMap.count(hash)) {
-               if (!recentlySeen.count(s))
+               if (recentlySeen[slot]!=s)
                   hashMap[hash]=0;
             } else {
                hashMap[hash]=1;
             }
-            if (!recentlySeen.count(s)) {
-               recentlySeen.insert(s);
-               recentlySeenList.push_back(s);
-               if (recentlySeenList.size()>100000) {
-                  recentlySeen.erase(recentlySeenList.front());
-                  recentlySeenList.pop_front();
-               }
-            }
+            recentlySeen[slot]=s;
          }
       } else {
          for (unsigned index=0;index<2;index++) {
@@ -160,12 +154,12 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
 
    // Remember the collisisons
    if (firstPass) {
-      set<unsigned> collisions;
+      vector<unsigned> collisions;
       for (map<unsigned,unsigned>::const_iterator iter=hashMap.begin(),limit=hashMap.end();iter!=limit;++iter)
          if (!(*iter).second)
-            collisions.insert((*iter).first);
+            collisions.push_back((*iter).first);
       hashMap.clear();
-      for (set<unsigned>::const_iterator iter=collisions.begin(),limit=collisions.end();iter!=limit;++iter)
+      for (vector<unsigned>::const_iterator iter=collisions.begin(),limit=collisions.end();iter!=limit;++iter)
          hashMap[*iter]=0;
    }
 
