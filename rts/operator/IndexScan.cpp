@@ -159,7 +159,7 @@ void IndexScan::print(unsigned level)
    std::cout << " ";
    printRegister(value2); if (bound2) std::cout << "*";
    std::cout << " ";
-   printRegister(value2); if (bound2) std::cout << "*";
+   printRegister(value3); if (bound3) std::cout << "*";
    std::cout << std::endl;
    indent(level); std::cout << ">" << std::endl;
 }

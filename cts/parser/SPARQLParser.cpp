@@ -137,9 +137,11 @@ SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned
       if (token==SPARQLLexer::Semicolon) {
          predicate=parsePatternElement(localVars);
          object=parsePatternElement(localVars);
+         patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Comma) {
          object=parsePatternElement(localVars);
+         patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Dot) {
          return subject;
@@ -231,9 +233,11 @@ void SPARQLParser::parseGraphPattern()
       if (token==SPARQLLexer::Semicolon) {
          predicate=parsePatternElement(localVars);
          object=parsePatternElement(localVars);
+         patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Comma) {
          object=parsePatternElement(localVars);
+         patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Dot) {
          return;

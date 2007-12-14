@@ -50,7 +50,8 @@ bool ResultsPrinter::first()
          for (std::vector<unsigned>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2) {
             if (first) first=false; else std::cout << ' ';
             if (~(*iter2))
-               std::cout << constants[*iter2];
+               std::cout << constants[*iter2]; else
+               std::cout << "NULL";
          }
          std::cout << std::endl;
       }
