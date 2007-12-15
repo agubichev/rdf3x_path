@@ -18,6 +18,10 @@ struct Directory
    unsigned factStarts[6];
    /// Root of the fact indices in all orderings
    unsigned factIndices[6];
+   /// Begin of the aggregated facts tables in all orderings
+   unsigned aggregatedFactStarts[6];
+   /// Root of the aggregatedfact indices in all orderings
+   unsigned aggregatedFactIndices[6];
    /// Begin of the string table
    unsigned stringStart;
    /// Begin of the string mapping
@@ -113,7 +117,7 @@ unsigned writeDelta(unsigned char* buffer,unsigned ofs,unsigned value)
 }
 //---------------------------------------------------------------------------
 unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripple,unsigned> >& boundaries,unsigned page)
-   // Pack the facts int leaves using prefix compression
+   // Pack the facts into leaves using prefix compression
 {
    const unsigned headerSize = 4; // Next pointer
    unsigned char buffer[pageSize];
@@ -271,6 +275,155 @@ unsigned packFacts(ofstream& out,Directory& directory,unsigned ordering,const ve
    return page;
 }
 //---------------------------------------------------------------------------
+unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<Tripple>& boundaries,unsigned page)
+   // Pack the aggregated facts into leaves using prefix compression
+{
+   const unsigned headerSize = 4; // Next pointer
+   unsigned char buffer[pageSize];
+   unsigned bufferPos=headerSize;
+   unsigned lastSubject=0,lastPredicate=0;
+
+   for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;) {
+      // Access the current tripple
+      unsigned subject=(*iter).subject,predicate=(*iter).predicate;
+      unsigned object=(*iter).object,count=1;
+      for (++iter;iter!=limit;++iter) {
+         if (((*iter).subject!=subject)||((*iter).predicate!=predicate))
+            break;
+         if ((*iter).object==object)
+            continue;
+         count++;
+      }
+
+      // Try to pack it on the current page
+      unsigned len;
+      if (subject==lastSubject) {
+         if ((count<=5)&&((predicate-lastPredicate)<32))
+            len=1; else
+            len=1+bytes(predicate-lastPredicate)+bytes(count);
+      } else {
+         len=1+bytes(subject-lastSubject)+bytes(predicate)+bytes(count);
+      }
+
+      // Tuple too big or first element on the page?
+      if ((bufferPos==headerSize)||(bufferPos+len>pageSize)) {
+         // Write the partial page
+         if (bufferPos>headerSize) {
+            writeUint32(buffer,page+1);
+            for (unsigned index=bufferPos;index<pageSize;index++)
+               buffer[index]=0;
+            writePage(out,page,buffer);
+            Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=page;
+            boundaries.push_back(t);
+            ++page;
+         }
+         // Write the first element fully
+         bufferPos=headerSize;
+         writeUint32(buffer+bufferPos,subject); bufferPos+=4;
+         writeUint32(buffer+bufferPos,predicate); bufferPos+=4;
+         writeUint32(buffer+bufferPos,count); bufferPos+=4;
+      } else {
+         // No, pack them
+         if (subject==lastSubject) {
+            if ((count<=5)&&((predicate-lastPredicate)<32)) {
+               buffer[bufferPos]=((count-1)<<5)|(predicate-lastPredicate);
+            } else {
+               buffer[bufferPos++]=0x80|((bytes(predicate-lastPredicate)-1)<<2)|(bytes(count)-1);
+               bufferPos=writeDelta(buffer,bufferPos,predicate-lastPredicate);
+               bufferPos=writeDelta(buffer,bufferPos,count);
+            }
+         } else {
+            buffer[bufferPos++]=0x80|(bytes(subject-lastSubject)<<4)|((bytes(predicate-lastPredicate)-1)<<2)|(bytes(count)-1);
+            bufferPos=writeDelta(buffer,bufferPos,subject-lastSubject);
+            bufferPos=writeDelta(buffer,bufferPos,predicate);
+            bufferPos=writeDelta(buffer,bufferPos,count);
+         }
+      }
+
+      // Update the values
+      lastSubject=subject; lastPredicate=predicate;
+   }
+   // Flush the last page
+   writeUint32(buffer,0);
+   for (unsigned index=bufferPos;index<pageSize;index++)
+      buffer[index]=0;
+   writePage(out,page,buffer);
+   Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=page;
+    boundaries.push_back(t);
+   ++page;
+
+   return page;
+}
+//---------------------------------------------------------------------------
+unsigned packAggregatedInner(ofstream& out,const vector<Tripple>& data,vector<Tripple>& boundaries,unsigned page)
+   // Create aggregated inner nodes
+{
+   const unsigned headerSize = 16; // marker+next+count+padding
+   unsigned char buffer[pageSize];
+   unsigned bufferPos=headerSize,bufferCount=0;
+
+   for (vector<Tripple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+      // Do we have to start a new page?
+      if ((bufferPos+12)>pageSize) {
+         writeUint32(buffer,0xFFFFFFFF);
+         writeUint32(buffer+4,page+1);
+         writeUint32(buffer+8,bufferCount);
+         writeUint32(buffer+12,0);
+         for (unsigned index=bufferPos;index<pageSize;index++)
+            buffer[index]=0;
+         writePage(out,page,buffer);
+         Tripple t=*(iter-1); t.object=page;
+         boundaries.push_back(t);
+         ++page;
+         bufferPos=headerSize; bufferCount=0;
+      }
+      // Write the entry
+      writeUint32(buffer+bufferPos,(*iter).subject); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).predicate); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).object); bufferPos+=4;
+      bufferCount++;
+   }
+   // Write the least page
+   writeUint32(buffer,0xFFFFFFFF);
+   writeUint32(buffer+4,0);
+   writeUint32(buffer+8,bufferCount);
+   writeUint32(buffer+12,0);
+   for (unsigned index=bufferPos;index<pageSize;index++)
+      buffer[index]=0;
+   writePage(out,page,buffer);
+   Tripple t=data.back(); t.object=page;
+   boundaries.push_back(t);
+   ++page;
+
+   return page;
+}
+//---------------------------------------------------------------------------
+unsigned packAggregatedFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Tripple>& facts,unsigned page)
+   // Pack the aggregated facts using prefix compression
+{
+   // Write the leave nodes
+   vector<Tripple> boundaries;
+   directory.aggregatedFactStarts[ordering]=page;
+   page=packAggregatedLeaves(out,facts,boundaries,page);
+
+   // Only one leaf node? Special case this
+   if (boundaries.size()==1) {
+      vector<Tripple> newBoundaries;
+      page=packAggregatedInner(out,boundaries,newBoundaries,page);
+      directory.aggregatedFactIndices[ordering]=page-1;
+      return page;
+   }
+
+   // Write the inner nodes
+   while (boundaries.size()>1) {
+      vector<Tripple> newBoundaries;
+      page=packAggregatedInner(out,boundaries,newBoundaries,page);
+      swap(boundaries,newBoundaries);
+   }
+   directory.aggregatedFactIndices[ordering]=page-1;
+   return page;
+}
+//---------------------------------------------------------------------------
 unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,unsigned page)
    // Dump all 6 orderings into the database
 {
@@ -313,6 +466,9 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
 
       // Dump them in the table
       page=packFacts(out,directory,index,facts,page);
+
+      // Dump the aggregated facts in another table
+      page=packAggregatedFacts(out,directory,index,facts,page);
 
       // Change the values back to the original order
       switch (index) {
@@ -616,6 +772,8 @@ void writeDirectory(ofstream& out,Directory& directory)
    for (unsigned index=0;index<6;index++) {
       writeUint32(buffer+bufferPos,directory.factStarts[index]); bufferPos+=4;
       writeUint32(buffer+bufferPos,directory.factIndices[index]); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.aggregatedFactStarts[index]); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.aggregatedFactIndices[index]); bufferPos+=4;
    }
 
    // Write the string entries
