@@ -123,7 +123,8 @@ bool FactsSegment::Scan::next()
       const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
 
       // End of page?
-      if ((pos>=BufferManager::pageSize)||((!page[pos])&&(pos>headerSize))) {
+      if (pos>=BufferManager::pageSize) {
+         nextPage:
          unsigned nextPage=readUint32Aligned(page);
          if (!nextPage)
             return false;
@@ -142,6 +143,8 @@ bool FactsSegment::Scan::next()
       unsigned info=page[pos++];
       // Small gap only?
       if (info<0x80) {
+         if (!info)
+            goto nextPage;
          value3+=info;
          return true;
       }
