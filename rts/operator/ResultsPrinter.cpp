@@ -26,16 +26,26 @@ bool ResultsPrinter::first()
       return true;
    }
 
+   // Prepare the constants cache
+   static const unsigned cacheSize = 65536;
+   unsigned constantCache[cacheSize];
+   const char* cacheStart[cacheSize],*cacheStop[cacheSize];
+   for (unsigned index=0;index<cacheSize;index++)
+      constantCache[index]=~0u;
+
    // Collect all tuples and constants
    do {
       bool first=true;
       for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
          if (first) first=false; else if (!silent) std::cout << ' ';
          if (~((*iter)->value)) {
-            const char* start,*stop;
-            dictionary.lookupById((*iter)->value,start,stop);
+            unsigned value=(*iter)->value,slot=value%cacheSize;
+            if (constantCache[slot]!=value) {
+               constantCache[slot]=value;
+               dictionary.lookupById(value,cacheStart[slot],cacheStop[slot]);
+            }
             if (!silent)
-               std::cout << std::string(start,stop);
+               std::cout << std::string(cacheStart[slot],cacheStop[slot]);
          } else {
             if (!silent)
                std::cout << "NULL";
