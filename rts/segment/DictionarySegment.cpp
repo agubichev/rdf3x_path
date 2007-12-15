@@ -108,26 +108,18 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    // Lookup a string for a given id
 {
    // Lookup the direct mapping entry
-   const unsigned entriesPerPage = BufferManager::pageSize/4;
+   const unsigned entriesPerPage = BufferManager::pageSize/8;
    BufferReference ref(readShared(mappingStart+(id/entriesPerPage)));
-   unsigned pageNo=readUint32(static_cast<const unsigned char*>(ref.getPage())+(4*(id%entriesPerPage)));
+   unsigned slot=id%entriesPerPage;
+   unsigned pageNo=readUint32(static_cast<const unsigned char*>(ref.getPage())+8*slot);
+   unsigned ofsLen=readUint32(static_cast<const unsigned char*>(ref.getPage())+8*slot+4);
+   unsigned ofs=ofsLen>>16,len=(ofsLen&0xFFFF);
 
    // Now search the entry on the page itself
    ref=readShared(pageNo);
-   const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
-   unsigned count=readUint32Aligned(page+4),pos=8;
+   const char* page=static_cast<const char*>(ref.getPage());
+   start=page+ofs; stop=start+len;
 
-   for (unsigned index=0;index<count;index++) {
-      unsigned len=readUint32(page+pos+8);
-      if (readUint32(page+pos)==id) {
-         start=reinterpret_cast<const char*>(page+pos+12);
-         stop=start+len;
-         return true;
-      }
-      pos+=12+len;
-   }
-
-   start=start=0;
-   return false;
+   return true;
 }
 //---------------------------------------------------------------------------

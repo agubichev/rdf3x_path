@@ -353,6 +353,8 @@ struct StringEntry {
    unsigned id;
    /// The page the string is put on
    unsigned page;
+   /// Offset and len
+   unsigned ofsLen;
    /// The hash value of the string
    unsigned hash;
 };
@@ -411,6 +413,7 @@ unsigned readAndPackStrings(ofstream& out,Directory& directory,vector<StringEntr
       writeUint32(buffer+bufferPos,id); bufferPos+=4;
       writeUint32(buffer+bufferPos,hash); bufferPos+=4;
       writeUint32(buffer+bufferPos,s.length()); bufferPos+=4;
+      unsigned ofs=bufferPos;
       for (unsigned index=0;index<s.length();index++)
          buffer[bufferPos++]=s[index];
       ++bufferCount;
@@ -419,6 +422,7 @@ unsigned readAndPackStrings(ofstream& out,Directory& directory,vector<StringEntr
       StringEntry e;
       e.id=id;
       e.page=page;
+      e.ofsLen=(ofs<<16)|(s.length());
       e.hash=hash;
       strings.push_back(e);
    }
@@ -461,11 +465,13 @@ unsigned writeStringMapping(ofstream& out,Directory& directory,vector<StringEntr
             warned=true;
          }
          writeUint32(buffer+bufferPos,0); bufferPos+=4;
+         writeUint32(buffer+bufferPos,0); bufferPos+=4;
          --iter;
          continue;
       }
-      // Write the page number
+      // Write the page number and ofs/len
       writeUint32(buffer+bufferPos,(*iter).page); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).ofsLen); bufferPos+=4;
    }
    // Write the last page
    for (unsigned index=bufferPos;index<pageSize;index++)
