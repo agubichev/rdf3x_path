@@ -25,7 +25,7 @@ class DictionarySegment : public Segment
    /// Lookup an id for a given string
    bool lookup(const std::string& text,unsigned& id);
    /// Lookup a string for a given id
-   bool lookupById(unsigned id,std::string& text);
+   bool lookupById(unsigned id,const char*& start,const char*& stop);
 };
 //---------------------------------------------------------------------------
 #endif

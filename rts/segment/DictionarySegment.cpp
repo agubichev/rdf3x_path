@@ -104,7 +104,7 @@ bool DictionarySegment::lookup(const std::string& text,unsigned& id)
    }
 }
 //---------------------------------------------------------------------------
-bool DictionarySegment::lookupById(unsigned id,std::string& text)
+bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& stop)
    // Lookup a string for a given id
 {
    // Lookup the direct mapping entry
@@ -120,12 +120,14 @@ bool DictionarySegment::lookupById(unsigned id,std::string& text)
    for (unsigned index=0;index<count;index++) {
       unsigned len=readUint32(page+pos+8);
       if (readUint32(page+pos)==id) {
-         text.assign(reinterpret_cast<const char*>(page+pos+12),len);
+         start=reinterpret_cast<const char*>(page+pos+12);
+         stop=start+len;
          return true;
       }
       pos+=12+len;
    }
 
+   start=start=0;
    return false;
 }
 //---------------------------------------------------------------------------

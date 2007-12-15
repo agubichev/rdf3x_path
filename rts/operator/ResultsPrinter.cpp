@@ -27,35 +27,23 @@ bool ResultsPrinter::first()
    }
 
    // Collect all tuples and constants
-   std::map<unsigned,std::string> constants;
-   std::vector<std::vector<unsigned> > tuples;
    do {
-      std::vector<unsigned> tuple;
+      bool first=true;
       for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
-         tuple.push_back((*iter)->value);
-         if (~((*iter)->value))
-            constants[(*iter)->value];
-      }
-      tuples.push_back(tuple);
-   } while (input->next());
-
-   // Resolve all constants
-   for (std::map<unsigned,std::string>::iterator iter=constants.begin(),limit=constants.end();iter!=limit;++iter)
-      dictionary.lookupById((*iter).first,(*iter).second);
-
-   // And print the tuples
-   if (!silent) {
-      for (std::vector<std::vector<unsigned> >::const_iterator iter=tuples.begin(),limit=tuples.end();iter!=limit;++iter) {
-         bool first=true;
-         for (std::vector<unsigned>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2) {
-            if (first) first=false; else std::cout << ' ';
-            if (~(*iter2))
-               std::cout << constants[*iter2]; else
+         if (first) first=false; else if (!silent) std::cout << ' ';
+         if (~((*iter)->value)) {
+            const char* start,*stop;
+            dictionary.lookupById((*iter)->value,start,stop);
+            if (!silent)
+               std::cout << std::string(start,stop);
+         } else {
+            if (!silent)
                std::cout << "NULL";
          }
-         std::cout << std::endl;
       }
-   }
+      if (!silent)
+         std::cout << std::endl;
+   } while (input->next());
 
    return true;
 }
