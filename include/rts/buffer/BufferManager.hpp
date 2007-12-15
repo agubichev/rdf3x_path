@@ -38,11 +38,11 @@ class BufferReference
    /// Constructor
    BufferReference() : page(0) {}
    /// Constructor from a request
-   BufferReference(const BufferRequest& request);
+   inline BufferReference(const BufferRequest& request);
    /// Note: Currently there is no destructor as all pages are accessible all the time. This might change!
 
    /// Remap the reference to a different page
-   BufferReference& operator=(const BufferRequest& request);
+   inline BufferReference& operator=(const BufferRequest& request);
    /// Reset the reference
    void reset() { page=0; }
 
@@ -83,4 +83,31 @@ class BufferManager
    void readExclusive(BufferReference& ref,unsigned page) { ref.page=file.getBegin()+(page*pageSize); }
 };
 //---------------------------------------------------------------------------
+BufferReference::BufferReference(const BufferRequest& request)
+   : page(0)
+   // Constructor from a request
+{
+#ifdef SUPPORT_READWRITE
+   if (request.shared)
+      request.bufferManager.readShared(*this,request.page); else
+      request.bufferManager.readExclusive(*this,request.page);
+#else
+   request.bufferManager.readShared(*this,request.page);
 #endif
+}
+//---------------------------------------------------------------------------
+BufferReference& BufferReference::operator=(const BufferRequest& request)
+   // Remap the reference to a different page
+{
+#ifdef SUPPORT_READWRITE
+   if (request.shared)
+      request.bufferManager.readShared(*this,request.page); else
+      request.bufferManager.readExclusive(*this,request.page);
+#else
+   request.bufferManager.readShared(*this,request.page);
+#endif
+   return *this;
+}
+//---------------------------------------------------------------------------
+#endif
+
