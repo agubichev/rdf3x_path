@@ -33,15 +33,15 @@ int main(int argc,char* argv[])
 
    // Scan the facts about this predicate
    Timestamp t1;
-   FactsSegment& facts=db.getFacts(Database::Order_Predicate_Subject_Object);
+   FactsSegment& facts=db.getFacts(Database::Order_Predicate_Object_Subject);
    FactsSegment::Scan scan;
    unsigned results=0,groups=0,currentGroup=0;
-   std::string groupName;
+   const char* groupNameStart,*groupNameStop;
    if (scan.first(facts,id,0,0)) {
       while (scan.getValue1()==id) {
          if ((!groups)||(scan.getValue2()!=currentGroup)) {
             currentGroup=scan.getValue2();
-            dict.lookupById(currentGroup,groupName);
+            dict.lookupById(currentGroup,groupNameStart,groupNameStop);
             groups++;
          }
          ++results;
