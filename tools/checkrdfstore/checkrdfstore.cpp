@@ -1,5 +1,6 @@
 #include "infra/util/Hash.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <fstream>
 #include <iostream>
@@ -67,7 +68,6 @@ bool checkFacts(Database& db,unsigned order,const vector<Tripple>& facts)
             std::cout << "data mismatch! Expected [" << (*iter).subject << "," << (*iter).predicate << "," << (*iter).object << "], got [" << scan.getValue1() << "," << scan.getValue2() << "," << scan.getValue3() << "]" << std::endl;
             return false;
          }
-         // std::cout << scan.getValue1() << "," << scan.getValue2() << "," << scan.getValue3() << std::endl;
 
          // Skip over duplicates
          unsigned s=(*iter).subject,p=(*iter).predicate,o=(*iter).object;
@@ -85,6 +85,44 @@ bool checkFacts(Database& db,unsigned order,const vector<Tripple>& facts)
             ++iter;
       }
       std::cout << "too few tuples in facts table! Got " << readTuples << ", expected " << realSize << std::endl;
+      return false;
+   }
+
+   return true;
+}
+//---------------------------------------------------------------------------
+bool checkAggregatedFacts(Database& db,unsigned order,const vector<Tripple>& facts)
+   // Check the aggregated facts table
+{
+   AggregatedFactsSegment& table=db.getAggregatedFacts(static_cast<Database::DataOrder>(order));
+   AggregatedFactsSegment::Scan scan;
+
+   vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();
+   if (scan.first(table)) {
+      do {
+         if (iter==limit) {
+            std::cout << "too many tuples in aggregated facts table!" << std::endl;
+            return false;
+         }
+         // Count the elements in the group
+         unsigned count=1;
+         unsigned s=(*iter).subject,p=(*iter).predicate,o=(*iter).object;
+         while ((iter!=limit)&&((*iter).subject==s)&&((*iter).predicate==p)) {
+            if ((*iter).object!=o) {
+               o=(*iter).object;
+               ++count;
+            }
+            ++iter;
+         }
+         if ((scan.getValue1()!=s)||(scan.getValue2()!=o)||(scan.getCount()!=count)) {
+            std::cout << "data mismatch! Expected [" << s << "," << o << "," << count << "], got [" << scan.getValue1() << "," << scan.getValue2() << "," << scan.getCount() << "]" << std::endl;
+            return false;
+         }
+
+      } while (scan.next());
+   }
+   if (iter!=limit) {
+      std::cout << "too few tuples in aggregated facts table!" << std::endl;
       return false;
    }
 
@@ -133,6 +171,8 @@ bool checkFacts(Database& db,vector<Tripple>& facts)
 
       // And compare them with the database
       if (!checkFacts(db,index,facts))
+         return false;
+      if (!checkAggregatedFacts(db,index,facts))
          return false;
 
       // Change the values back to the original order
