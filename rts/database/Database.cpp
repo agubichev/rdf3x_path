@@ -1,5 +1,6 @@
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferManager.hpp"
+#include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 //---------------------------------------------------------------------------
@@ -49,6 +50,7 @@ bool Database::open(const char* fileName)
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
             facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index]);
+            aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,aggregatedFactStarts[index],aggregatedFactIndices[index]);
          }
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
