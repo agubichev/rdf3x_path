@@ -114,8 +114,8 @@ bool checkAggregatedFacts(Database& db,unsigned order,const vector<Tripple>& fac
             }
             ++iter;
          }
-         if ((scan.getValue1()!=s)||(scan.getValue2()!=o)||(scan.getCount()!=count)) {
-            std::cout << "data mismatch! Expected [" << s << "," << o << "," << count << "], got [" << scan.getValue1() << "," << scan.getValue2() << "," << scan.getCount() << "]" << std::endl;
+         if ((scan.getValue1()!=s)||(scan.getValue2()!=p)||(scan.getCount()!=count)) {
+            std::cout << "aggregated data mismatch! Expected [" << s << "," << p << "," << count << "], got [" << scan.getValue1() << "," << scan.getValue2() << "," << scan.getCount() << "]" << std::endl;
             return false;
          }
 

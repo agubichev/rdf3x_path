@@ -116,6 +116,40 @@ unsigned writeDelta(unsigned char* buffer,unsigned ofs,unsigned value)
    }
 }
 //---------------------------------------------------------------------------
+unsigned bytes0(unsigned v)
+   // Compute the number of bytes required to encode a value with 0 compression
+{
+   if (v>=(1<<24))
+      return 4; else
+   if (v>=(1<<16))
+      return 3; else
+   if (v>=(1<<8)) return 2;
+   if (v>0)
+      return 1; else
+      return 0;
+}
+//---------------------------------------------------------------------------
+unsigned writeDelta0(unsigned char* buffer,unsigned ofs,unsigned value)
+   // Write an integer with varying size with 0 compression
+{
+   if (value>=(1<<24)) {
+      writeUint32(buffer+ofs,value);
+      return ofs+4;
+   } else if (value>=(1<<16)) {
+      buffer[ofs]=value>>16;
+      buffer[ofs+1]=(value>>8)&0xFF;
+      buffer[ofs+2]=value&0xFF;
+      return ofs+3;
+   } else if (value>=(1<<8)) {
+      buffer[ofs]=value>>8;
+      buffer[ofs+1]=value&0xFF;
+      return ofs+2;
+   } else if (value>0) {
+      buffer[ofs]=value;
+      return ofs+1;
+   } else return ofs;
+}
+//---------------------------------------------------------------------------
 unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripple,unsigned> >& boundaries,unsigned page)
    // Pack the facts into leaves using prefix compression
 {
@@ -292,18 +326,15 @@ unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<
             break;
          if ((*iter).object==object)
             continue;
+         object=(*iter).object;
          count++;
       }
 
       // Try to pack it on the current page
       unsigned len;
-      if (subject==lastSubject) {
-         if ((count<=5)&&((predicate-lastPredicate)<32))
-            len=1; else
-            len=1+bytes(predicate-lastPredicate)+bytes(count);
-      } else {
-         len=1+bytes(subject-lastSubject)+bytes(predicate)+bytes(count);
-      }
+      if ((subject==lastSubject)&&(count<5)&&((predicate-lastPredicate)<32))
+         len=1; else
+         len=1+bytes0(subject-lastSubject)+bytes0(predicate)+bytes0(count-1);
 
       // Tuple too big or first element on the page?
       if ((bufferPos==headerSize)||(bufferPos+len>pageSize)) {
@@ -324,19 +355,13 @@ unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<
          writeUint32(buffer+bufferPos,count); bufferPos+=4;
       } else {
          // No, pack them
-         if (subject==lastSubject) {
-            if ((count<=5)&&((predicate-lastPredicate)<32)) {
-               buffer[bufferPos]=((count-1)<<5)|(predicate-lastPredicate);
-            } else {
-               buffer[bufferPos++]=0x80|((bytes(predicate-lastPredicate)-1)<<2)|(bytes(count)-1);
-               bufferPos=writeDelta(buffer,bufferPos,predicate-lastPredicate);
-               bufferPos=writeDelta(buffer,bufferPos,count);
-            }
+         if ((subject==lastSubject)&&(count<5)&&((predicate-lastPredicate)<32)) {
+            buffer[bufferPos++]=((count-1)<<5)|(predicate-lastPredicate);
          } else {
-            buffer[bufferPos++]=0x80|(bytes(subject-lastSubject)<<4)|((bytes(predicate-lastPredicate)-1)<<2)|(bytes(count)-1);
-            bufferPos=writeDelta(buffer,bufferPos,subject-lastSubject);
-            bufferPos=writeDelta(buffer,bufferPos,predicate);
-            bufferPos=writeDelta(buffer,bufferPos,count);
+            buffer[bufferPos++]=0x80|((bytes0(subject-lastSubject)*25)+(bytes0(predicate)*5)+bytes0(count-1));
+            bufferPos=writeDelta0(buffer,bufferPos,subject-lastSubject);
+            bufferPos=writeDelta0(buffer,bufferPos,predicate);
+            bufferPos=writeDelta0(buffer,bufferPos,count-1);
          }
       }
 

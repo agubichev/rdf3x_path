@@ -144,25 +144,14 @@ bool AggregatedFactsSegment::Scan::next()
          value2+=(info&31);
          return true;
       }
-      // Last value changed only?
-      if (info<0x90) {
-         unsigned size2=((info>>2)&3)+1;
-         value2+=readDelta(page+pos,size2);
-         pos+=size2;
-         unsigned sizeCount=(info&3)+1;
-         count=readDelta(page+pos,sizeCount);
-         pos+=sizeCount;
-         return true;
-      }
-      // Both values changed
-      unsigned size1=(info>>4)&7;
+      // Decode the parts
+      info&=127;
+      unsigned size1=info/25,size2=(info/5)%5,sizeCount=info%5;
       value1+=readDelta(page+pos,size1);
       pos+=size1;
-      unsigned size2=((info>>2)&4)+1;
       value2=readDelta(page+pos,size2);
       pos+=size2;
-      unsigned sizeCount=(info&3)+1;
-      count=readDelta(page+pos,sizeCount);
+      count=readDelta(page+pos,sizeCount)+1;
       pos+=sizeCount;
       return true;
    }
