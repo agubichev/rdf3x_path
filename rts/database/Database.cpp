@@ -35,14 +35,16 @@ bool Database::open(const char* fileName)
       // Check the header
       if ((readUint32(page)==(('R'<<24)|('D'<<16)|('F'<<8)))&&(readUint32(page+4)==1)) {
          // Read the page infos
-         unsigned factStarts[6],factIndices[6];
+         unsigned factStarts[6],factIndices[6],aggregatedFactStarts[6],aggregatedFactIndices[6];
          for (unsigned index=0;index<6;index++) {
-            factStarts[index]=readUint32(page+8+index*8);
-            factIndices[index]=readUint32(page+8+index*8+4);
+            factStarts[index]=readUint32(page+8+index*16);
+            factIndices[index]=readUint32(page+8+index*16+4);
+            aggregatedFactStarts[index]=readUint32(page+8+index*16+8);
+            aggregatedFactIndices[index]=readUint32(page+8+index*16+12);
          }
-         unsigned stringStart=readUint32(page+56);
-         unsigned stringMapping=readUint32(page+60);
-         unsigned stringIndex=readUint32(page+64);
+         unsigned stringStart=readUint32(page+104);
+         unsigned stringMapping=readUint32(page+108);
+         unsigned stringIndex=readUint32(page+112);
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
@@ -77,6 +79,12 @@ FactsSegment& Database::getFacts(DataOrder order)
    // Get the facts
 {
    return *(facts[order]);
+}
+//---------------------------------------------------------------------------
+AggregatedFactsSegment& Database::getAggregatedFacts(DataOrder order)
+   // Get the facts
+{
+   return *(aggregatedFacts[order]);
 }
 //---------------------------------------------------------------------------
 DictionarySegment& Database::getDictionary()

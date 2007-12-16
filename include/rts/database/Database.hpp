@@ -3,6 +3,7 @@
 //---------------------------------------------------------------------------
 class BufferManager;
 class FactsSegment;
+class AggregatedFactsSegment;
 class DictionarySegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
@@ -20,6 +21,8 @@ class Database
    BufferManager* bufferManager;
    /// The fact segments
    FactsSegment* facts[6];
+   /// The aggregated fact segments
+   AggregatedFactsSegment* aggregatedFacts[6];
    /// The dictionary segment
    DictionarySegment* dictionary;
 
@@ -39,6 +42,8 @@ class Database
 
    /// Get a facts table
    FactsSegment& getFacts(DataOrder order);
+   /// Get an aggregated facts table
+   AggregatedFactsSegment& getAggregatedFacts(DataOrder order);
    /// Get the dictionary
    DictionarySegment& getDictionary();
 };

@@ -1,5 +1,6 @@
 #include "cts/codegen/CodeGen.hpp"
 #include "cts/infra/QueryGraph.hpp"
+#include "rts/operator/AggregatedIndexScan.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/NestedLoopJoin.hpp"
 #include "rts/operator/ResultsPrinter.hpp"
@@ -8,7 +9,7 @@
 #include <map>
 #include <set>
 //---------------------------------------------------------------------------
-static IndexScan* buildIndexScan(Runtime& runtime,const QueryGraph::Node& node,std::set<unsigned>& boundVariables,std::map<unsigned,Register*>& constantRegisters,std::map<unsigned,Register*>& variableRegisters)
+static Operator* buildIndexScan(Runtime& runtime,const QueryGraph::Node& node,std::set<unsigned>& boundVariables,std::map<unsigned,Register*>& constantRegisters,std::map<unsigned,Register*>& variableRegisters,std::map<unsigned,unsigned>& variableUses)
    // Construct an index scan
 {
    // Examine which variables are bound
@@ -16,22 +17,6 @@ static IndexScan* buildIndexScan(Runtime& runtime,const QueryGraph::Node& node,s
    boundSubject=(node.constSubject||boundVariables.count(node.subject));
    boundPredicate=(node.constPredicate||boundVariables.count(node.predicate));
    boundObject=(node.constObject||boundVariables.count(node.object));
-
-   // Pick a suitable data order
-   Database::DataOrder order;
-   if (boundSubject) {
-      if (boundPredicate) {
-         order=Database::Order_Subject_Predicate_Object;
-      } else if (boundObject) {
-         order=Database::Order_Subject_Object_Predicate;
-      } else order=Database::Order_Subject_Predicate_Object;
-   } else if (boundPredicate) {
-      if (boundObject)
-         order=Database::Order_Predicate_Object_Subject; else
-         order=Database::Order_Predicate_Subject_Object;
-   } else if (boundObject) {
-      order=Database::Order_Object_Subject_Predicate;
-   } else order=Database::Order_Subject_Predicate_Object;
 
    // Lookup the registers and mark them as bound
    Register* subject,*predicate,*object;
@@ -54,7 +39,63 @@ static IndexScan* buildIndexScan(Runtime& runtime,const QueryGraph::Node& node,s
       boundVariables.insert(node.object);
    }
 
+   // Pick a suitable data order
+   Database::DataOrder order;
+   bool aggregated=false;
+   if (boundSubject) {
+      if (boundPredicate) {
+         order=Database::Order_Subject_Predicate_Object;
+         if ((!node.constObject)&&(variableUses[node.object]==1)) {
+            object=0; aggregated=true;
+         }
+      } else if (boundObject) {
+         order=Database::Order_Subject_Object_Predicate;
+         if ((!node.constPredicate)&&(variableUses[node.predicate]==1)) {
+            predicate=0; aggregated=true;
+         }
+      } else {
+         if ((!node.constPredicate)&&(variableUses[node.predicate]==1)) {
+            order=Database::Order_Subject_Object_Predicate;
+            predicate=0; aggregated=true;
+         } else {
+            order=Database::Order_Subject_Predicate_Object;
+            if ((!node.constObject)&&(variableUses[node.object]==1)) {
+               object=0; aggregated=true;
+            }
+         }
+      }
+   } else if (boundPredicate) {
+      if (boundObject) {
+         order=Database::Order_Predicate_Object_Subject;
+         if ((!node.constSubject)&&(variableUses[node.subject]==1)) {
+            subject=0; aggregated=true;
+         }
+      } else {
+         if ((!node.constSubject)&&(variableUses[node.subject]==1)) {
+            order=Database::Order_Predicate_Object_Subject;
+            subject=0; aggregated=true;
+         } else {
+            order=Database::Order_Predicate_Subject_Object;
+            if ((!node.constObject)&&(variableUses[node.object]==1)) {
+               object=0; aggregated=true;
+            }
+         }
+      }
+   } else if (boundObject) {
+      if ((!node.constSubject)&&(variableUses[node.subject]==1)) {
+         order=Database::Order_Object_Predicate_Subject;
+         subject=0; aggregated=true;
+      } else {
+         order=Database::Order_Object_Subject_Predicate;
+         if ((!node.constPredicate)&&(variableUses[node.predicate]==1)) {
+            predicate=0; aggregated=true;
+         }
+      }
+   } else order=Database::Order_Subject_Predicate_Object;
+
    // And return the scan
+   if (aggregated)
+      return new AggregatedIndexScan(runtime.getDatabase(),order,subject,boundSubject,predicate,boundPredicate,object,boundObject);
    return new IndexScan(runtime.getDatabase(),order,subject,boundSubject,predicate,boundPredicate,object,boundObject);
 }
 //---------------------------------------------------------------------------
@@ -64,13 +105,14 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,bool silen
    // Collect the required number of registers
    std::map<unsigned,Register*> constantRegisters;
    std::map<unsigned,Register*> variableRegisters;
+   std::map<unsigned,unsigned> variableUses;
    for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
       variableRegisters[*iter];
    for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter) {
       const QueryGraph::Node& n=(*iter);
-      if (n.constSubject) constantRegisters[n.subject]; else variableRegisters[n.subject];
-      if (n.constPredicate) constantRegisters[n.predicate]; else variableRegisters[n.predicate];
-      if (n.constObject) constantRegisters[n.object]; else variableRegisters[n.object];
+      if (n.constSubject) constantRegisters[n.subject]; else { variableRegisters[n.subject]; variableUses[n.subject]++; }
+      if (n.constPredicate) constantRegisters[n.predicate]; else { variableRegisters[n.predicate]; variableUses[n.predicate]++; }
+      if (n.constObject) constantRegisters[n.object]; else { variableRegisters[n.object]; variableUses[n.object]++; }
    }
 
    // Allocate the registers
@@ -117,7 +159,7 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,bool silen
          done.insert(node);
 
          // Build the index scan
-         Operator* scan=buildIndexScan(runtime,*node,boundVariables,constantRegisters,variableRegisters);
+         Operator* scan=buildIndexScan(runtime,*node,boundVariables,constantRegisters,variableRegisters,variableUses);
 
          // And enlarge the tree
          if (!tree)
