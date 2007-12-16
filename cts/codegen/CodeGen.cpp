@@ -106,8 +106,10 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,bool silen
    std::map<unsigned,Register*> constantRegisters;
    std::map<unsigned,Register*> variableRegisters;
    std::map<unsigned,unsigned> variableUses;
-   for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
+   for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter) {
       variableRegisters[*iter];
+      variableUses[*iter]++;
+   }
    for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter) {
       const QueryGraph::Node& n=(*iter);
       if (n.constSubject) constantRegisters[n.subject]; else { variableRegisters[n.subject]; variableUses[n.subject]++; }
