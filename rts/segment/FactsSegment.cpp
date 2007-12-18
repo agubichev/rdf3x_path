@@ -17,8 +17,9 @@ static inline bool greater(unsigned a1,unsigned a2,unsigned a3,unsigned b1,unsig
                       ((a2==b2)&&(a3>b3))));
 }
 //---------------------------------------------------------------------------
-FactsSegment::FactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot)
-   : Segment(bufferManager),tableStart(tableStart),indexRoot(indexRoot)
+FactsSegment::FactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality)
+   : Segment(bufferManager),tableStart(tableStart),indexRoot(indexRoot),
+     pages(pages),groups1(groups1),groups2(groups2),cardinality(cardinality)
    // Constructor
 {
 }

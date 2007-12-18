@@ -37,20 +37,26 @@ bool Database::open(const char* fileName)
       if ((readUint32(page)==(('R'<<24)|('D'<<16)|('F'<<8)))&&(readUint32(page+4)==1)) {
          // Read the page infos
          unsigned factStarts[6],factIndices[6],aggregatedFactStarts[6],aggregatedFactIndices[6];
+         unsigned pageCounts[6],aggregatedPageCounts[6],groups1[6],groups2[6],cardinalities[6];
          for (unsigned index=0;index<6;index++) {
-            factStarts[index]=readUint32(page+8+index*16);
-            factIndices[index]=readUint32(page+8+index*16+4);
-            aggregatedFactStarts[index]=readUint32(page+8+index*16+8);
-            aggregatedFactIndices[index]=readUint32(page+8+index*16+12);
+            factStarts[index]=readUint32(page+8+index*36);
+            factIndices[index]=readUint32(page+8+index*36+4);
+            aggregatedFactStarts[index]=readUint32(page+8+index*36+8);
+            aggregatedFactIndices[index]=readUint32(page+8+index*36+12);
+            pageCounts[index]=readUint32(page+8+index*36+16);
+            aggregatedPageCounts[index]=readUint32(page+8+index*36+20);
+            groups1[index]=readUint32(page+8+index*36+24);
+            groups2[index]=readUint32(page+8+index*36+28);
+            cardinalities[index]=readUint32(page+8+index*36+32);
          }
-         unsigned stringStart=readUint32(page+104);
-         unsigned stringMapping=readUint32(page+108);
-         unsigned stringIndex=readUint32(page+112);
+         unsigned stringStart=readUint32(page+224);
+         unsigned stringMapping=readUint32(page+228);
+         unsigned stringIndex=readUint32(page+232);
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
-            facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index]);
-            aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,aggregatedFactStarts[index],aggregatedFactIndices[index]);
+            facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
+            aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
          }
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 

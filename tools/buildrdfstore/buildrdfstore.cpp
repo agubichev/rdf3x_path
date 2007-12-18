@@ -14,6 +14,19 @@ namespace {
 /// The database directory
 struct Directory
 {
+   /// Statistics for a facts table
+   struct FactsStatistics {
+      /// The number of pages
+      unsigned pages;
+      /// The number of aggregated pages
+      unsigned aggregatedPages;
+      /// The number of level 1 groups
+      unsigned groups1;
+      /// The number of level 2 groups
+      unsigned groups2;
+      /// The number of tuples
+      unsigned cardinality;
+   };
    /// Begin of the facts tables in all orderings
    unsigned factStarts[6];
    /// Root of the fact indices in all orderings
@@ -22,6 +35,8 @@ struct Directory
    unsigned aggregatedFactStarts[6];
    /// Root of the aggregatedfact indices in all orderings
    unsigned aggregatedFactIndices[6];
+   /// The statistics
+   FactsStatistics factStatistics[6];
    /// Begin of the string table
    unsigned stringStart;
    /// Begin of the string mapping
@@ -290,6 +305,7 @@ unsigned packFacts(ofstream& out,Directory& directory,unsigned ordering,const ve
    vector<pair<Tripple,unsigned> > boundaries;
    directory.factStarts[ordering]=page;
    page=packLeaves(out,facts,boundaries,page);
+   directory.factStatistics[ordering].pages=page-directory.factStarts[ordering];
 
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
@@ -430,6 +446,7 @@ unsigned packAggregatedFacts(ofstream& out,Directory& directory,unsigned orderin
    vector<Tripple> boundaries;
    directory.aggregatedFactStarts[ordering]=page;
    page=packAggregatedLeaves(out,facts,boundaries,page);
+   directory.factStatistics[ordering].aggregatedPages=page-directory.aggregatedFactStarts[ordering];
 
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
@@ -494,6 +511,35 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
 
       // Dump the aggregated facts in another table
       page=packAggregatedFacts(out,directory,index,facts,page);
+
+      // Compute the tuple statistics
+      if (facts.begin()==facts.end()) {
+         directory.factStatistics[index].groups1=0;
+         directory.factStatistics[index].groups2=0;
+         directory.factStatistics[index].cardinality=0;
+      } else {
+         vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();
+         unsigned subject=(*iter).subject,predicate=(*iter).predicate,object=(*iter).object;
+         directory.factStatistics[index].groups1=1;
+         directory.factStatistics[index].groups2=1;
+         directory.factStatistics[index].cardinality=1;
+         for (++iter;iter!=limit;++iter) {
+            if ((*iter).subject!=subject) {
+               directory.factStatistics[index].groups1++;
+               directory.factStatistics[index].groups2++;
+               directory.factStatistics[index].cardinality++;
+               subject=(*iter).subject; predicate=(*iter).predicate; object=(*iter).object;
+            } else if ((*iter).predicate!=predicate) {
+               directory.factStatistics[index].groups2++;
+               directory.factStatistics[index].cardinality++;
+               predicate=(*iter).predicate; object=(*iter).object;
+            } else if ((*iter).object!=object) {
+               directory.factStatistics[index].cardinality++;
+               object=(*iter).object;
+            }
+         }
+      }
+
 
       // Change the values back to the original order
       switch (index) {
@@ -799,6 +845,11 @@ void writeDirectory(ofstream& out,Directory& directory)
       writeUint32(buffer+bufferPos,directory.factIndices[index]); bufferPos+=4;
       writeUint32(buffer+bufferPos,directory.aggregatedFactStarts[index]); bufferPos+=4;
       writeUint32(buffer+bufferPos,directory.aggregatedFactIndices[index]); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.factStatistics[index].pages); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.factStatistics[index].aggregatedPages); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.factStatistics[index].groups1); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.factStatistics[index].groups2); bufferPos+=4;
+      writeUint32(buffer+bufferPos,directory.factStatistics[index].cardinality); bufferPos+=4;
    }
 
    // Write the string entries

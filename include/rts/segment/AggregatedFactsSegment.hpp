@@ -12,6 +12,8 @@ class AggregatedFactsSegment : public Segment
    unsigned tableStart;
    /// The root of the index b-tree
    unsigned indexRoot;
+   /// Statistics
+   unsigned pages,groups1,groups2;
 
    /// Lookup the first page contains entries >= the start condition
    bool lookup(unsigned start1,unsigned start2,BufferReference& ref);
@@ -21,7 +23,14 @@ class AggregatedFactsSegment : public Segment
 
    public:
    /// Constructor
-   AggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot);
+   AggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2);
+
+   /// Get the number of pages in the segment
+   unsigned getPages() const { return pages; }
+   /// Get the number of level 1 groups
+   unsigned getLevel1Groups() const { return groups1; }
+   /// Get the number of level 2 groups
+   unsigned getLevel2Groups() const { return groups2; }
 
    /// A scan over the facts segment
    class Scan {

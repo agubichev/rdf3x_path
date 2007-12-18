@@ -14,8 +14,9 @@ static inline bool greater(unsigned a1,unsigned a2,unsigned b1,unsigned b2) {
    return (a1>b1)||((a1==b1)&&(a2>b2));
 }
 //---------------------------------------------------------------------------
-AggregatedFactsSegment::AggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot)
-   : Segment(bufferManager),tableStart(tableStart),indexRoot(indexRoot)
+AggregatedFactsSegment::AggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2)
+   : Segment(bufferManager),tableStart(tableStart),indexRoot(indexRoot),
+     pages(pages),groups1(groups1),groups2(groups2)
    // Constructor
 {
 }
