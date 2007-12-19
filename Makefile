@@ -41,6 +41,11 @@ $(PREFIX)%$(OBJEXT): %.cpp $(PREFIX)makeutil/getdep$(EXEEXT)
 	$(generatedependencies)
 	$(compile)
 
+#############################################################################
+# Cleanup
+
+clean:
+	find bin -name '*.d' -o -name '*.o' -o '(' -perm /u=x '!' -type d ')' -delete
 
 #############################################################################
 # Executable
