@@ -7,6 +7,9 @@
 class QueryGraph
 {
    public:
+   /// Possible duplicate handling modes
+   enum DuplicateHandling { AllDuplicates, CountDuplicates, ReducedDuplicates, NoDuplicates };
+
    /// A node in the graph
    struct Node {
       /// The values
@@ -29,6 +32,8 @@ class QueryGraph
    std::vector<Edge> edges;
    /// The projection
    std::vector<unsigned> projection;
+   /// The duplicate handling
+   DuplicateHandling duplicateHandling;
 
    QueryGraph(const QueryGraph&);
    void operator=(const QueryGraph&);
@@ -46,6 +51,10 @@ class QueryGraph
    /// Construct the edges
    void constructEdges();
 
+   /// Set the duplicate handling mode
+   void setDuplicateHandling(DuplicateHandling d) { duplicateHandling=d; }
+   /// Get the duplicate handling mode
+   DuplicateHandling getDuplicateHandling() const { return duplicateHandling; }
    /// Add an entry to the output projection
    void addProjection(unsigned id) { projection.push_back(id); }
 

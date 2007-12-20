@@ -30,7 +30,7 @@ SPARQLParser::Pattern::~Pattern()
 }
 //---------------------------------------------------------------------------
 SPARQLParser::SPARQLParser(SPARQLLexer& lexer)
-   : lexer(lexer),variableCount(0)
+   : lexer(lexer),variableCount(0),projectionModifier(Modifier_None)
    // Constructor
 {
 }
@@ -85,6 +85,19 @@ void SPARQLParser::parseProjection()
    // Parse the projection
    if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("select")))
       throw ParserException("'select' expected");
+
+   // Parse modifiers, if any
+   {
+      SPARQLLexer::Token token=lexer.getNext();
+      if (token==SPARQLLexer::Identifier) {
+         if (lexer.isKeyword("distinct")) projectionModifier=Modifier_Distinct; else
+         if (lexer.isKeyword("reduced")) projectionModifier=Modifier_Reduced; else
+         if (lexer.isKeyword("count")) projectionModifier=Modifier_Count; else
+            lexer.unget(token);
+      } else lexer.unget(token);
+   }
+
+   // Parse the projection clause
    bool first=true;
    while (true) {
       SPARQLLexer::Token token=lexer.getNext();

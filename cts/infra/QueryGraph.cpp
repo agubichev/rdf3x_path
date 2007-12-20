@@ -31,6 +31,7 @@ bool QueryGraph::Node::canJoin(const Node& other) const
 }
 //---------------------------------------------------------------------------
 QueryGraph::QueryGraph()
+   : duplicateHandling(AllDuplicates)
    // Constructor
 {
 }
@@ -46,6 +47,7 @@ void QueryGraph::clear()
    nodes.clear();
    edges.clear();
    projection.clear();
+   duplicateHandling=AllDuplicates;
 }
 //---------------------------------------------------------------------------
 void QueryGraph::addNode(const Node& node)

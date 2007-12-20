@@ -44,6 +44,9 @@ class SPARQLParser
       /// Destructor
       ~Pattern();
    };
+   /// The projection modifier
+   enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count };
+
    private:
    /// The lexer
    SPARQLLexer& lexer;
@@ -54,6 +57,8 @@ class SPARQLParser
    /// The total variable count
    unsigned variableCount;
 
+   /// The projection modifier
+   ProjectionModifier projectionModifier;
    /// The projection clause
    std::vector<unsigned> projection;
    /// The patterns in the where clause
@@ -102,6 +107,9 @@ class SPARQLParser
    projection_iterator projectionBegin() const { return projection.begin(); }
    /// Iterator over the projection
    projection_iterator projectionEnd() const { return projection.end(); }
+
+   /// The projection modifier
+   ProjectionModifier getProjectionModifier() const { return projectionModifier; }
 };
 //---------------------------------------------------------------------------
 #endif
