@@ -11,6 +11,10 @@ class Register;
 /// Consumes its input and prints it. Pruduces a single empty tuple.
 class ResultsPrinter : public Operator
 {
+   public:
+   /// Duplicate handling
+   enum DuplicateHandling { ReduceDuplicates, ExpandDuplicates, CountDuplicates };
+
    private:
    /// The output registers
    std::vector<Register*> output;
@@ -18,12 +22,14 @@ class ResultsPrinter : public Operator
    Operator* input;
    /// The dictionary
    DictionarySegment& dictionary;
+   /// The duplicate handling
+   DuplicateHandling duplicateHandling;
    /// Skip the printing, resolve only?
    bool silent;
 
    public:
    /// Constructor
-   ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,bool silent=false);
+   ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,bool silent=false);
    /// Destructor
    ~ResultsPrinter();
 

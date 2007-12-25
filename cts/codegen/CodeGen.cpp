@@ -174,7 +174,14 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,bool silen
    std::vector<Register*> output;
    for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
       output.push_back(variableRegisters[*iter]);
-   tree=new ResultsPrinter(runtime.getDatabase(),tree,output,silent);
+   ResultsPrinter::DuplicateHandling duplicateHandling=ResultsPrinter::ExpandDuplicates;
+   switch (query.getDuplicateHandling()) {
+      case QueryGraph::AllDuplicates: duplicateHandling=ResultsPrinter::ExpandDuplicates; break;
+      case QueryGraph::CountDuplicates: duplicateHandling=ResultsPrinter::CountDuplicates; break; // XXX additional group by required
+      case QueryGraph::ReducedDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break;
+      case QueryGraph::NoDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break; // XXX additional group by required
+   }
+   tree=new ResultsPrinter(runtime.getDatabase(),tree,output,duplicateHandling,silent);
 
    return tree;
 }
