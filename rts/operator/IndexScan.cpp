@@ -54,7 +54,7 @@ IndexScan::~IndexScan()
 {
 }
 //---------------------------------------------------------------------------
-bool IndexScan::first()
+unsigned IndexScan::first()
    // Produce the first tuple
 {
    // Compute the start/stop conditions
@@ -107,10 +107,10 @@ bool IndexScan::first()
    } else value3->value=scan.getValue3();
 
    // We have a match
-   return true;
+   return 1;
 }
 //---------------------------------------------------------------------------
-bool IndexScan::next()
+unsigned IndexScan::next()
    // Produce the next tuple
 {
    unsigned filter=this->filter,prefix=this->prefix;
@@ -146,7 +146,7 @@ bool IndexScan::next()
       } else value3->value=scan.getValue3();
 
       // We have a match
-      return true;
+      return 1;
    }
 }
 //---------------------------------------------------------------------------

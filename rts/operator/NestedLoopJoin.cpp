@@ -1,4 +1,5 @@
 #include "rts/operator/NestedLoopJoin.hpp"
+#include "rts/runtime/Runtime.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
 NestedLoopJoin::NestedLoopJoin(Operator* left,Operator* right)
@@ -14,40 +15,42 @@ NestedLoopJoin::~NestedLoopJoin()
    delete right;
 }
 //---------------------------------------------------------------------------
-bool NestedLoopJoin::first()
+unsigned NestedLoopJoin::first()
    // Produce the first tuple
 {
    // Read the first tuple on the left side
-   if (!left->first())
+   if ((leftCount=left->first())==0)
       return false;
 
    // Look for tuples on the right side
-   while (!right->first()) {
-      if (!left->next())
+   unsigned rightCount;
+   while ((rightCount=right->first())==0) {
+      if ((leftCount=left->next())==0)
          return false;
    }
 
-   return true;
+   return leftCount*rightCount;
 }
 //---------------------------------------------------------------------------
-bool NestedLoopJoin::next()
+unsigned NestedLoopJoin::next()
    // Produce the next tuple
 {
    // A simple match?
-   if (right->next())
-      return true;
+   unsigned rightCount;
+   if ((rightCount=right->next())!=0)
+      return leftCount*rightCount;
 
    // No, do we have more tuples on the left hand side?
-   if (!left->next())
+   if ((leftCount=left->next())==0)
       return false;
 
    // Yes, look for tuples on the right side
-   while (!right->first()) {
-      if (!left->next())
+   while ((rightCount=right->first())==0) {
+      if ((leftCount=left->next())==0)
          return false;
    }
 
-   return true;
+   return leftCount*rightCount;
 }
 //---------------------------------------------------------------------------
 void NestedLoopJoin::print(unsigned level)

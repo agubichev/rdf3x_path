@@ -11,13 +11,13 @@ SingletonScan::~SingletonScan()
 {
 }
 //---------------------------------------------------------------------------
-bool SingletonScan::first()
+unsigned SingletonScan::first()
    // Produce the first tuple
 {
-   return true;
+   return 1;
 }
 //---------------------------------------------------------------------------
-bool SingletonScan::next()
+unsigned SingletonScan::next()
    // Produce the next tuple
 {
    return false;

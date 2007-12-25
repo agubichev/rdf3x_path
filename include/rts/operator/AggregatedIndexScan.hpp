@@ -13,8 +13,6 @@ class AggregatedIndexScan : public Operator
    private:
    /// The registers for the different parts of the triple
    Register* value1,*value2;
-   /// Register for the count
-   Register* count;
    /// The stop conditions
    unsigned stop1,stop2;
    /// Which colums form the prefix
@@ -37,9 +35,9 @@ class AggregatedIndexScan : public Operator
    ~AggregatedIndexScan();
 
    /// Produce the first tuple
-   bool first();
+   unsigned first();
    /// Produce the next tuple
-   bool next();
+   unsigned next();
 
    /// Print the operator tree. Debugging only.
    void print(unsigned indent);

@@ -16,11 +16,12 @@ ResultsPrinter::~ResultsPrinter()
 {
 }
 //---------------------------------------------------------------------------
-bool ResultsPrinter::first()
+unsigned ResultsPrinter::first()
    // Produce the first tuple
 {
    // Empty input?
-   if (!input->first()) {
+   unsigned count;
+   if ((count=input->first())==0) {
       if (!silent)
          std::cout << "<empty result>" << std::endl;
       return true;
@@ -51,14 +52,17 @@ bool ResultsPrinter::first()
                std::cout << "NULL";
          }
       }
-      if (!silent)
+      if (!silent) {
+         if (count!=1)
+            std::cout << " x" << count;
          std::cout << std::endl;
-   } while (input->next());
+      }
+   } while ((count=input->next())!=0);
 
-   return true;
+   return 1;
 }
 //---------------------------------------------------------------------------
-bool ResultsPrinter::next()
+unsigned ResultsPrinter::next()
    // Produce the next tuple
 {
    return false;

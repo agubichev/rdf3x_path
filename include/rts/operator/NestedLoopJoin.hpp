@@ -9,6 +9,8 @@ class NestedLoopJoin : public Operator
    private:
    /// The input
    Operator* left,*right;
+   /// The count from the left side
+   unsigned leftCount;
 
    public:
    /// Constructor
@@ -17,9 +19,9 @@ class NestedLoopJoin : public Operator
    ~NestedLoopJoin();
 
    /// Produce the first tuple
-   bool first();
+   unsigned first();
    /// Produce the next tuple
-   bool next();
+   unsigned next();
 
    /// Print the operator tree. Debugging only.
    void print(unsigned indent);

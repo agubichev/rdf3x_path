@@ -28,9 +28,9 @@ class ResultsPrinter : public Operator
    ~ResultsPrinter();
 
    /// Produce the first tuple
-   bool first();
+   unsigned first();
    /// Produce the next tuple
-   bool next();
+   unsigned next();
 
    /// Print the operator tree. Debugging only.
    void print(unsigned indent);

@@ -40,7 +40,6 @@ AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,
          assert(!subject);
          break;
    }
-   count=0;
 
    // Construct the filtering slots (if any)
    if (!bound1) {
@@ -59,7 +58,7 @@ AggregatedIndexScan::~AggregatedIndexScan()
 {
 }
 //---------------------------------------------------------------------------
-bool AggregatedIndexScan::first()
+unsigned AggregatedIndexScan::first()
    // Produce the first tuple
 {
    // Compute the start/stop conditions
@@ -98,14 +97,12 @@ bool AggregatedIndexScan::first()
       if (scan.getValue2()!=value2->value)
          return next();
    } else value2->value=scan.getValue2();
-   if (count)
-      count->value=scan.getCount();
 
    // We have a match
-   return true;
+   return scan.getCount();
 }
 //---------------------------------------------------------------------------
-bool AggregatedIndexScan::next()
+unsigned AggregatedIndexScan::next()
    // Produce the next tuple
 {
    unsigned filter=this->filter,prefix=this->prefix;
@@ -130,11 +127,9 @@ bool AggregatedIndexScan::next()
          if (scan.getValue2()!=value2->value)
             continue;
       } else value2->value=scan.getValue2();
-      if (count)
-         count->value=scan.getCount();
 
       // We have a match
-      return true;
+      return scan.getCount();
    }
 }
 //---------------------------------------------------------------------------
@@ -146,8 +141,6 @@ void AggregatedIndexScan::print(unsigned level)
    printRegister(value1); if (bound1) std::cout << "*";
    std::cout << " ";
    printRegister(value2); if (bound2) std::cout << "*";
-   std::cout << " ";
-   if (count) printRegister(count); else std::cout << "<no count>";
    std::cout << std::endl;
    indent(level); std::cout << ">" << std::endl;
 }
