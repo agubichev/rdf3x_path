@@ -5,5 +5,6 @@ src_rts_operator:=				\
 	rts/operator/IndexScan.cpp		\
 	rts/operator/NestedLoopJoin.cpp		\
 	rts/operator/ResultsPrinter.cpp		\
+	rts/operator/Selection.cpp		\
 	rts/operator/SingletonScan.cpp
 
