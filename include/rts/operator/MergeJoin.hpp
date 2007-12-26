@@ -9,7 +9,7 @@ class Register;
 /// A merge join. The input has to be sorted by the join attributes.
 class MergeJoin : public Operator
 {
-   public:
+   private:
    /// The input
    Operator* left,*right;
    /// The join attributes
@@ -17,7 +17,6 @@ class MergeJoin : public Operator
    /// The non-join attributes
    std::vector<Register*> leftTail,rightTail;
 
-   private:
    /// Possible states while scanning the input
    enum ScanState {
       empty,
