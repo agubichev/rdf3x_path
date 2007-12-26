@@ -3,6 +3,7 @@ src_rts_operator:=				\
 	rts/operator/AggregatedIndexScan.cpp	\
 	rts/operator/HashGroupify.cpp		\
 	rts/operator/IndexScan.cpp		\
+	rts/operator/MergeJoin.cpp		\
 	rts/operator/NestedLoopJoin.cpp		\
 	rts/operator/ResultsPrinter.cpp		\
 	rts/operator/Selection.cpp		\
