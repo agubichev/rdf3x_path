@@ -1,3 +1,4 @@
 src_infra_util:=		\
-	infra/util/Hash.cpp
+	infra/util/Hash.cpp	\
+	infra/util/Pool.cpp
 
