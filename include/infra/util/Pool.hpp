@@ -51,6 +51,9 @@ template <class Impl,class T> class PoolBase
    /// Allocate a new chunk
    void allocChunk();
 
+   PoolBase(const PoolBase&);
+   void operator=(const PoolBase&);
+
    protected:
    /// Constructor
    PoolBase(unsigned cs=32) : freeList(0),chunks(0),chunkSize(cs) { if (chunkSize&7) chunkSize=(chunkSize|7)+1; }

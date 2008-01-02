@@ -105,7 +105,7 @@ void SPARQLParser::parseProjection()
          projection.push_back(nameVariable(lexer.getTokenValue()));
       } else if (token==SPARQLLexer::Star) {
          // We do nothing here. Empty projections will be filled with all
-         // named variables after parsin.
+         // named variables after parsing
       } else {
          if (first)
             throw ParserException("projection required after select");
