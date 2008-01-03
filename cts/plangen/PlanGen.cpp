@@ -2,6 +2,7 @@
 #include "cts/plangen/Costs.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
+#include <map>
 //---------------------------------------------------------------------------
 /// Description for a join
 struct PlanGen::JoinDescription
@@ -287,6 +288,84 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
    std::vector<JoinDescription> joins;
    for (QueryGraph::edge_iterator iter=query.edgesBegin(),limit=query.edgesEnd();iter!=limit;++iter)
       joins.push_back(buildJoinInfo(db,query,*iter));
+
+   // Build larger join trees
+   std::vector<unsigned> joinOrderings;
+   for (unsigned index=1;index<dpTable.size();index++) {
+      std::map<BitSet,Problem*> lookup;
+      for (unsigned index2=0;index2<index;index2++) {
+         for (Problem* iter=dpTable[index2];iter;iter=iter->next) {
+            BitSet leftRel=iter->relations;
+            for (Problem* iter2=dpTable[index-index2-1];iter2;iter2=iter2->next) {
+               // Overlapping subproblem?
+               BitSet rightRel=iter2->relations;
+               if (leftRel.overlapsWith(rightRel))
+                  continue;
+
+               // Investigate all join candidates
+               Problem* problem=0;
+               double selectivity=1;
+               for (std::vector<JoinDescription>::const_iterator iter3=joins.begin(),limit3=joins.end();iter3!=limit3;++iter3)
+                  if (((*iter3).left.subsetOf(leftRel))&&((*iter3).right.subsetOf(rightRel))) {
+                     // We can join it...
+                     BitSet relations=leftRel.unionWith(rightRel);
+                     if (lookup.count(relations)) {
+                        problem=lookup[relations];
+                     } else {
+                        lookup[relations]=problem=problems.alloc();
+                        problem->relations=relations;
+                        problem->plans=0;
+                        problem->next=dpTable[index];
+                        dpTable[index]=problem;
+                     }
+                     // Collect selectivities and join order candidates
+                     joinOrderings.clear();
+                     joinOrderings.push_back((*iter3).ordering);
+                     selectivity=(*iter3).selectivity;
+                     for (++iter3;iter3!=limit3;++iter3) {
+                        joinOrderings.push_back((*iter3).ordering);
+                        selectivity*=(*iter3).selectivity;
+                     }
+                     break;
+                  }
+               if (!problem) continue;
+
+               // Combine phyiscal plans
+               for (Plan* leftPlan=iter->plans;leftPlan;leftPlan=leftPlan->next) {
+                  for (Plan* rightPlan=iter2->plans;rightPlan;rightPlan=rightPlan->next) {
+                     // Try a merge joins
+                     if (leftPlan->ordering==rightPlan->ordering) {
+                        for (std::vector<unsigned>::const_iterator iter=joinOrderings.begin(),limit=joinOrderings.end();iter!=limit;++iter) {
+                           if (leftPlan->ordering==(*iter)) {
+                              Plan* p=plans.alloc();
+                              p->op=Plan::MergeJoin;
+                              p->opArg=*iter;
+                              p->left=leftPlan;
+                              p->right=rightPlan;
+                              p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                              p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
+                              p->ordering=leftPlan->ordering;
+                              addPlan(problem,p);
+                              break;
+                           }
+                        }
+                     }
+                     // Try a hash join
+                     Plan* p=plans.alloc();
+                     p->op=Plan::HashJoin;
+                     p->opArg=0;
+                     p->left=leftPlan;
+                     p->right=rightPlan;
+                     p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                     p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
+                     p->ordering=~0u;
+                     addPlan(problem,p);
+                  }
+               }
+            }
+         }
+      }
+   }
 
    // Retrieve the best plan
    if (!dpTable.back())

@@ -37,15 +37,20 @@ class BitSet
    bool operator==(const BitSet& o) const { return value==o.value; }
    /// Not equal?
    bool operator!=(const BitSet& o) const { return value!=o.value; }
+   /// Compare for set operators
+   bool operator<(const BitSet& o) const { return value<o.value; }
+
    /// Subset or equal?
-   bool operator<=(const BitSet& o) const { return (value&o.value)==value; }
+   bool subsetOf(const BitSet& o) const { return (value&o.value)==value; }
+   /// Overlap?
+   bool overlapsWith(const BitSet& o) const { return value&o.value; }
 
    /// Union
-   BitSet operator+(const BitSet& o) const { return BitSet(value|o.value); }
+   BitSet unionWith(const BitSet& o) const { return BitSet(value|o.value); }
    /// Difference
-   BitSet operator-(const BitSet& o) const { return BitSet(value&(~o.value)); }
+   BitSet differenceWith(const BitSet& o) const { return BitSet(value&(~o.value)); }
    /// Intersection
-   BitSet operator*(const BitSet& o) const { return BitSet(value&o.value); }
+   BitSet intersectWith(const BitSet& o) const { return BitSet(value&o.value); }
 };
 //---------------------------------------------------------------------------
 #endif
