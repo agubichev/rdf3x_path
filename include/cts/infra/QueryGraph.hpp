@@ -67,6 +67,13 @@ class QueryGraph
    /// Iterator over the nodes
    node_iterator nodesEnd() const { return nodes.end(); }
 
+   /// Iterator over the edges
+   typedef std::vector<Edge>::const_iterator edge_iterator;
+   /// Iterator over the edges
+   edge_iterator edgesBegin() const { return edges.begin(); }
+   /// Iterator over the edges
+   edge_iterator edgesEnd() const { return edges.end(); }
+
    /// Iterator over the projection
    typedef std::vector<unsigned>::const_iterator projection_iterator;
    /// Iterator over the projection

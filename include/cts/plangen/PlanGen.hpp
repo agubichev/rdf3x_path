@@ -4,8 +4,7 @@
 #include "cts/plangen/Plan.hpp"
 #include "cts/infra/BitSet.hpp"
 #include "cts/infra/QueryGraph.hpp"
-//---------------------------------------------------------------------------
-class Operator;
+#include "rts/database/Database.hpp"
 //---------------------------------------------------------------------------
 /// A plan generator that construct a physical plan from a query graph
 class PlanGen
@@ -20,6 +19,8 @@ class PlanGen
       /// The relations involved in the problem
       BitSet relations;
    };
+   /// A join description
+   struct JoinDescription;
    /// The plans
    PlanContainer plans;
    /// The problems
@@ -30,8 +31,16 @@ class PlanGen
    PlanGen(const PlanGen&);
    void operator=(const PlanGen&);
 
+   /// Add a plan to a subproblem
+   void addPlan(Problem* problem,Plan* plan);
+   /// Generate an index scan
+   void buildIndexScan(Database& db,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2,unsigned value3);
+   /// Generate an aggregated index scan
+   void buildAggregatedIndexScan(Database& db,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2);
    /// Generate base table accesses
-   Problem* buildScan(const QueryGraph& query,const QueryGraph::Node& node,unsigned id);
+   Problem* buildScan(Database& db,const QueryGraph& query,const QueryGraph::Node& node,unsigned id);
+   /// Build the informaion about a join
+   JoinDescription buildJoinInfo(Database& db,const QueryGraph& query,const QueryGraph::Edge& edge);
 
    public:
    /// Constructor
@@ -40,7 +49,7 @@ class PlanGen
    ~PlanGen();
 
    /// Translate a query into an operator tree
-   Operator* translate(const QueryGraph& query);
+   Plan* translate(Database& db,const QueryGraph& query);
 };
 //---------------------------------------------------------------------------
 #endif
