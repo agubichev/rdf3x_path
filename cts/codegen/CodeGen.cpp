@@ -36,7 +36,7 @@ static Operator* translateIndexScan(Runtime& runtime,const std::set<unsigned>& p
       bindings[node.predicate]=predicate;
    Register* object=runtime.getRegister(3*id+2);
    if (node.constObject)
-      object->value=node.predicate; else
+      object->value=node.object; else
    if (projection.count(node.object))
       bindings[node.object]=object;
 
@@ -71,7 +71,7 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const std::set<un
       bindings[node.predicate]=predicate;
    Register* object=runtime.getRegister(3*id+2);
    if (node.constObject)
-      object->value=node.predicate; else
+      object->value=node.object; else
    if ((order==Database::Order_Subject_Predicate_Object)||(order==Database::Order_Predicate_Subject_Object))
       object=0; else
    if (projection.count(node.object))

@@ -278,7 +278,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
    dpTable.resize(query.getNodeCount());
    Problem* last=0;
    unsigned id=0;
-   for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter) {
+   for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter,++id) {
       Problem* p=buildScan(db,query,*iter,id);
       if (last)
          last->next=p; else
@@ -390,6 +390,19 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
          best=iter;
    if (!best)
       return 0;
+
+   // Aggregate, if required
+   if ((query.getDuplicateHandling()==QueryGraph::CountDuplicates)||(query.getDuplicateHandling()==QueryGraph::NoDuplicates)) {
+      Plan* p=plans.alloc();
+      p->op=Plan::HashGroupify;
+      p->opArg=0;
+      p->left=best;
+      p->right=0;
+      p->cardinality=best->cardinality; // not correct, be we do not use this value anyway
+      p->costs=best->costs; // the same here
+      p->ordering=~0u;
+      best=p;
+   }
 
    return best;
 }

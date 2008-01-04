@@ -153,7 +153,16 @@ unsigned IndexScan::next()
 void IndexScan::print(unsigned level)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<IndexScan " << order << std::endl;
+   indent(level); std::cout << "<IndexScan ";
+   switch (order) {
+      case Database::Order_Subject_Predicate_Object: std::cout << "SubjectPredicateObject"; break;
+      case Database::Order_Subject_Object_Predicate: std::cout << "SubjectObjectPredicate"; break;
+      case Database::Order_Object_Predicate_Subject: std::cout << "ObjectPredicateSubject"; break;
+      case Database::Order_Object_Subject_Predicate: std::cout << "ObjectSubjectPredicate"; break;
+      case Database::Order_Predicate_Subject_Object: std::cout << "PredicateSubjectObject"; break;
+      case Database::Order_Predicate_Object_Subject: std::cout << "PredicateObjectSubject"; break;
+   }
+   std::cout << std::endl;
    indent(level+1);
    printRegister(value1); if (bound1) std::cout << "*";
    std::cout << " ";
