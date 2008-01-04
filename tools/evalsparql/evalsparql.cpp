@@ -2,6 +2,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
 #include "cts/parser/SPARQLParser.hpp"
+#include "cts/plangen/PlanGen.hpp"
 #include "cts/semana/SemanticAnalysis.hpp"
 #include "infra/osdep/Timestamp.hpp"
 #include "rts/database/Database.hpp"
@@ -53,22 +54,29 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
       }
    }
 
+   // Run the optimizer
+   PlanGen plangen;
+   Plan* plan=plangen.translate(db,queryGraph);
+   if (!plan) {
+      std::cout << "plan generation failed" << std::endl;
+      return;
+   }
+
    // Build a physical plan
    Runtime runtime(db);
-   Operator* plan=CodeGen::translate(runtime,queryGraph,silent);
+   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,silent);
 
-   // plan->print();
+   // operatorTree->print();
 
    // And execute it
    Timestamp start;
-   if (plan->first()) {
-      while (plan->next());
+   if (operatorTree->first()) {
+      while (operatorTree->next());
    }
    Timestamp stop;
    std::cout << "Execution time: " << (stop-start) << " ms" << std::endl;
 
-
-   delete plan;
+   delete operatorTree;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])

@@ -2,6 +2,7 @@
 #define H_cts_codegen_CodeGen
 //---------------------------------------------------------------------------
 class Operator;
+class Plan;
 class Runtime;
 class QueryGraph;
 //---------------------------------------------------------------------------
@@ -9,8 +10,8 @@ class QueryGraph;
 class CodeGen
 {
    public:
-   /// Perform a naive translation of a query into an operator tree
-   static Operator* translate(Runtime& runtime,const QueryGraph& query,bool silent=false);
+   /// Translate an execution plan into an operator tree
+   static Operator* translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent=false);
 };
 //---------------------------------------------------------------------------
 #endif

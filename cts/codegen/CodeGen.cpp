@@ -1,179 +1,320 @@
 #include "cts/codegen/CodeGen.hpp"
 #include "cts/infra/QueryGraph.hpp"
+#include "cts/plangen/Plan.hpp"
 #include "rts/operator/AggregatedIndexScan.hpp"
+#include "rts/operator/HashGroupify.hpp"
+#include "rts/operator/HashJoin.hpp"
 #include "rts/operator/IndexScan.hpp"
+#include "rts/operator/MergeJoin.hpp"
 #include "rts/operator/NestedLoopJoin.hpp"
 #include "rts/operator/ResultsPrinter.hpp"
+#include "rts/operator/Selection.hpp"
 #include "rts/operator/SingletonScan.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include <map>
 #include <set>
+#include <cassert>
 //---------------------------------------------------------------------------
-static Operator* buildIndexScan(Runtime& runtime,const QueryGraph::Node& node,std::set<unsigned>& boundVariables,std::map<unsigned,Register*>& constantRegisters,std::map<unsigned,Register*>& variableRegisters,std::map<unsigned,unsigned>& variableUses)
-   // Construct an index scan
+static Operator* translatePlan(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan);
+//---------------------------------------------------------------------------
+static Operator* translateIndexScan(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate an index scan into an operator tree
 {
-   // Examine which variables are bound
-   bool boundSubject,boundPredicate,boundObject;
-   boundSubject=(node.constSubject||boundVariables.count(node.subject));
-   boundPredicate=(node.constPredicate||boundVariables.count(node.predicate));
-   boundObject=(node.constObject||boundVariables.count(node.object));
+   unsigned id=plan->left-static_cast<Plan*>(0);
+   const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
 
-   // Lookup the registers and mark them as bound
-   Register* subject,*predicate,*object;
-   if (node.constSubject) {
-      subject=constantRegisters[node.subject];
-   } else {
-      subject=variableRegisters[node.subject];
-      boundVariables.insert(node.subject);
-   }
-   if (node.constPredicate) {
-      predicate=constantRegisters[node.predicate];
-   } else {
-      predicate=variableRegisters[node.predicate];
-      boundVariables.insert(node.predicate);
-   }
-   if (node.constObject) {
-      object=constantRegisters[node.object];
-   } else {
-      object=variableRegisters[node.object];
-      boundVariables.insert(node.object);
-   }
+   // Initialize the registers
+   Register* subject=runtime.getRegister(3*id+0);
+   if (node.constSubject)
+      subject->value=node.subject; else
+   if (projection.count(node.subject))
+      bindings[node.subject]=subject;
+   Register* predicate=runtime.getRegister(3*id+1);
+   if (node.constPredicate)
+      predicate->value=node.predicate; else
+   if (projection.count(node.predicate))
+      bindings[node.predicate]=predicate;
+   Register* object=runtime.getRegister(3*id+2);
+   if (node.constObject)
+      object->value=node.predicate; else
+   if (projection.count(node.object))
+      bindings[node.object]=object;
 
-   // Pick a suitable data order
-   Database::DataOrder order;
-   bool aggregated=false;
-   if (boundSubject) {
-      if (boundPredicate) {
-         order=Database::Order_Subject_Predicate_Object;
-         if ((!node.constObject)&&(variableUses[node.object]==1)) {
-            object=0; aggregated=true;
-         }
-      } else if (boundObject) {
-         order=Database::Order_Subject_Object_Predicate;
-         if ((!node.constPredicate)&&(variableUses[node.predicate]==1)) {
-            predicate=0; aggregated=true;
-         }
-      } else {
-         if ((!node.constPredicate)&&(variableUses[node.predicate]==1)) {
-            order=Database::Order_Subject_Object_Predicate;
-            predicate=0; aggregated=true;
-         } else {
-            order=Database::Order_Subject_Predicate_Object;
-            if ((!node.constObject)&&(variableUses[node.object]==1)) {
-               object=0; aggregated=true;
-            }
-         }
-      }
-   } else if (boundPredicate) {
-      if (boundObject) {
-         order=Database::Order_Predicate_Object_Subject;
-         if ((!node.constSubject)&&(variableUses[node.subject]==1)) {
-            subject=0; aggregated=true;
-         }
-      } else {
-         if ((!node.constSubject)&&(variableUses[node.subject]==1)) {
-            order=Database::Order_Predicate_Object_Subject;
-            subject=0; aggregated=true;
-         } else {
-            order=Database::Order_Predicate_Subject_Object;
-            if ((!node.constObject)&&(variableUses[node.object]==1)) {
-               object=0; aggregated=true;
-            }
-         }
-      }
-   } else if (boundObject) {
-      if ((!node.constSubject)&&(variableUses[node.subject]==1)) {
-         order=Database::Order_Object_Predicate_Subject;
-         subject=0; aggregated=true;
-      } else {
-         order=Database::Order_Object_Subject_Predicate;
-         if ((!node.constPredicate)&&(variableUses[node.predicate]==1)) {
-            predicate=0; aggregated=true;
-         }
-      }
-   } else order=Database::Order_Subject_Predicate_Object;
-
-   // And return the scan
-   if (aggregated)
-      return new AggregatedIndexScan(runtime.getDatabase(),order,subject,boundSubject,predicate,boundPredicate,object,boundObject);
-   return new IndexScan(runtime.getDatabase(),order,subject,boundSubject,predicate,boundPredicate,object,boundObject);
+   // And return the operator
+   return new IndexScan(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
+                        subject,node.constSubject,
+                        predicate,node.constPredicate,
+                        object,node.constObject);
 }
 //---------------------------------------------------------------------------
-Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,bool silent)
+static Operator* translateAggregatedIndexScan(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate an aggregated index scan into an operator tree
+{
+   unsigned id=plan->left-static_cast<Plan*>(0);
+   const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
+   Database::DataOrder order=static_cast<Database::DataOrder>(plan->opArg);
+
+   // Initialize the registers
+   Register* subject=runtime.getRegister(3*id+0);
+   if (node.constSubject)
+      subject->value=node.subject; else
+   if ((order==Database::Order_Object_Predicate_Subject)||(order==Database::Order_Predicate_Object_Subject))
+      subject=0; else
+   if (projection.count(node.subject))
+      bindings[node.subject]=subject;
+   Register* predicate=runtime.getRegister(3*id+1);
+   if (node.constPredicate)
+      predicate->value=node.predicate; else
+   if ((order==Database::Order_Subject_Object_Predicate)||(order==Database::Order_Object_Subject_Predicate))
+      predicate=0; else
+   if (projection.count(node.predicate))
+      bindings[node.predicate]=predicate;
+   Register* object=runtime.getRegister(3*id+2);
+   if (node.constObject)
+      object->value=node.predicate; else
+   if ((order==Database::Order_Subject_Predicate_Object)||(order==Database::Order_Predicate_Subject_Object))
+      object=0; else
+   if (projection.count(node.object))
+      bindings[node.object]=object;
+
+   // And return the operator
+   return new AggregatedIndexScan(runtime.getDatabase(),order,
+                                  subject,node.constSubject,
+                                  predicate,node.constPredicate,
+                                  object,node.constObject);
+}
+//---------------------------------------------------------------------------
+static void collectVariables(std::set<unsigned>& variables,Plan* plan)
+   // Collect all variables contained in a plan
+{
+   switch (plan->op) {
+      case Plan::IndexScan:
+      case Plan::AggregatedIndexScan: {
+         const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
+         if (!node.constSubject)
+            variables.insert(node.subject);
+         if (!node.constPredicate)
+            variables.insert(node.predicate);
+         if (!node.constObject)
+            variables.insert(node.object);
+         break;
+      }
+      case Plan::NestedLoopJoin:
+      case Plan::MergeJoin:
+      case Plan::HashJoin:
+         collectVariables(variables,plan->left);
+         collectVariables(variables,plan->right);
+         break;
+      case Plan::HashGroupify:
+         collectVariables(variables,plan->left);
+         break;
+   }
+}
+//---------------------------------------------------------------------------
+static void getJoinVariables(std::set<unsigned>& variables,Plan* left,Plan* right)
+   // Get the join variables
+{
+   // Collect all variables
+   std::set<unsigned> leftVariables,rightVariables;
+   collectVariables(leftVariables,left);
+   collectVariables(rightVariables,right);
+
+   // Find common ones
+   if (leftVariables.size()<rightVariables.size()) {
+      for (std::set<unsigned>::const_iterator iter=leftVariables.begin(),limit=leftVariables.end();iter!=limit;++iter)
+         if (rightVariables.count(*iter))
+            variables.insert(*iter);
+   } else {
+      for (std::set<unsigned>::const_iterator iter=rightVariables.begin(),limit=rightVariables.end();iter!=limit;++iter)
+         if (leftVariables.count(*iter))
+            variables.insert(*iter);
+   }
+}
+//---------------------------------------------------------------------------
+static void mergeBindings(const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<unsigned,Register*>& leftBindings,const std::map<unsigned,Register*>& rightBindings)
+   // Merge bindings after a join
+{
+   for (std::map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+      if (projection.count((*iter).first))
+         bindings[(*iter).first]=(*iter).second;
+   for (std::map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+      if (projection.count((*iter).first)&&(!bindings.count((*iter).first)))
+         bindings[(*iter).first]=(*iter).second;
+}
+//---------------------------------------------------------------------------
+static Operator* translateNestedLoopJoin(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate a nested loop join into an operator tree
+{
+   // Get the join variables (if any)
+   std::set<unsigned> joinVariables,newProjection=projection;
+   getJoinVariables(joinVariables,plan->left,plan->right);
+   newProjection.insert(joinVariables.begin(),joinVariables.end());
+
+   // Build the input trees
+   std::map<unsigned,Register*> leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,newProjection,leftBindings,plan->left);
+   Operator* rightTree=translatePlan(runtime,newProjection,rightBindings,plan->right);
+   mergeBindings(projection,bindings,leftBindings,rightBindings);
+
+   // Build the operator
+   Operator* result=new NestedLoopJoin(leftTree,rightTree);
+
+   // And apply additional selections if necessary
+   if (!joinVariables.empty()) {
+      std::vector<Register*> conditions;
+      for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+         conditions.push_back(leftBindings[*iter]);
+         conditions.push_back(rightBindings[*iter]);
+      }
+      result=new Selection(result,conditions);
+   }
+
+   return result;
+}
+//---------------------------------------------------------------------------
+static Operator* translateMergeJoin(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate a merge join into an operator tree
+{
+   // Get the join variables (if any)
+   std::set<unsigned> joinVariables,newProjection=projection;
+   getJoinVariables(joinVariables,plan->left,plan->right);
+   newProjection.insert(joinVariables.begin(),joinVariables.end());
+   assert(!joinVariables.empty());
+   unsigned joinOn=plan->opArg;
+   assert(joinVariables.count(joinOn));
+
+   // Build the input trees
+   std::map<unsigned,Register*> leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,newProjection,leftBindings,plan->left);
+   Operator* rightTree=translatePlan(runtime,newProjection,rightBindings,plan->right);
+   mergeBindings(projection,bindings,leftBindings,rightBindings);
+
+   // Prepare the tails
+   std::vector<Register*> leftTail,rightTail;
+   for (std::map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+      if ((*iter).first!=joinOn)
+         leftTail.push_back((*iter).second);
+   for (std::map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+      if ((*iter).first!=joinOn)
+         rightTail.push_back((*iter).second);
+
+   // Build the operator
+   Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail);
+
+   // And apply additional selections if necessary
+   if (joinVariables.size()>1) {
+      std::vector<Register*> conditions;
+      for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+         if ((*iter)!=joinOn) {
+            conditions.push_back(leftBindings[*iter]);
+            conditions.push_back(rightBindings[*iter]);
+         }
+      }
+      result=new Selection(result,conditions);
+   }
+
+   return result;
+}
+//---------------------------------------------------------------------------
+static Operator* translateHashJoin(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate a hash join into an operator tree
+{
+   // Get the join variables (if any)
+   std::set<unsigned> joinVariables,newProjection=projection;
+   getJoinVariables(joinVariables,plan->left,plan->right);
+   newProjection.insert(joinVariables.begin(),joinVariables.end());
+   assert(!joinVariables.empty());
+   unsigned joinOn=*(joinVariables.begin());
+
+   // Build the input trees
+   std::map<unsigned,Register*> leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,newProjection,leftBindings,plan->left);
+   Operator* rightTree=translatePlan(runtime,newProjection,rightBindings,plan->right);
+   mergeBindings(projection,bindings,leftBindings,rightBindings);
+
+   // Prepare the tails
+   std::vector<Register*> leftTail,rightTail;
+   for (std::map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+      if ((*iter).first!=joinOn)
+         leftTail.push_back((*iter).second);
+   for (std::map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+      if ((*iter).first!=joinOn)
+         rightTail.push_back((*iter).second);
+
+   // Build the operator
+   Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail);
+
+   // And apply additional selections if necessary
+   if (joinVariables.size()>1) {
+      std::vector<Register*> conditions;
+      for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+         if ((*iter)!=joinOn) {
+            conditions.push_back(leftBindings[*iter]);
+            conditions.push_back(rightBindings[*iter]);
+         }
+      }
+      result=new Selection(result,conditions);
+   }
+
+   return result;
+}
+//---------------------------------------------------------------------------
+static Operator* translateHashGroupify(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate a hash groupify into an operator tree
+{
+   // Build the input trees
+   Operator* tree=translatePlan(runtime,projection,bindings,plan->left);
+
+   // Collect output registers
+   std::vector<Register*> output;
+   for (std::map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
+      output.push_back((*iter).second);
+
+   // Build the operator
+   return new HashGroupify(tree,output);
+}
+//---------------------------------------------------------------------------
+static Operator* translatePlan(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate a plan into an operator tree
+{
+   switch (plan->op) {
+      case Plan::IndexScan: return translateIndexScan(runtime,projection,bindings,plan);
+      case Plan::AggregatedIndexScan: return translateAggregatedIndexScan(runtime,projection,bindings,plan);
+      case Plan::NestedLoopJoin: return translateNestedLoopJoin(runtime,projection,bindings,plan);
+      case Plan::MergeJoin: return translateMergeJoin(runtime,projection,bindings,plan);
+      case Plan::HashJoin: return translateHashJoin(runtime,projection,bindings,plan);
+      case Plan::HashGroupify: return translateHashGroupify(runtime,projection,bindings,plan);
+      default: return 0;
+   }
+}
+//---------------------------------------------------------------------------
+Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent)
    // Perform a naive translation of a query into an operator tree
 {
-   // Collect the required number of registers
-   std::map<unsigned,Register*> constantRegisters;
-   std::map<unsigned,Register*> variableRegisters;
-   std::map<unsigned,unsigned> variableUses;
-   for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter) {
-      variableRegisters[*iter];
-      variableUses[*iter]++;
-   }
-   for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter) {
-      const QueryGraph::Node& n=(*iter);
-      if (n.constSubject) constantRegisters[n.subject]; else { variableRegisters[n.subject]; variableUses[n.subject]++; }
-      if (n.constPredicate) constantRegisters[n.predicate]; else { variableRegisters[n.predicate]; variableUses[n.predicate]++; }
-      if (n.constObject) constantRegisters[n.object]; else { variableRegisters[n.object]; variableUses[n.object]++; }
-   }
+   // Allocate registers for all relations
+   runtime.allocateRegisters(query.getNodeCount()*3);
 
-   // Allocate the registers
-   runtime.allocateRegisters(constantRegisters.size()+variableRegisters.size());
-   { Register* nextReg=runtime.getRegister(0);
-   for (std::map<unsigned,Register*>::iterator iter=constantRegisters.begin(),limit=constantRegisters.end();iter!=limit;++iter) {
-      (*iter).second=nextReg++;
-      (*iter).second->value=(*iter).first;
-   }
-   for (std::map<unsigned,Register*>::iterator iter=variableRegisters.begin(),limit=variableRegisters.end();iter!=limit;++iter) {
-      (*iter).second=nextReg++;
-   } }
-
-   // Build the basic tree
+   // Build the operator tree
    Operator* tree;
+   std::vector<Register*> output;
    if (query.nodesBegin()==query.nodesEnd()) {
       tree=new SingletonScan();
    } else {
-      // Start with the first pattern
-      std::set<unsigned> boundVariables;
-      std::set<const QueryGraph::Node*> done,reachable;
-      reachable.insert(&(*query.nodesBegin()));
+      // Construct the projection
+      std::set<unsigned> projection;
+      for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
+         projection.insert(*iter);
 
-      // Expand
-      unsigned nodesCount=query.getNodeCount();
-      tree=0;
-      while (done.size()<nodesCount) {
-         // Examine the next node
-         const QueryGraph::Node* node;
-         if (reachable.empty()) {
-            // No reachable node found, take the next one
-            node=0;
-            for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter)
-               if (!done.count(&(*iter))) {
-                  node=&(*iter);
-                  break;
-               }
-         } else {
-            node=*reachable.begin();
-            reachable.erase(node);
-            if (done.count(node))
-               continue;
-         }
-         done.insert(node);
+      // And build the tree
+      std::map<unsigned,Register*> bindings;
+      tree=translatePlan(runtime,projection,bindings,plan);
 
-         // Build the index scan
-         Operator* scan=buildIndexScan(runtime,*node,boundVariables,constantRegisters,variableRegisters,variableUses);
-
-         // And enlarge the tree
-         if (!tree)
-            tree=scan; else
-            tree=new NestedLoopJoin(tree,scan);
-      }
+      // Remember the output registers
+      for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
+         output.push_back(bindings[*iter]);
    }
 
    // And add the output generation
-   std::vector<Register*> output;
-   for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
-      output.push_back(variableRegisters[*iter]);
    ResultsPrinter::DuplicateHandling duplicateHandling=ResultsPrinter::ExpandDuplicates;
    switch (query.getDuplicateHandling()) {
       case QueryGraph::AllDuplicates: duplicateHandling=ResultsPrinter::ExpandDuplicates; break;

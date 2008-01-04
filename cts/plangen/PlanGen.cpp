@@ -188,8 +188,10 @@ PlanGen::Problem* PlanGen::buildScan(Database& db,const QueryGraph& query,const 
       buildIndexScan(db,Database::Order_Predicate_Object_Subject,result,p,o,s);
 
    // Update the child pointers as info for the code generation
-   for (Plan* iter=result->plans;iter;iter=iter->next)
+   for (Plan* iter=result->plans;iter;iter=iter->next) {
+      iter->left=static_cast<Plan*>(0)+id;
       iter->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&node));
+   }
 
    return result;
 }
@@ -351,14 +353,26 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
                         }
                      }
                      // Try a hash join
+                     if (selectivity<1) {
+                        Plan* p=plans.alloc();
+                        p->op=Plan::HashJoin;
+                        p->opArg=0;
+                        p->left=leftPlan;
+                        p->right=rightPlan;
+                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
+                        p->ordering=~0u;
+                        addPlan(problem,p);
+                     }
+                     // Nested loop join
                      Plan* p=plans.alloc();
-                     p->op=Plan::HashJoin;
+                     p->op=Plan::NestedLoopJoin;
                      p->opArg=0;
                      p->left=leftPlan;
                      p->right=rightPlan;
                      p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
-                     p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
-                     p->ordering=~0u;
+                     p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
+                     p->ordering=leftPlan->ordering;
                      addPlan(problem,p);
                   }
                }
