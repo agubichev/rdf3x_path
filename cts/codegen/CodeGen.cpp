@@ -292,7 +292,8 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
    // Perform a naive translation of a query into an operator tree
 {
    // Allocate registers for all relations
-   runtime.allocateRegisters(query.getNodeCount()*3);
+   unsigned unboundVariable=query.getNodeCount()*3;
+   runtime.allocateRegisters(unboundVariable+1);
 
    // Build the operator tree
    Operator* tree;
@@ -311,7 +312,9 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
 
       // Remember the output registers
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
-         output.push_back(bindings[*iter]);
+         if (bindings.count(*iter))
+            output.push_back(bindings[*iter]); else
+            output.push_back(runtime.getRegister(unboundVariable));
    }
 
    // And add the output generation
