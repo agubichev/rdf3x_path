@@ -1,4 +1,5 @@
 #include "cts/infra/QueryGraph.hpp"
+#include <set>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -72,5 +73,26 @@ void QueryGraph::constructEdges()
          }
       }
    }
+}
+//---------------------------------------------------------------------------
+void QueryGraph::addFilter(const Filter& filter)
+   // Add a filter condition
+{
+   // Does a filter on the same variable already exist?
+   for (vector<Filter>::iterator iter=filters.begin(),limit=filters.end();iter!=limit;++iter) {
+      if ((*iter).id==filter.id) {
+         // Yes, intersect the two filters
+         set<unsigned> oldValues;
+         oldValues.insert((*iter).values.begin(),(*iter).values.end());
+         (*iter).values.clear();
+         for (vector<unsigned>::const_iterator iter2=filter.values.begin(),limit2=filter.values.end();iter2!=limit2;++iter2)
+            if (oldValues.count(*iter2))
+               (*iter).values.push_back(*iter2);
+         return;
+      }
+   }
+
+   // No, add it
+   filters.push_back(filter);
 }
 //---------------------------------------------------------------------------

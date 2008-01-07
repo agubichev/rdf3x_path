@@ -25,11 +25,20 @@ class QueryGraph
       /// The endpoints
       const Node* from,*to;
    };
+   /// A value filter
+   struct Filter {
+      /// The id
+      unsigned id;
+      /// The valid values. Sorted by id.
+      std::vector<unsigned> values;
+   };
    private:
    /// The nodes
    std::vector<Node> nodes;
    /// The edges
    std::vector<Edge> edges;
+   /// The filter conditions
+   std::vector<Filter> filters;
    /// The projection
    std::vector<unsigned> projection;
    /// The duplicate handling
@@ -55,6 +64,8 @@ class QueryGraph
    void setDuplicateHandling(DuplicateHandling d) { duplicateHandling=d; }
    /// Get the duplicate handling mode
    DuplicateHandling getDuplicateHandling() const { return duplicateHandling; }
+   /// Add a filter condition
+   void addFilter(const Filter& filter);
    /// Add an entry to the output projection
    void addProjection(unsigned id) { projection.push_back(id); }
 

@@ -3,6 +3,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include <set>
 //---------------------------------------------------------------------------
 SemanticAnalysis::SemanticAnalysis(Database& db)
    : db(db)
@@ -28,6 +29,38 @@ static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& i
    }
 }
 //---------------------------------------------------------------------------
+static bool encode(Database& db,const SPARQLParser& query,const SPARQLParser::Filter& input,QueryGraph::Filter& filter)
+   // Encode an element for the query graph
+{
+   // Check if the id is bound somewhere
+   bool found=false;
+   for (SPARQLParser::pattern_iterator iter=query.patternsBegin(),limit=query.patternsEnd();iter!=limit;++iter)
+      if ((((*iter).subject.type==SPARQLParser::Element::Variable)&&((*iter).subject.id==input.id))||
+          (((*iter).predicate.type==SPARQLParser::Element::Variable)&&((*iter).predicate.id==input.id))||
+          (((*iter).object.type==SPARQLParser::Element::Variable)&&((*iter).object.id==input.id))) {
+         found=true;
+         break;
+      }
+   if (!found)
+      return false;
+
+   // Resolve all values
+   std::set<unsigned> values;
+   for (std::vector<SPARQLParser::Element>::const_iterator iter=input.values.begin(),limit=input.values.end();iter!=limit;++iter) {
+      unsigned id;
+      if (db.getDictionary().lookup((*iter).value,id))
+         values.insert(id);
+   }
+
+   // Construct the filter
+   filter.id=input.id;
+   filter.values.clear();
+   for (std::set<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter)
+      filter.values.push_back(*iter);
+
+   return true;
+}
+//---------------------------------------------------------------------------
 bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
    // Perform the transformation
 {
@@ -40,11 +73,22 @@ bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
       if ((!encode(db,(*iter).subject,node.subject,node.constSubject))||
           (!encode(db,(*iter).predicate,node.predicate,node.constPredicate))||
           (!encode(db,(*iter).object,node.object,node.constObject))) {
-         // A constant could not be resolved. This will produce an empty resut
+         // A constant could not be resolved. This will produce an empty result
          output.clear();
          return true;
       }
       output.addNode(node);
+   }
+
+   // Encode the filter conditions
+   for (SPARQLParser::filter_iterator iter=input.filtersBegin(),limit=input.filtersEnd();iter!=limit;++iter) {
+      QueryGraph::Filter filter;
+      if (!encode(db,input,*iter,filter)) {
+         // The filter variable is not bound. This will produce an empty result
+         output.clear();
+         return true;
+      }
+      output.addFilter(filter);
    }
 
    // Compute the edges

@@ -112,6 +112,13 @@ class SPARQLParser
    /// Iterator over the patterns
    pattern_iterator patternsEnd() const { return patterns.end(); }
 
+   /// Iterator over the filters
+   typedef std::vector<Filter>::const_iterator filter_iterator;
+   /// Iterator over the filters
+   filter_iterator filtersBegin() const { return filters.begin(); }
+   /// Iterator over the filters
+   filter_iterator filtersEnd() const { return filters.end(); }
+
    /// Iterator over the projection clause
    typedef std::vector<unsigned>::const_iterator projection_iterator;
    /// Iterator over the projection
