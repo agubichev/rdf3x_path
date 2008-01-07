@@ -51,7 +51,7 @@ void PlanGen::addPlan(Problem* problem,Plan* plan)
    problem->plans=plan;
 }
 //---------------------------------------------------------------------------
-void PlanGen::buildIndexScan(Database& db,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2,unsigned value3)
+void PlanGen::buildIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2,unsigned value3)
    // Build an index scan
 {
    // Initialize a new plan
@@ -92,11 +92,26 @@ void PlanGen::buildIndexScan(Database& db,Database::DataOrder order,Problem* res
    if (div)
       plan->cardinality=plan->cardinality/div;
 
+   // Apply all applicable filters
+   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
+      if (((*iter).id==value1)||((*iter).id==value2)||((*iter).id==value3)) {
+         Plan* p2=plans.alloc();
+         p2->op=Plan::Filter;
+         p2->opArg=(*iter).id;
+         p2->left=plan;
+         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+         p2->next=0;
+         p2->cardinality=plan->cardinality*0.5;
+         p2->costs=plan->costs+Costs::filter(plan->cardinality);
+         p2->ordering=plan->ordering;
+         plan=p2;
+      }
+
    // And store it
    addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
-void PlanGen::buildAggregatedIndexScan(Database& db,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2)
+void PlanGen::buildAggregatedIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2)
    // Build an aggregated index scan
 {
    // Initialize a new plan
@@ -128,6 +143,21 @@ void PlanGen::buildAggregatedIndexScan(Database& db,Database::DataOrder order,Pr
    if (div)
       plan->cardinality=plan->cardinality/div;
 
+   // Apply all applicable filters
+   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
+      if (((*iter).id==value1)||((*iter).id==value2)) {
+         Plan* p2=plans.alloc();
+         p2->op=Plan::Filter;
+         p2->opArg=(*iter).id;
+         p2->left=plan;
+         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+         p2->next=0;
+         p2->cardinality=plan->cardinality*0.5;
+         p2->costs=plan->costs+Costs::filter(plan->cardinality);
+         p2->ordering=plan->ordering;
+         plan=p2;
+      }
+
    // And store it
    addPlan(result,plan);
 }
@@ -137,6 +167,9 @@ static bool isUnused(const QueryGraph& query,const QueryGraph::Node& node,unsign
 {
    for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
       if ((*iter)==val)
+         return false;
+   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
+      if ((*iter).id==val)
          return false;
    for (QueryGraph::node_iterator iter=query.nodesBegin(),limit=query.nodesEnd();iter!=limit;++iter) {
       const QueryGraph::Node& n=*iter;
@@ -169,28 +202,31 @@ PlanGen::Problem* PlanGen::buildScan(Database& db,const QueryGraph& query,const 
 
    // Build all relevant scans
    if (unusedObject)
-      buildAggregatedIndexScan(db,Database::Order_Subject_Predicate_Object,result,s,p); else
-      buildIndexScan(db,Database::Order_Subject_Predicate_Object,result,s,p,o);
+      buildAggregatedIndexScan(db,query,Database::Order_Subject_Predicate_Object,result,s,p); else
+      buildIndexScan(db,query,Database::Order_Subject_Predicate_Object,result,s,p,o);
    if (unusedPredicate)
-      buildAggregatedIndexScan(db,Database::Order_Subject_Object_Predicate,result,s,o); else
-      buildIndexScan(db,Database::Order_Subject_Object_Predicate,result,s,o,p);
+      buildAggregatedIndexScan(db,query,Database::Order_Subject_Object_Predicate,result,s,o); else
+      buildIndexScan(db,query,Database::Order_Subject_Object_Predicate,result,s,o,p);
    if (unusedSubject)
-      buildAggregatedIndexScan(db,Database::Order_Object_Predicate_Subject,result,o,p); else
-      buildIndexScan(db,Database::Order_Object_Predicate_Subject,result,o,p,s);
+      buildAggregatedIndexScan(db,query,Database::Order_Object_Predicate_Subject,result,o,p); else
+      buildIndexScan(db,query,Database::Order_Object_Predicate_Subject,result,o,p,s);
    if (unusedPredicate)
-      buildAggregatedIndexScan(db,Database::Order_Object_Subject_Predicate,result,o,s); else
-      buildIndexScan(db,Database::Order_Object_Subject_Predicate,result,o,s,p);
+      buildAggregatedIndexScan(db,query,Database::Order_Object_Subject_Predicate,result,o,s); else
+      buildIndexScan(db,query,Database::Order_Object_Subject_Predicate,result,o,s,p);
    if (unusedObject)
-      buildAggregatedIndexScan(db,Database::Order_Predicate_Subject_Object,result,p,s); else
-      buildIndexScan(db,Database::Order_Predicate_Subject_Object,result,p,s,o);
+      buildAggregatedIndexScan(db,query,Database::Order_Predicate_Subject_Object,result,p,s); else
+      buildIndexScan(db,query,Database::Order_Predicate_Subject_Object,result,p,s,o);
    if (unusedSubject)
-      buildAggregatedIndexScan(db,Database::Order_Predicate_Object_Subject,result,p,o); else
-      buildIndexScan(db,Database::Order_Predicate_Object_Subject,result,p,o,s);
+      buildAggregatedIndexScan(db,query,Database::Order_Predicate_Object_Subject,result,p,o); else
+      buildIndexScan(db,query,Database::Order_Predicate_Object_Subject,result,p,o,s);
 
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {
-      iter->left=static_cast<Plan*>(0)+id;
-      iter->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&node));
+      Plan* iter2=iter;
+      while (iter2->op==Plan::Filter)
+         iter2=iter2->left;
+      iter2->left=static_cast<Plan*>(0)+id;
+      iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&node));
    }
 
    return result;

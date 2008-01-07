@@ -26,6 +26,8 @@ class Costs
    static cost_t mergeJoin(double leftCard,double rightCard) { return (leftCard/cpuSpeed)+(rightCard/cpuSpeed); }
    /// Costs for a hash join
    static cost_t hashJoin(double leftCard,double rightCard) { return (leftCard/(cpuSpeed/10))+(rightCard/(cpuSpeed/15)); }
+   /// Costs for a filter
+   static cost_t filter(double card) { return card/(cpuSpeed/3); }
 };
 //---------------------------------------------------------------------------
 #endif

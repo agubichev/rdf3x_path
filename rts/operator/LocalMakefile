@@ -1,6 +1,7 @@
 src_rts_operator:=				\
 	rts/operator/Operator.cpp		\
 	rts/operator/AggregatedIndexScan.cpp	\
+	rts/operator/Filter.cpp			\
 	rts/operator/HashGroupify.cpp		\
 	rts/operator/HashJoin.cpp		\
 	rts/operator/IndexScan.cpp		\

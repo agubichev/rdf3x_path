@@ -2,6 +2,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "cts/plangen/Plan.hpp"
 #include "rts/operator/AggregatedIndexScan.hpp"
+#include "rts/operator/Filter.hpp"
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
 #include "rts/operator/IndexScan.hpp"
@@ -106,6 +107,7 @@ static void collectVariables(std::set<unsigned>& variables,Plan* plan)
          collectVariables(variables,plan->right);
          break;
       case Plan::HashGroupify:
+      case Plan::Filter:
          collectVariables(variables,plan->left);
          break;
    }
@@ -274,6 +276,26 @@ static Operator* translateHashGroupify(Runtime& runtime,const std::set<unsigned>
    return new HashGroupify(tree,output);
 }
 //---------------------------------------------------------------------------
+static Operator* translateFilter(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
+   // Translate a filter into an operator tree
+{
+   const QueryGraph::Filter& filter=*reinterpret_cast<QueryGraph::Filter*>(plan->right);
+
+   // Build the input trees
+   std::set<unsigned> newProjection=projection;
+   newProjection.insert(filter.id);
+   Operator* tree=translatePlan(runtime,newProjection,bindings,plan->left);
+
+   // Build the operator
+   Operator* result=new Filter(tree,bindings[filter.id],filter.values);
+
+   // Cleanup the binding
+   if (!projection.count(filter.id))
+      bindings.erase(filter.id);
+
+   return result;
+}
+//---------------------------------------------------------------------------
 static Operator* translatePlan(Runtime& runtime,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
    // Translate a plan into an operator tree
 {
@@ -284,8 +306,9 @@ static Operator* translatePlan(Runtime& runtime,const std::set<unsigned>& projec
       case Plan::MergeJoin: return translateMergeJoin(runtime,projection,bindings,plan);
       case Plan::HashJoin: return translateHashJoin(runtime,projection,bindings,plan);
       case Plan::HashGroupify: return translateHashGroupify(runtime,projection,bindings,plan);
-      default: return 0;
+      case Plan::Filter: return translateFilter(runtime,projection,bindings,plan);
    }
+   return 0;
 }
 //---------------------------------------------------------------------------
 Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent)

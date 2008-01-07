@@ -34,9 +34,9 @@ class PlanGen
    /// Add a plan to a subproblem
    void addPlan(Problem* problem,Plan* plan);
    /// Generate an index scan
-   void buildIndexScan(Database& db,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2,unsigned value3);
+   void buildIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2,unsigned value3);
    /// Generate an aggregated index scan
-   void buildAggregatedIndexScan(Database& db,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2);
+   void buildAggregatedIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2);
    /// Generate base table accesses
    Problem* buildScan(Database& db,const QueryGraph& query,const QueryGraph::Node& node,unsigned id);
    /// Build the informaion about a join

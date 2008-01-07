@@ -85,6 +85,13 @@ class QueryGraph
    /// Iterator over the edges
    edge_iterator edgesEnd() const { return edges.end(); }
 
+   /// Iterator over the filters
+   typedef std::vector<Filter>::const_iterator filter_iterator;
+   /// Iterator over the filters
+   filter_iterator filtersBegin() const { return filters.begin(); }
+   /// Iterator over the filter
+   filter_iterator filtersEnd() const { return filters.end(); }
+
    /// Iterator over the projection
    typedef std::vector<unsigned>::const_iterator projection_iterator;
    /// Iterator over the projection
