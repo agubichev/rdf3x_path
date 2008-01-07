@@ -131,6 +131,45 @@ void SPARQLParser::parseFrom()
    }
 }
 //---------------------------------------------------------------------------
+void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
+   // Parse a filter condition
+{
+   // '('
+   if (lexer.getNext()!=SPARQLLexer::LParen)
+      throw ParserException("'(' expected");
+
+   // Variable
+   Element var=parsePatternElement(localVars);
+   if (var.type!=Element::Variable)
+      throw ParserException("filter variable expected");
+
+   // 'in'
+   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("in")))
+      throw ParserException("'in' expected");
+
+   // The values
+   std::vector<Element> values;
+   while (true) {
+      Element e=parsePatternElement(localVars);
+      if (e.type==Element::Variable)
+         throw ParserException("constant values required in 'in' filter");
+      values.push_back(e);
+
+      SPARQLLexer::Token token=lexer.getNext();
+      if (token==SPARQLLexer::Comma)
+         continue;
+      if (token==SPARQLLexer::RParen)
+         break;
+      throw ParserException("',' or ')' expected");
+   }
+
+   // Remember the filter
+   Filter f;
+   f.id=var.id;
+   f.values=values;
+   filters.push_back(f);
+}
+//---------------------------------------------------------------------------
 SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned>& localVars)
    // Parse blank node patterns
 {
@@ -161,6 +200,11 @@ SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned
       } else if (token==SPARQLLexer::RBracket) {
          lexer.unget(token);
          return subject;
+      } else if (token==SPARQLLexer::Identifier) {
+         if (!lexer.isKeyword("filter"))
+            throw ParserException("'filter' expected");
+         parseFilter(localVars);
+         continue;
       } else {
          // Error while parsing, let out caller handle it
          lexer.unget(token);
@@ -257,6 +301,11 @@ void SPARQLParser::parseGraphPattern()
       } else if (token==SPARQLLexer::RCurly) {
          lexer.unget(token);
          return;
+      } else if (token==SPARQLLexer::Identifier) {
+         if (!lexer.isKeyword("filter"))
+            throw ParserException("'filter' expected");
+         parseFilter(localVars);
+         continue;
       } else {
          // Error while parsing, let out caller handle it
          lexer.unget(token);
@@ -274,8 +323,14 @@ void SPARQLParser::parseGroupGraphPattern()
       if (token==SPARQLLexer::LCurly) {
          parseGroupGraphPattern();
       } else if ((token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
-         lexer.unget(token);
-         parseGraphPattern();
+         // Distinguish filter conditions
+         if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("filter"))) {
+            std::map<std::string,unsigned> localVars;
+            parseFilter(localVars);
+         } else {
+            lexer.unget(token);
+            parseGraphPattern();
+         }
       } else if (token==SPARQLLexer::RCurly) {
          break;
       } else {

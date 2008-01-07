@@ -44,6 +44,13 @@ class SPARQLParser
       /// Destructor
       ~Pattern();
    };
+   /// A filter condition
+   struct Filter {
+      /// The filtered variable
+      unsigned id;
+      /// Valid entries
+      std::vector<Element> values;
+   };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count };
 
@@ -63,10 +70,14 @@ class SPARQLParser
    std::vector<unsigned> projection;
    /// The patterns in the where clause
    std::vector<Pattern> patterns;
+   /// The filter conditions
+   std::vector<Filter> filters;
 
    /// Lookup or create a named variable
    unsigned nameVariable(const std::string& name);
 
+   /// Parse a filter condition
+   void parseFilter(std::map<std::string,unsigned>& localVars);
    /// Parse an entry in a pattern
    Element parsePatternElement(std::map<std::string,unsigned>& localVars);
    /// Parse blank node patterns

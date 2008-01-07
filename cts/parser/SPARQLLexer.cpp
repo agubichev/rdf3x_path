@@ -49,6 +49,8 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case '_': return Underscore;
          case '{': return LCurly;
          case '}': return RCurly;
+         case '(': return LParen;
+         case ')': return RParen;
          // Brackets
          case '[':
             // Skip whitespaces
