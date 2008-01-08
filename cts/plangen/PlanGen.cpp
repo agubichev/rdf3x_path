@@ -51,6 +51,47 @@ void PlanGen::addPlan(Problem* problem,Plan* plan)
    problem->plans=plan;
 }
 //---------------------------------------------------------------------------
+static Plan* buildFilters(PlanContainer& plans,const QueryGraph& query,Plan* plan,unsigned value1,unsigned value2,unsigned value3)
+   // Apply filters to index scans
+{
+   // Apply a filter on the ordering first
+   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
+      if ((*iter).id==plan->ordering) {
+         Plan* p2=plans.alloc();
+         double cost1=plan->costs+Costs::filter(plan->cardinality);
+         double cost2=0.1*plan->costs+(*iter).values.size()*Costs::seekBtree();
+         if (cost2<cost1) {
+            p2->op=Plan::NestedLoopFilter;
+            p2->costs=cost2;
+         } else {
+            p2->op=Plan::Filter;
+            p2->costs=cost1;
+         }
+         p2->opArg=(*iter).id;
+         p2->left=plan;
+         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+         p2->next=0;
+         p2->cardinality=plan->cardinality*0.5;
+         p2->ordering=plan->ordering;
+         plan=p2;
+      }
+   // Apply all other applicable filters
+   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
+      if ((((*iter).id==value1)||((*iter).id==value2)||((*iter).id==value3))&&((*iter).id!=plan->ordering)) {
+         Plan* p2=plans.alloc();
+         p2->op=Plan::Filter;
+         p2->opArg=(*iter).id;
+         p2->left=plan;
+         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+         p2->next=0;
+         p2->cardinality=plan->cardinality*0.5;
+         p2->costs=plan->costs+Costs::filter(plan->cardinality);
+         p2->ordering=plan->ordering;
+         plan=p2;
+      }
+   return plan;
+}
+//---------------------------------------------------------------------------
 void PlanGen::buildIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2,unsigned value3)
    // Build an index scan
 {
@@ -92,20 +133,8 @@ void PlanGen::buildIndexScan(Database& db,const QueryGraph& query,Database::Data
    if (div)
       plan->cardinality=plan->cardinality/div;
 
-   // Apply all applicable filters
-   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
-      if (((*iter).id==value1)||((*iter).id==value2)||((*iter).id==value3)) {
-         Plan* p2=plans.alloc();
-         p2->op=Plan::Filter;
-         p2->opArg=(*iter).id;
-         p2->left=plan;
-         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
-         p2->next=0;
-         p2->cardinality=plan->cardinality*0.5;
-         p2->costs=plan->costs+Costs::filter(plan->cardinality);
-         p2->ordering=plan->ordering;
-         plan=p2;
-      }
+   // Apply filters
+   plan=buildFilters(plans,query,plan,value1,value2,value3);
 
    // And store it
    addPlan(result,plan);
@@ -143,20 +172,8 @@ void PlanGen::buildAggregatedIndexScan(Database& db,const QueryGraph& query,Data
    if (div)
       plan->cardinality=plan->cardinality/div;
 
-   // Apply all applicable filters
-   for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
-      if (((*iter).id==value1)||((*iter).id==value2)) {
-         Plan* p2=plans.alloc();
-         p2->op=Plan::Filter;
-         p2->opArg=(*iter).id;
-         p2->left=plan;
-         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
-         p2->next=0;
-         p2->cardinality=plan->cardinality*0.5;
-         p2->costs=plan->costs+Costs::filter(plan->cardinality);
-         p2->ordering=plan->ordering;
-         plan=p2;
-      }
+   // Apply filters
+   plan=buildFilters(plans,query,plan,value1,value2,~0u);
 
    // And store it
    addPlan(result,plan);
@@ -223,7 +240,7 @@ PlanGen::Problem* PlanGen::buildScan(Database& db,const QueryGraph& query,const 
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {
       Plan* iter2=iter;
-      while (iter2->op==Plan::Filter)
+      while ((iter2->op==Plan::Filter)||(iter2->op==Plan::NestedLoopFilter))
          iter2=iter2->left;
       iter2->left=static_cast<Plan*>(0)+id;
       iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&node));
@@ -271,6 +288,8 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(Database& db,const QueryGraph& q
    result.selectivity=(sel1>sel2)?sel1:sel2;
 
    // Look up suitable orderings
+   if (result.selectivity==1) // Distinguish real joins from cross products
+      result.selectivity=0.999;
    if ((!edge.from->constSubject)&&(!edge.to->constSubject)&&(edge.from->subject==edge.to->subject)) {
       result.ordering=edge.from->subject;
    } else if ((!edge.from->constSubject)&&(!edge.to->constPredicate)&&(edge.from->subject==edge.to->predicate)) {
@@ -399,17 +418,18 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
+                     } else {
+                        // Nested loop join
+                        Plan* p=plans.alloc();
+                        p->op=Plan::NestedLoopJoin;
+                        p->opArg=0;
+                        p->left=leftPlan;
+                        p->right=rightPlan;
+                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
+                        p->ordering=leftPlan->ordering;
+                        addPlan(problem,p);
                      }
-                     // Nested loop join
-                     Plan* p=plans.alloc();
-                     p->op=Plan::NestedLoopJoin;
-                     p->opArg=0;
-                     p->left=leftPlan;
-                     p->right=rightPlan;
-                     p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
-                     p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
-                     p->ordering=leftPlan->ordering;
-                     addPlan(problem,p);
                   }
                }
             }
