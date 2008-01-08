@@ -59,7 +59,7 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph& query,Plan* pla
       if ((*iter).id==plan->ordering) {
          Plan* p2=plans.alloc();
          double cost1=plan->costs+Costs::filter(plan->cardinality);
-         double cost2=0.1*plan->costs+(*iter).values.size()*Costs::seekBtree();
+         double cost2=0.5*plan->costs+(*iter).values.size()*Costs::seekBtree();
          if (cost2<cost1) {
             p2->op=Plan::NestedLoopFilter;
             p2->costs=cost2;

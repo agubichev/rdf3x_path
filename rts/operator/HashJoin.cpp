@@ -17,7 +17,7 @@ unsigned HashJoin::first()
    // Produce the first tuple
 {
    // Build the hash table from the left side
-   const unsigned hashTableSize = 997;
+   const unsigned hashTableSize = 1503499;
    const unsigned stepSize = 2+leftTail.size();
    hashTable.clear();
    hashTable.resize(hashTableSize);
