@@ -184,7 +184,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const map<unsigned,u
    for (vector<pair<unsigned,string> >::const_iterator iter=propertyNames.begin(),limit=propertyNames.end();iter!=limit;++iter) {
       if (iter!=propertyNames.begin())
          out << " union all";
-      out << " (select * from p" << (*iter).first <<")";
+      out << " (select subject," << (*iter).first << " as predicate,object from p" << (*iter).first <<")";
    }
    out << ";" << endl;
    //out << "drop view filteredproperties;" << endl
@@ -192,7 +192,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const map<unsigned,u
    for (set<unsigned>::const_iterator iter=filteredProperties.begin(),limit=filteredProperties.end();iter!=limit;++iter) {
       if (iter!=filteredProperties.begin())
          out << " union all";
-      out << " (select * from p" << (*iter) <<")";
+      out << " (select subject," << (*iter) << " as predicate,object from p" << (*iter) <<")";
    }
    out << ";" << endl;
 
