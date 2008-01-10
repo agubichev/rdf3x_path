@@ -68,7 +68,7 @@ void Filter::print(unsigned level)
    printRegister(filter);
    std::cout << " [";
    unsigned id=min;
-   for (std::vector<bool>::const_iterator iter=valid.begin(),limit=valid.end();iter!=limit;++iter,++id) {
+   for (std::vector<unsigned char>::const_iterator iter=valid.begin(),limit=valid.end();iter!=limit;++iter,++id) {
       if (*iter)
          std::cout << " " << id;
    }

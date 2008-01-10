@@ -17,7 +17,7 @@ class Filter : public Operator
    /// The bounds
    unsigned min,max;
    /// The valid values
-   std::vector<bool> valid;
+   std::vector<unsigned char> valid;
 
    public:
    /// Constructor
