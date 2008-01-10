@@ -66,7 +66,8 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
    Runtime runtime(db);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,silent);
 
-   // operatorTree->print();
+   if (getenv("SHOWPLAN"))
+      operatorTree->print();
 
    // And execute it
    Timestamp start;
