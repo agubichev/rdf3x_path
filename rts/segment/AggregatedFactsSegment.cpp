@@ -87,7 +87,7 @@ bool AggregatedFactsSegment::Scan::first(AggregatedFactsSegment& segment,unsigne
 
    // Place the iterator
    seg=&segment;
-   pos=headerSize;
+   pos=~0u;
 
    // Skip over leading entries that are too small
    while (true) {
@@ -112,20 +112,22 @@ bool AggregatedFactsSegment::Scan::next()
 
       // End of page?
       if (pos>=BufferManager::pageSize) {
+         // First entry on the page?
+         if (!~pos) {
+            value1=readUint32Aligned(page+headerSize);
+            value2=readUint32Aligned(page+headerSize+4);
+            count=readUint32Aligned(page+headerSize+8);
+            pos=headerSize+12;
+            return true;
+         }
+         // No, really at the end of page
          nextPage:
          unsigned nextPage=readUint32Aligned(page);
          if (!nextPage)
             return false;
          current=seg->readShared(nextPage);
-         pos=headerSize;
+         pos=~0u;
          continue;
-      }
-      // First entry on the page?
-      if (pos==headerSize) {
-         value1=readUint32Aligned(page+pos); pos+=4;
-         value2=readUint32Aligned(page+pos); pos+=4;
-         count=readUint32Aligned(page+pos); pos+=4;
-         return true;
       }
       // No, decode it
       unsigned info=page[pos++];
