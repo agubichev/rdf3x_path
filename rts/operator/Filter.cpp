@@ -1,13 +1,26 @@
 #include "rts/operator/Filter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <algorithm>
 #include <iostream>
 //---------------------------------------------------------------------------
 Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values)
-   : input(input),filter(filter),values(values)
+   : input(input),filter(filter)
    // Constructor
 {
-   std::sort(this->values.begin(),this->values.end());
+   if (values.empty()) {
+      min=1;
+      max=0;
+   } else {
+      min=max=values[0];
+      for (std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter) {
+         if ((*iter)<min)
+            min=*iter;
+         if ((*iter)>max)
+            max=*iter;
+      }
+      valid.resize(max-min+1);
+      for (std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter)
+         valid[(*iter)-min]=true;
+   }
 }
 //---------------------------------------------------------------------------
 Filter::~Filter()
@@ -24,16 +37,12 @@ unsigned Filter::first()
       return false;
 
    // Check if valid
-   unsigned value;
-   lastValue=value=filter->value;
-   std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();
-   iter=lower_bound(iter,limit,value);
-   lastResult=((iter!=limit)&&((*iter)==value));
+   unsigned value=filter->value;
+   if ((value>=min)&&(value<=max)&&(valid[value-min]))
+      return count;
 
-   // Return if found, otherwise call next
-   if (lastResult)
-      return count; else
-      return next();
+   // Call next to find other entries
+   return next();
 }
 //---------------------------------------------------------------------------
 unsigned Filter::next()
@@ -47,13 +56,7 @@ unsigned Filter::next()
 
       // Check if valid
       unsigned value=filter->value;
-      if (value!=lastValue) {
-         lastValue=value;
-         std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();
-         iter=lower_bound(iter,limit,value);
-         lastResult=((iter!=limit)&&((*iter)==value));
-      }
-      if (lastResult)
+      if ((value>=min)&&(value<=max)&&(valid[value-min]))
          return count;
    }
 }
@@ -64,8 +67,10 @@ void Filter::print(unsigned level)
    indent(level); std::cout << "<Filter ";
    printRegister(filter);
    std::cout << " [";
-   for (std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter) {
-      std::cout << " " << (*iter);
+   unsigned id=min;
+   for (std::vector<bool>::const_iterator iter=valid.begin(),limit=valid.end();iter!=limit;++iter,++id) {
+      if (*iter)
+         std::cout << " " << id;
    }
    std::cout << "]" << std::endl;
    input->print(level+1);

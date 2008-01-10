@@ -14,12 +14,10 @@ class Filter : public Operator
    Operator* input;
    /// The filter register
    Register* filter;
+   /// The bounds
+   unsigned min,max;
    /// The valid values
-   std::vector<unsigned> values;
-   /// Cached lookup
-   unsigned lastValue;
-   /// Cached lookup
-   bool lastResult;
+   std::vector<bool> valid;
 
    public:
    /// Constructor
