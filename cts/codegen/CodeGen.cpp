@@ -57,10 +57,10 @@ static Operator* translateIndexScan(Runtime& runtime,const std::map<unsigned,Reg
    resolveScanVariable(runtime,context,projection,bindings,id,2,node,object,constObject);
 
    // And return the operator
-   return new IndexScan(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
-                        subject,constSubject,
-                        predicate,constPredicate,
-                        object,constObject);
+   return IndexScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
+                            subject,constSubject,
+                            predicate,constPredicate,
+                            object,constObject);
 }
 //---------------------------------------------------------------------------
 static Operator* translateAggregatedIndexScan(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,Plan* plan)
@@ -78,10 +78,10 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const std::map<un
    resolveScanVariable(runtime,context,projection,bindings,id,2,node,object,constObject,(order==Database::Order_Subject_Predicate_Object)||(order==Database::Order_Predicate_Subject_Object));
 
    // And return the operator
-   return new AggregatedIndexScan(runtime.getDatabase(),order,
-                                  subject,constSubject,
-                                  predicate,constPredicate,
-                                  object,constObject);
+   return AggregatedIndexScan::create(runtime.getDatabase(),order,
+                                      subject,constSubject,
+                                      predicate,constPredicate,
+                                      object,constObject);
 }
 //---------------------------------------------------------------------------
 static void collectVariables(const std::map<unsigned,Register*>& context,std::set<unsigned>& variables,Plan* plan)

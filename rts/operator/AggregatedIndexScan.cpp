@@ -3,11 +3,104 @@
 #include <iostream>
 #include <cassert>
 //---------------------------------------------------------------------------
-AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
-   : prefix(0),filter(0),facts(db.getAggregatedFacts(order)),order(order)
+/// Implementation
+class AggregatedIndexScan::Scan : public AggregatedIndexScan {
+   public:
+   /// Constructor
+   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+
+   /// First tuple
+   unsigned first();
+   /// Next tuple
+   unsigned next();
+};
+//---------------------------------------------------------------------------
+/// Implementation
+class AggregatedIndexScan::ScanFilter2 : public AggregatedIndexScan {
+   public:
+   /// The filter value
+   unsigned filter;
+
+   public:
+   /// Constructor
+   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+
+   /// First tuple
+   unsigned first();
+   /// Next tuple
+   unsigned next();
+};
+//---------------------------------------------------------------------------
+/// Implementation
+class AggregatedIndexScan::ScanPrefix1 : public AggregatedIndexScan {
+   private:
+   /// The stop condition
+   unsigned stop1;
+
+   public:
+   /// Constructor
+   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+
+   /// First tuple
+   unsigned first();
+   /// Next tuple
+   unsigned next();
+};
+//---------------------------------------------------------------------------
+/// Implementation
+class AggregatedIndexScan::ScanPrefix12 : public AggregatedIndexScan {
+   private:
+   /// The stop condition
+   unsigned stop1,stop2;
+
+   public:
+   /// Constructor
+   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+
+   /// First tuple
+   unsigned first();
+   /// Next tuple
+   unsigned next();
+};
+//---------------------------------------------------------------------------
+AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2)
+   : value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+AggregatedIndexScan::~AggregatedIndexScan()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+void AggregatedIndexScan::print(unsigned level)
+   // Print the operator tree. Debugging only.
+{
+   indent(level); std::cout << "<AggregatedIndexScan ";
+   switch (order) {
+      case Database::Order_Subject_Predicate_Object: std::cout << "SubjectPredicate"; break;
+      case Database::Order_Subject_Object_Predicate: std::cout << "SubjectObject"; break;
+      case Database::Order_Object_Predicate_Subject: std::cout << "ObjectPredicate"; break;
+      case Database::Order_Object_Subject_Predicate: std::cout << "ObjectSubject"; break;
+      case Database::Order_Predicate_Subject_Object: std::cout << "PredicateSubject"; break;
+      case Database::Order_Predicate_Object_Subject: std::cout << "PredicateObject"; break;
+   }
+   std::cout << std::endl;
+   indent(level+1);
+   printRegister(value1); if (bound1) std::cout << "*";
+   std::cout << " ";
+   printRegister(value2); if (bound2) std::cout << "*";
+   std::cout << std::endl;
+   indent(level); std::cout << ">" << std::endl;
+}
+//---------------------------------------------------------------------------
+AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
    // Constructor
 {
    // Setup the slot bindings
+   Register* value1=0,*value2=0;
+   bool bound1=false,bound2=false;
    switch (order) {
       case Database::Order_Subject_Predicate_Object:
          value1=subject; value2=predicate;
@@ -41,116 +134,108 @@ AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,
          break;
    }
 
-   // Construct the filtering slots (if any)
+   // Construct the proper operator
+   AggregatedIndexScan* result;
    if (!bound1) {
-      if (bound2) filter|=1;
+      if (bound2)
+         result=new ScanFilter2(db,order,value1,bound1,value2,bound2); else
+         result=new Scan(db,order,value1,bound1,value2,bound2);
    } else {
-      prefix|=2;
-      if (!bound2) {
-      } else {
-         prefix|=1;
-      }
+      if (!bound2)
+         result=new ScanPrefix1(db,order,value1,bound1,value2,bound2); else
+         result=new ScanPrefix12(db,order,value1,bound1,value2,bound2);
    }
+
+   return result;
 }
 //---------------------------------------------------------------------------
-AggregatedIndexScan::~AggregatedIndexScan()
-   // Destructor
-{
-}
-//---------------------------------------------------------------------------
-unsigned AggregatedIndexScan::first()
+unsigned AggregatedIndexScan::Scan::first()
    // Produce the first tuple
 {
-   // Compute the start/stop conditions
-   unsigned start1=0,start2=0;
-   stop1=~0u; stop2=~0u;
-   if (bound1) {
-      start1=stop1=value1->value;
-      if (bound2) {
-         start2=stop2=value2->value;
-      }
-   }
-
-   // Start the scan depending on if we have conditions or not
-   if (start1||start2) {
-      if (!scan.first(facts,start1,start2))
-         return false;
-   } else {
-      if (!scan.first(facts))
-         return false;
-   }
-
-   // Check the columns
-   unsigned filter=this->filter,prefix=this->prefix;
-   bool onBorder=false;
-   if (prefix&2) {
-      unsigned v1=scan.getValue1();
-      if (v1>stop1)
-         return false;
-      onBorder=(v1==stop1);
-   } else value1->value=scan.getValue1();
-   if (prefix&1) {
-      unsigned v2=scan.getValue2();
-      if (onBorder&&(v2>stop2))
-         return false;
-   } else if (filter&1) {
-      if (scan.getValue2()!=value2->value)
-         return next();
-   } else value2->value=scan.getValue2();
-
-   // We have a match
+   if (!scan.first(facts))
+      return false;
+   value1->value=scan.getValue1();
+   value2->value=scan.getValue2();
    return scan.getCount();
 }
 //---------------------------------------------------------------------------
-unsigned AggregatedIndexScan::next()
+unsigned AggregatedIndexScan::Scan::next()
    // Produce the next tuple
 {
-   unsigned filter=this->filter,prefix=this->prefix;
+   if (!scan.next())
+      return false;
+   value1->value=scan.getValue1();
+   value2->value=scan.getValue2();
+   return scan.getCount();
+}
+//---------------------------------------------------------------------------
+unsigned AggregatedIndexScan::ScanFilter2::first()
+   // Produce the first tuple
+{
+   filter=value2->value;
+
+   if (!scan.first(facts))
+      return false;
+   if (scan.getValue2()!=filter)
+      return next();
+   value1->value=scan.getValue1();
+   return scan.getCount();
+}
+//---------------------------------------------------------------------------
+unsigned AggregatedIndexScan::ScanFilter2::next()
+   // Produce the next tuple
+{
    while (true) {
-      // Access the next tuple
       if (!scan.next())
          return false;
-
-      // Check the columns
-      bool onBorder=false;
-      if (prefix&2) {
-         unsigned v1=scan.getValue1();
-         if (v1>stop1)
-            return false;
-         onBorder=(v1==stop1);
-      } else value1->value=scan.getValue1();
-      if (prefix&1) {
-         unsigned v2=scan.getValue2();
-         if (onBorder&&(v2>stop2))
-            return false;
-      } else if (filter&1) {
-         if (scan.getValue2()!=value2->value)
-            continue;
-      } else value2->value=scan.getValue2();
-
-      // We have a match
+      if (scan.getValue2()!=filter)
+         continue;
+      value1->value=scan.getValue1();
       return scan.getCount();
    }
 }
 //---------------------------------------------------------------------------
-void AggregatedIndexScan::print(unsigned level)
-   // Print the operator tree. Debugging only.
+unsigned AggregatedIndexScan::ScanPrefix1::first()
+   // Produce the first tuple
 {
-   indent(level); std::cout << "<AggregatedIndexScan ";
-   switch (order) {
-      case Database::Order_Subject_Predicate_Object: std::cout << "SubjectPredicate"; break;
-      case Database::Order_Subject_Object_Predicate: std::cout << "SubjectObject"; break;
-      case Database::Order_Object_Predicate_Subject: std::cout << "ObjectPredicate"; break;
-      case Database::Order_Object_Subject_Predicate: std::cout << "ObjectSubject"; break;
-      case Database::Order_Predicate_Subject_Object: std::cout << "PredicateSubject"; break;
-      case Database::Order_Predicate_Object_Subject: std::cout << "PredicateObject"; break;
-   }
-   std::cout << std::endl;
-   indent(level+1);
-   printRegister(value1); if (bound1) std::cout << "*";
-   std::cout << " ";
-   printRegister(value2); if (bound2) std::cout << "*";
-   std::cout << std::endl;
-   indent(level); std::cout << ">" << std::endl;
+   stop1=value1->value;
+   if (!scan.first(facts,stop1,0))
+      return false;
+   if (scan.getValue1()>stop1)
+      return false;
+   value2->value=scan.getValue2();
+   return scan.getCount();
+}
+//---------------------------------------------------------------------------
+unsigned AggregatedIndexScan::ScanPrefix1::next()
+   // Produce the next tuple
+{
+   if (!scan.next())
+      return false;
+   if (scan.getValue1()>stop1)
+      return false;
+   value2->value=scan.getValue2();
+   return scan.getCount();
+}
+//---------------------------------------------------------------------------
+unsigned AggregatedIndexScan::ScanPrefix12::first()
+   // Produce the first tuple
+{
+   stop1=value1->value; stop2=value2->value;
+   if (!scan.first(facts,stop1,stop2))
+      return false;
+   if ((scan.getValue1()>stop1)||((scan.getValue1()==stop1)&&(scan.getValue2()>stop2)))
+      return false;
+   return scan.getCount();
+}
+//---------------------------------------------------------------------------
+unsigned AggregatedIndexScan::ScanPrefix12::next()
+   // Produce the next tuple
+{
+   if (!scan.next())
+      return false;
+   if ((scan.getValue1()>stop1)||((scan.getValue1()==stop1)&&(scan.getValue2()>stop2)))
+      return false;
+   return scan.getCount();
 }
 //---------------------------------------------------------------------------

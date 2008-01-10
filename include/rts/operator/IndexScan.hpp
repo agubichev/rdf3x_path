@@ -13,12 +13,6 @@ class IndexScan : public Operator
    private:
    /// The registers for the different parts of the triple
    Register* value1,*value2,*value3;
-   /// The stop conditions
-   unsigned stop1,stop2,stop3;
-   /// Which colums form the prefix
-   unsigned prefix;
-   /// Which colums to need a filter?
-   unsigned filter;
    /// The different boundings
    bool bound1,bound2,bound3;
    /// The facts segment
@@ -28,19 +22,33 @@ class IndexScan : public Operator
    /// The scan
    FactsSegment::Scan scan;
 
-   public:
    /// Constructor
-   IndexScan(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
+   IndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3);
+
+   // Implementations
+   class Scan;
+   class ScanFilter2;
+   class ScanFilter3;
+   class ScanFilter23;
+   class ScanPrefix1;
+   class ScanPrefix1Filter3;
+   class ScanPrefix12;
+   class ScanPrefix123;
+
+   public:
    /// Destructor
    ~IndexScan();
 
    /// Produce the first tuple
-   unsigned first();
+   virtual unsigned first() = 0;
    /// Produce the next tuple
-   unsigned next();
+   virtual unsigned next() = 0;
 
    /// Print the operator tree. Debugging only.
    void print(unsigned indent);
+
+   /// Create a suitable operator
+   static IndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
 };
 //---------------------------------------------------------------------------
 #endif

@@ -13,12 +13,6 @@ class AggregatedIndexScan : public Operator
    private:
    /// The registers for the different parts of the triple
    Register* value1,*value2;
-   /// The stop conditions
-   unsigned stop1,stop2;
-   /// Which colums form the prefix
-   unsigned prefix;
-   /// Which colums to need a filter?
-   unsigned filter;
    /// The different boundings
    bool bound1,bound2;
    /// The facts segment
@@ -28,19 +22,29 @@ class AggregatedIndexScan : public Operator
    /// The scan
    AggregatedFactsSegment::Scan scan;
 
-   public:
    /// Constructor
-   AggregatedIndexScan(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
+   AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2);
+
+   // Implementations
+   class Scan;
+   class ScanFilter2;
+   class ScanPrefix1;
+   class ScanPrefix12;
+
+   public:
    /// Destructor
    ~AggregatedIndexScan();
 
    /// Produce the first tuple
-   unsigned first();
+   virtual unsigned first() = 0;
    /// Produce the next tuple
-   unsigned next();
+   virtual unsigned next() = 0;
 
    /// Print the operator tree. Debugging only.
    void print(unsigned indent);
+
+   /// Create a suitable operator
+   static AggregatedIndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
 };
 //---------------------------------------------------------------------------
 #endif
