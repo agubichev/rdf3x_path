@@ -104,18 +104,10 @@ bool FactsSegment::Scan::first(FactsSegment& segment,unsigned start1,unsigned st
    }
 }
 //---------------------------------------------------------------------------
-static unsigned readDelta(const unsigned char* pos,unsigned size)
-   // Read an delta encoded value
-{
-   switch (size) {
-      case 0: return 0;
-      case 1: return pos[0];
-      case 2: return (pos[0]<<8)|pos[1];
-      case 3: return (pos[0]<<16)|(pos[1]<<8)|pos[2];
-      case 4: return (pos[0]<<24)|(pos[1]<<16)|(pos[2]<<8)|pos[3];
-      default: return 0;
-   }
-}
+static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }
+static unsigned readDelta2(const unsigned char* pos) { return (pos[0]<<8)|pos[1]; }
+static unsigned readDelta3(const unsigned char* pos) { return (pos[0]<<16)|(pos[1]<<8)|pos[2]; }
+static unsigned readDelta4(const unsigned char* pos) { return (pos[0]<<24)|(pos[1]<<16)|(pos[2]<<8)|pos[3]; }
 //---------------------------------------------------------------------------
 bool FactsSegment::Scan::next()
    // Read the next entry
@@ -149,33 +141,97 @@ bool FactsSegment::Scan::next()
          value3+=info;
          return true;
       }
-      // Last value changed only?
-      if (info<0x84) {
-         unsigned size3=(info&3)+1;
-         value3+=readDelta(page+pos,size3)+128;
-         pos+=size3;
-         return true;
+      // Decode it
+      switch (info&127) {
+         case 0: value3+=readDelta1(page+pos)+128; pos+=1; break;
+         case 1: value3+=readDelta2(page+pos)+128; pos+=2; break;
+         case 2: value3+=readDelta3(page+pos)+128; pos+=3; break;
+         case 3: value3+=readDelta4(page+pos)+128; pos+=4; break;
+         case 4: value2+=readDelta1(page+pos); value3=readDelta1(page+pos+1); pos+=2; break;
+         case 5: value2+=readDelta1(page+pos); value3=readDelta2(page+pos+1); pos+=3; break;
+         case 6: value2+=readDelta1(page+pos); value3=readDelta3(page+pos+1); pos+=4; break;
+         case 7: value2+=readDelta1(page+pos); value3=readDelta4(page+pos+1); pos+=5; break;
+         case 8: value2+=readDelta2(page+pos); value3=readDelta1(page+pos+2); pos+=3; break;
+         case 9: value2+=readDelta2(page+pos); value3=readDelta2(page+pos+2); pos+=4; break;
+         case 10: value2+=readDelta2(page+pos); value3=readDelta3(page+pos+2); pos+=5; break;
+         case 11: value2+=readDelta2(page+pos); value3=readDelta4(page+pos+2); pos+=6; break;
+         case 12: value2+=readDelta3(page+pos); value3=readDelta1(page+pos+3); pos+=4; break;
+         case 13: value2+=readDelta3(page+pos); value3=readDelta2(page+pos+3); pos+=5; break;
+         case 14: value2+=readDelta3(page+pos); value3=readDelta3(page+pos+3); pos+=6; break;
+         case 15: value2+=readDelta3(page+pos); value3=readDelta4(page+pos+3); pos+=7; break;
+         case 16: value2+=readDelta4(page+pos); value3=readDelta1(page+pos+4); pos+=5; break;
+         case 17: value2+=readDelta4(page+pos); value3=readDelta2(page+pos+4); pos+=6; break;
+         case 18: value2+=readDelta4(page+pos); value3=readDelta3(page+pos+4); pos+=7; break;
+         case 19: value2+=readDelta4(page+pos); value3=readDelta4(page+pos+4); pos+=8; break;
+         case 20: case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28: case 29: case 30: case 31: break;
+         case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39: case 40: case 41: case 42: case 43:
+         case 44: case 45: case 46: case 47: case 48: case 49: case 50: case 51: case 52: case 53: case 54: case 55:
+         case 56: case 57: case 58: case 59: case 60: case 61: case 62: case 63:
+         case 64: value1+=readDelta1(page+pos); value2=readDelta1(page+pos+1); value3=readDelta1(page+pos+2); pos+=3; break;
+         case 65: value1+=readDelta1(page+pos); value2=readDelta1(page+pos+1); value3=readDelta2(page+pos+2); pos+=4; break;
+         case 66: value1+=readDelta1(page+pos); value2=readDelta1(page+pos+1); value3=readDelta3(page+pos+2); pos+=5; break;
+         case 67: value1+=readDelta1(page+pos); value2=readDelta1(page+pos+1); value3=readDelta4(page+pos+2); pos+=6; break;
+         case 68: value1+=readDelta1(page+pos); value2=readDelta2(page+pos+1); value3=readDelta1(page+pos+3); pos+=4; break;
+         case 69: value1+=readDelta1(page+pos); value2=readDelta2(page+pos+1); value3=readDelta2(page+pos+3); pos+=5; break;
+         case 70: value1+=readDelta1(page+pos); value2=readDelta2(page+pos+1); value3=readDelta3(page+pos+3); pos+=6; break;
+         case 71: value1+=readDelta1(page+pos); value2=readDelta2(page+pos+1); value3=readDelta4(page+pos+3); pos+=7; break;
+         case 72: value1+=readDelta1(page+pos); value2=readDelta3(page+pos+1); value3=readDelta1(page+pos+4); pos+=5; break;
+         case 73: value1+=readDelta1(page+pos); value2=readDelta3(page+pos+1); value3=readDelta2(page+pos+4); pos+=6; break;
+         case 74: value1+=readDelta1(page+pos); value2=readDelta3(page+pos+1); value3=readDelta3(page+pos+4); pos+=7; break;
+         case 75: value1+=readDelta1(page+pos); value2=readDelta3(page+pos+1); value3=readDelta4(page+pos+4); pos+=8; break;
+         case 76: value1+=readDelta1(page+pos); value2=readDelta4(page+pos+1); value3=readDelta1(page+pos+5); pos+=6; break;
+         case 77: value1+=readDelta1(page+pos); value2=readDelta4(page+pos+1); value3=readDelta2(page+pos+5); pos+=7; break;
+         case 78: value1+=readDelta1(page+pos); value2=readDelta4(page+pos+1); value3=readDelta3(page+pos+5); pos+=8; break;
+         case 79: value1+=readDelta1(page+pos); value2=readDelta4(page+pos+1); value3=readDelta4(page+pos+5); pos+=9; break;
+         case 80: value1+=readDelta2(page+pos); value2=readDelta1(page+pos+2); value3=readDelta1(page+pos+3); pos+=4; break;
+         case 81: value1+=readDelta2(page+pos); value2=readDelta1(page+pos+2); value3=readDelta2(page+pos+3); pos+=5; break;
+         case 82: value1+=readDelta2(page+pos); value2=readDelta1(page+pos+2); value3=readDelta3(page+pos+3); pos+=6; break;
+         case 83: value1+=readDelta2(page+pos); value2=readDelta1(page+pos+2); value3=readDelta4(page+pos+3); pos+=7; break;
+         case 84: value1+=readDelta2(page+pos); value2=readDelta2(page+pos+2); value3=readDelta1(page+pos+4); pos+=5; break;
+         case 85: value1+=readDelta2(page+pos); value2=readDelta2(page+pos+2); value3=readDelta2(page+pos+4); pos+=6; break;
+         case 86: value1+=readDelta2(page+pos); value2=readDelta2(page+pos+2); value3=readDelta3(page+pos+4); pos+=7; break;
+         case 87: value1+=readDelta2(page+pos); value2=readDelta2(page+pos+2); value3=readDelta4(page+pos+4); pos+=8; break;
+         case 88: value1+=readDelta2(page+pos); value2=readDelta3(page+pos+2); value3=readDelta1(page+pos+5); pos+=6; break;
+         case 89: value1+=readDelta2(page+pos); value2=readDelta3(page+pos+2); value3=readDelta2(page+pos+5); pos+=7; break;
+         case 90: value1+=readDelta2(page+pos); value2=readDelta3(page+pos+2); value3=readDelta3(page+pos+5); pos+=8; break;
+         case 91: value1+=readDelta2(page+pos); value2=readDelta3(page+pos+2); value3=readDelta4(page+pos+5); pos+=9; break;
+         case 92: value1+=readDelta2(page+pos); value2=readDelta4(page+pos+2); value3=readDelta1(page+pos+6); pos+=7; break;
+         case 93: value1+=readDelta2(page+pos); value2=readDelta4(page+pos+2); value3=readDelta2(page+pos+6); pos+=8; break;
+         case 94: value1+=readDelta2(page+pos); value2=readDelta4(page+pos+2); value3=readDelta3(page+pos+6); pos+=9; break;
+         case 95: value1+=readDelta2(page+pos); value2=readDelta4(page+pos+2); value3=readDelta4(page+pos+6); pos+=10; break;
+         case 96: value1+=readDelta3(page+pos); value2=readDelta1(page+pos+3); value3=readDelta1(page+pos+4); pos+=5; break;
+         case 97: value1+=readDelta3(page+pos); value2=readDelta1(page+pos+3); value3=readDelta2(page+pos+4); pos+=6; break;
+         case 98: value1+=readDelta3(page+pos); value2=readDelta1(page+pos+3); value3=readDelta3(page+pos+4); pos+=7; break;
+         case 99: value1+=readDelta3(page+pos); value2=readDelta1(page+pos+3); value3=readDelta4(page+pos+4); pos+=8; break;
+         case 100: value1+=readDelta3(page+pos); value2=readDelta2(page+pos+3); value3=readDelta1(page+pos+5); pos+=6; break;
+         case 101: value1+=readDelta3(page+pos); value2=readDelta2(page+pos+3); value3=readDelta2(page+pos+5); pos+=7; break;
+         case 102: value1+=readDelta3(page+pos); value2=readDelta2(page+pos+3); value3=readDelta3(page+pos+5); pos+=8; break;
+         case 103: value1+=readDelta3(page+pos); value2=readDelta2(page+pos+3); value3=readDelta4(page+pos+5); pos+=9; break;
+         case 104: value1+=readDelta3(page+pos); value2=readDelta3(page+pos+3); value3=readDelta1(page+pos+6); pos+=7; break;
+         case 105: value1+=readDelta3(page+pos); value2=readDelta3(page+pos+3); value3=readDelta2(page+pos+6); pos+=8; break;
+         case 106: value1+=readDelta3(page+pos); value2=readDelta3(page+pos+3); value3=readDelta3(page+pos+6); pos+=9; break;
+         case 107: value1+=readDelta3(page+pos); value2=readDelta3(page+pos+3); value3=readDelta4(page+pos+6); pos+=10; break;
+         case 108: value1+=readDelta3(page+pos); value2=readDelta4(page+pos+3); value3=readDelta1(page+pos+7); pos+=8; break;
+         case 109: value1+=readDelta3(page+pos); value2=readDelta4(page+pos+3); value3=readDelta2(page+pos+7); pos+=9; break;
+         case 110: value1+=readDelta3(page+pos); value2=readDelta4(page+pos+3); value3=readDelta3(page+pos+7); pos+=10; break;
+         case 111: value1+=readDelta3(page+pos); value2=readDelta4(page+pos+3); value3=readDelta4(page+pos+7); pos+=11; break;
+         case 112: value1+=readDelta4(page+pos); value2=readDelta1(page+pos+4); value3=readDelta1(page+pos+5); pos+=6; break;
+         case 113: value1+=readDelta4(page+pos); value2=readDelta1(page+pos+4); value3=readDelta2(page+pos+5); pos+=7; break;
+         case 114: value1+=readDelta4(page+pos); value2=readDelta1(page+pos+4); value3=readDelta3(page+pos+5); pos+=8; break;
+         case 115: value1+=readDelta4(page+pos); value2=readDelta1(page+pos+4); value3=readDelta4(page+pos+5); pos+=9; break;
+         case 116: value1+=readDelta4(page+pos); value2=readDelta2(page+pos+4); value3=readDelta1(page+pos+6); pos+=7; break;
+         case 117: value1+=readDelta4(page+pos); value2=readDelta2(page+pos+4); value3=readDelta2(page+pos+6); pos+=8; break;
+         case 118: value1+=readDelta4(page+pos); value2=readDelta2(page+pos+4); value3=readDelta3(page+pos+6); pos+=9; break;
+         case 119: value1+=readDelta4(page+pos); value2=readDelta2(page+pos+4); value3=readDelta4(page+pos+6); pos+=10; break;
+         case 120: value1+=readDelta4(page+pos); value2=readDelta3(page+pos+4); value3=readDelta1(page+pos+7); pos+=8; break;
+         case 121: value1+=readDelta4(page+pos); value2=readDelta3(page+pos+4); value3=readDelta2(page+pos+7); pos+=9; break;
+         case 122: value1+=readDelta4(page+pos); value2=readDelta3(page+pos+4); value3=readDelta3(page+pos+7); pos+=10; break;
+         case 123: value1+=readDelta4(page+pos); value2=readDelta3(page+pos+4); value3=readDelta4(page+pos+7); pos+=11; break;
+         case 124: value1+=readDelta4(page+pos); value2=readDelta4(page+pos+4); value3=readDelta1(page+pos+8); pos+=9; break;
+         case 125: value1+=readDelta4(page+pos); value2=readDelta4(page+pos+4); value3=readDelta2(page+pos+8); pos+=10; break;
+         case 126: value1+=readDelta4(page+pos); value2=readDelta4(page+pos+4); value3=readDelta3(page+pos+8); pos+=11; break;
+         case 127: value1+=readDelta4(page+pos); value2=readDelta4(page+pos+4); value3=readDelta4(page+pos+8); pos+=12; break;
       }
-      // Last two values changed only?
-      if (info<0xC0) {
-         unsigned size2=(info>>2)&7;
-         value2+=readDelta(page+pos,size2);
-         pos+=size2;
-         unsigned size3=(info&3)+1;
-         value3=readDelta(page+pos,size3);
-         pos+=size3;
-         return true;
-      }
-      // All three values changed
-      unsigned size1=((info>>4)&3)+1;
-      value1+=readDelta(page+pos,size1);
-      pos+=size1;
-      unsigned size2=((info>>2)&3)+1;
-      value2=readDelta(page+pos,size2);
-      pos+=size2;
-      unsigned size3=(info&3)+1;
-      value3=readDelta(page+pos,size3);
-      pos+=size3;
       return true;
    }
 }
