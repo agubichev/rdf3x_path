@@ -59,6 +59,30 @@ unsigned ResultsPrinter::first()
                std::cout << s << std::endl;
          }
       } while ((count=input->next())!=0);
+   } else if (duplicateHandling==ShowDuplicates) {
+      // Show only duplicates?
+      do {
+         if (count<=1) continue;
+         bool first=true;
+         for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
+            if (first) first=false; else if (!silent) std::cout << ' ';
+            if (~((*iter)->value)) {
+               unsigned value=(*iter)->value,slot=value%cacheSize;
+               if (constantCache[slot]!=value) {
+                  constantCache[slot]=value;
+                  dictionary.lookupById(value,cacheStart[slot],cacheStop[slot]);
+               }
+               if (!silent)
+                  std::cout << std::string(cacheStart[slot],cacheStop[slot]);
+            } else {
+               if (!silent)
+                  std::cout << "NULL";
+            }
+         }
+         if (!silent) {
+            std::cout << " x" << count << std::endl;
+         }
+      } while ((count=input->next())!=0);
    } else {
       // No, reduce or count duplicates
       do {

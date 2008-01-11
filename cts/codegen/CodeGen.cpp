@@ -380,9 +380,10 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
    ResultsPrinter::DuplicateHandling duplicateHandling=ResultsPrinter::ExpandDuplicates;
    switch (query.getDuplicateHandling()) {
       case QueryGraph::AllDuplicates: duplicateHandling=ResultsPrinter::ExpandDuplicates; break;
-      case QueryGraph::CountDuplicates: duplicateHandling=ResultsPrinter::CountDuplicates; break; // XXX additional group by required
+      case QueryGraph::CountDuplicates: duplicateHandling=ResultsPrinter::CountDuplicates; break;
       case QueryGraph::ReducedDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break;
-      case QueryGraph::NoDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break; // XXX additional group by required
+      case QueryGraph::NoDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break;
+      case QueryGraph::ShowDuplicates: duplicateHandling=ResultsPrinter::ShowDuplicates; break;
    }
    tree=new ResultsPrinter(runtime.getDatabase(),tree,output,duplicateHandling,silent);
 

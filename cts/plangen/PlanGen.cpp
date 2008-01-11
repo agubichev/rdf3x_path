@@ -448,7 +448,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       return 0;
 
    // Aggregate, if required
-   if ((query.getDuplicateHandling()==QueryGraph::CountDuplicates)||(query.getDuplicateHandling()==QueryGraph::NoDuplicates)) {
+   if ((query.getDuplicateHandling()==QueryGraph::CountDuplicates)||(query.getDuplicateHandling()==QueryGraph::NoDuplicates)||(query.getDuplicateHandling()==QueryGraph::ShowDuplicates)) {
       Plan* p=plans.alloc();
       p->op=Plan::HashGroupify;
       p->opArg=0;

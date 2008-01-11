@@ -13,7 +13,7 @@ class ResultsPrinter : public Operator
 {
    public:
    /// Duplicate handling
-   enum DuplicateHandling { ReduceDuplicates, ExpandDuplicates, CountDuplicates };
+   enum DuplicateHandling { ReduceDuplicates, ExpandDuplicates, CountDuplicates, ShowDuplicates };
 
    private:
    /// The output registers

@@ -8,7 +8,7 @@ class QueryGraph
 {
    public:
    /// Possible duplicate handling modes
-   enum DuplicateHandling { AllDuplicates, CountDuplicates, ReducedDuplicates, NoDuplicates };
+   enum DuplicateHandling { AllDuplicates, CountDuplicates, ReducedDuplicates, NoDuplicates, ShowDuplicates };
 
    /// A node in the graph
    struct Node {

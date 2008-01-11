@@ -93,6 +93,7 @@ void SPARQLParser::parseProjection()
          if (lexer.isKeyword("distinct")) projectionModifier=Modifier_Distinct; else
          if (lexer.isKeyword("reduced")) projectionModifier=Modifier_Reduced; else
          if (lexer.isKeyword("count")) projectionModifier=Modifier_Count; else
+         if (lexer.isKeyword("duplicates")) projectionModifier=Modifier_Duplicates; else
             lexer.unget(token);
       } else lexer.unget(token);
    }

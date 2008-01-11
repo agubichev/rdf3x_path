@@ -52,7 +52,7 @@ class SPARQLParser
       std::vector<Element> values;
    };
    /// The projection modifier
-   enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count };
+   enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };
 
    private:
    /// The lexer
