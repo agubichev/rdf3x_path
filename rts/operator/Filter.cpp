@@ -2,8 +2,8 @@
 #include "rts/runtime/Runtime.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
-Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values)
-   : input(input),filter(filter)
+Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude)
+   : input(input),filter(filter),exclude(exclude)
    // Constructor
 {
    if (values.empty()) {
@@ -38,26 +38,45 @@ unsigned Filter::first()
 
    // Check if valid
    unsigned value=filter->value;
-   if ((value>=min)&&(value<=max)&&(valid[value-min]))
+   if (exclude) {
+      if ((value>=min)&&(value<=max)&&(valid[value-min]))
+         return next();
       return count;
-
-   // Call next to find other entries
-   return next();
+   } else {
+      if ((value>=min)&&(value<=max)&&(valid[value-min]))
+         return count;
+      return next();
+   }
 }
 //---------------------------------------------------------------------------
 unsigned Filter::next()
    // Produce the next tuple
 {
-   while (true) {
-      // Done?
-      unsigned count;
-      if ((count=input->next())==0)
-         return false;
+   if (exclude) {
+      while (true) {
+         // Done?
+         unsigned count;
+         if ((count=input->next())==0)
+            return false;
 
-      // Check if valid
-      unsigned value=filter->value;
-      if ((value>=min)&&(value<=max)&&(valid[value-min]))
+         // Check if valid
+         unsigned value=filter->value;
+         if ((value>=min)&&(value<=max)&&(valid[value-min]))
+            continue;
          return count;
+      }
+   } else {
+      while (true) {
+         // Done?
+         unsigned count;
+         if ((count=input->next())==0)
+            return false;
+
+         // Check if valid
+         unsigned value=filter->value;
+         if ((value>=min)&&(value<=max)&&(valid[value-min]))
+            return count;
+      }
    }
 }
 //---------------------------------------------------------------------------
@@ -66,6 +85,7 @@ void Filter::print(unsigned level)
 {
    indent(level); std::cout << "<Filter ";
    printRegister(filter);
+   if (exclude) std::cout << " !";
    std::cout << " [";
    unsigned id=min;
    for (std::vector<unsigned char>::const_iterator iter=valid.begin(),limit=valid.end();iter!=limit;++iter,++id) {

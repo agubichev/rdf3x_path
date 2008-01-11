@@ -144,30 +144,42 @@ void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
    if (var.type!=Element::Variable)
       throw ParserException("filter variable expected");
 
-   // 'in'
-   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("in")))
-      throw ParserException("'in' expected");
-
-   // The values
+   // Prepare the setuo
    std::vector<Element> values;
-   while (true) {
+   bool negation=false;
+
+   // 'in'?
+   SPARQLLexer::Token token=lexer.getNext();
+   if ((token==SPARQLLexer::Identifier)&&(!lexer.isKeyword("in"))) {
+      // The values
+      while (true) {
+         Element e=parsePatternElement(localVars);
+         if (e.type==Element::Variable)
+            throw ParserException("constant values required in 'in' filter");
+         values.push_back(e);
+
+         SPARQLLexer::Token token=lexer.getNext();
+         if (token==SPARQLLexer::Comma)
+            continue;
+         if (token==SPARQLLexer::RParen)
+            break;
+         throw ParserException("',' or ')' expected");
+      }
+   } else if ((token==SPARQLLexer::Equal)||(token==SPARQLLexer::NotEqual)) {
+      negation=(token==SPARQLLexer::NotEqual);
       Element e=parsePatternElement(localVars);
       if (e.type==Element::Variable)
-         throw ParserException("constant values required in 'in' filter");
+         throw ParserException("variable filters not yet implemented");
       values.push_back(e);
-
-      SPARQLLexer::Token token=lexer.getNext();
-      if (token==SPARQLLexer::Comma)
-         continue;
-      if (token==SPARQLLexer::RParen)
-         break;
-      throw ParserException("',' or ')' expected");
-   }
+      if (lexer.getNext()!=SPARQLLexer::RParen)
+         throw ParserException("')' expected");
+   } else throw ParserException("'=', '!=', or 'in' expected");
 
    // Remember the filter
    Filter f;
    f.id=var.id;
    f.values=values;
+   f.exclude=negation;
    filters.push_back(f);
 }
 //---------------------------------------------------------------------------

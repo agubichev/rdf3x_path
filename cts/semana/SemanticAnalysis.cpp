@@ -57,6 +57,7 @@ static bool encode(Database& db,const SPARQLParser& query,const SPARQLParser::Fi
    filter.values.clear();
    for (std::set<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter)
       filter.values.push_back(*iter);
+   filter.exclude=input.exclude;
 
    return true;
 }

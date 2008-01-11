@@ -56,7 +56,7 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph& query,Plan* pla
 {
    // Apply a filter on the ordering first
    for (QueryGraph::filter_iterator iter=query.filtersBegin(),limit=query.filtersEnd();iter!=limit;++iter)
-      if ((*iter).id==plan->ordering) {
+      if (((*iter).id==plan->ordering)&&(!(*iter).exclude)) {
          Plan* p2=plans.alloc();
          double cost1=plan->costs+Costs::filter(plan->cardinality);
          double cost2=0.5*plan->costs+(*iter).values.size()*Costs::seekBtree();

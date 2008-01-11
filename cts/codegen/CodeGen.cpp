@@ -287,7 +287,7 @@ static Operator* translateFilter(Runtime& runtime,const std::map<unsigned,Regist
    Operator* tree=translatePlan(runtime,context,newProjection,bindings,plan->left);
 
    // Build the operator
-   Operator* result=new Filter(tree,bindings[filter.id],filter.values);
+   Operator* result=new Filter(tree,bindings[filter.id],filter.values,filter.exclude);
 
    // Cleanup the binding
    if (!projection.count(filter.id))

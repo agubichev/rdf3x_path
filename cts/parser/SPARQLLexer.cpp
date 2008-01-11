@@ -51,6 +51,13 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case '}': return RCurly;
          case '(': return LParen;
          case ')': return RParen;
+         case '=': return Equal;
+         // Not equal
+         case '!':
+            if ((pos==input.end())||((*pos)!='='))
+               return Error;
+            ++pos;
+            return NotEqual;
          // Brackets
          case '[':
             // Skip whitespaces

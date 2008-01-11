@@ -18,10 +18,12 @@ class Filter : public Operator
    unsigned min,max;
    /// The valid values
    std::vector<unsigned char> valid;
+   /// Negative filter
+   bool exclude;
 
    public:
    /// Constructor
-   Filter(Operator* input,Register* filter,const std::vector<unsigned>& values);
+   Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude);
    /// Destructor
    ~Filter();
 

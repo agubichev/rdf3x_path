@@ -50,6 +50,8 @@ class SPARQLParser
       unsigned id;
       /// Valid entries
       std::vector<Element> values;
+      /// Negative filter?
+      bool exclude;
    };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };

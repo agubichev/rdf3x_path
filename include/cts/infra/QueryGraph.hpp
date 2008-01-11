@@ -31,6 +31,8 @@ class QueryGraph
       unsigned id;
       /// The valid values. Sorted by id.
       std::vector<unsigned> values;
+      /// Negative filter?
+      bool exclude;
    };
    private:
    /// The nodes
