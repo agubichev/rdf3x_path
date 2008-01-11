@@ -2,18 +2,26 @@
 #include "rts/runtime/Runtime.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
-/// A group
-struct HashGroupify::Group {
-   /// The next group
-   Group* next;
-   /// The values
-   std::vector<unsigned> values;
-   /// The count
-   unsigned count;
+/// Helper
+class HashGroupify::Rehasher {
+   private:
+   /// The hash table
+   std::vector<Group*>& hashTable;
+
+   public:
+   /// Constructor
+   Rehasher(std::vector<Group*>& hashTable) : hashTable(hashTable) {}
+
+   /// Rehash
+   void operator()(Group* g) {
+      Group*& slot=hashTable[g->hash&(hashTable.size()-1)];
+      g->next=slot;
+      slot=g;
+   }
 };
 //---------------------------------------------------------------------------
 HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values)
-   : values(values),input(input),groups(0)
+   : values(values),input(input),groups(0),groupsPool(values.size()*sizeof(unsigned))
    // Constructor
 {
 }
@@ -22,27 +30,17 @@ HashGroupify::~HashGroupify()
    // Destructor
 {
    delete input;
-   deleteGroups();
-}
-//---------------------------------------------------------------------------
-void HashGroupify::deleteGroups()
-   // Delete the groups
-{
-   while (groups) {
-      Group* next=groups;
-      delete groups;
-      groups=next;
-   }
 }
 //---------------------------------------------------------------------------
 unsigned HashGroupify::first()
    // Produce the first tuple
 {
    // Aggregate the input
-   const unsigned hashTableSize=997;
-   Group* hashTable[hashTableSize];
-   for (unsigned index=0;index<hashTableSize;index++)
-      hashTable[index]=0;
+   std::vector<Group*> hashTable;
+   unsigned hashTableSize=64,load=0,maxLoad=static_cast<unsigned>(0.8*hashTableSize);
+   hashTable.resize(hashTableSize);
+   groupsPool.freeAll();
+
    for (unsigned count=input->first();count;count=input->next()) {
       // Hash the aggregation values
       unsigned hash=0;
@@ -50,8 +48,9 @@ unsigned HashGroupify::first()
          hash=((hash<<15)|(hash>>(8*sizeof(unsigned)-15)))^((*iter)->value);
 
       // Scan the hash table for existing values
+      Group*& slot=hashTable[hash&(hashTableSize-1)];
       bool match=false;
-      for (Group* iter=hashTable[hash%hashTableSize];iter;iter=iter->next) {
+      for (Group* iter=slot;iter;iter=iter->next) {
          match=true;
          for (unsigned index=0,limit=values.size();index<limit;index++)
             if (iter->values[index]!=values[index]->value)
@@ -64,26 +63,32 @@ unsigned HashGroupify::first()
       if (match) continue;
 
       // Create a new group
-      Group* g=new Group();
-      g->next=hashTable[hash%hashTableSize];
-      hashTable[hash%hashTableSize]=g;
-      g->values.resize(values.size());
+      Group* g=groupsPool.alloc();
+      g->next=slot;
+      g->hash=hash;
+      g->count=count;
       for (unsigned index=0,limit=values.size();index<limit;index++)
          g->values[index]=values[index]->value;
-      g->count=count;
+      slot=g;
+
+      // Rehash if necessary
+      if ((++load)>=maxLoad) {
+         hashTable.clear();
+         hashTableSize*=2;
+         maxLoad=static_cast<unsigned>(0.8*hashTableSize);
+         hashTable.resize(hashTableSize);
+         Rehasher rehasher(hashTable);
+         groupsPool.enumAll(rehasher);
+      }
    }
 
    // Form a chain out of the groups
-   deleteGroups();
-   Group* tail=0;
-   for (unsigned index=0;index<hashTableSize;index++)
-      if (hashTable[index]) {
-         if (tail)
-            tail->next=hashTable[index]; else
-            groups=tail=hashTable[index];
-         while (tail->next)
-            tail=tail->next;
-      }
+   hashTable.clear();
+   hashTable.resize(1);
+   Rehasher rehasher(hashTable);
+   groupsPool.enumAll(rehasher);
+
+   groups=hashTable[0];
    groupsIter=groups;
 
    return next();

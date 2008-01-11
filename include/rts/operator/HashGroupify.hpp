@@ -2,6 +2,7 @@
 #define H_rts_operator_HashGroupify
 //---------------------------------------------------------------------------
 #include "rts/operator/Operator.hpp"
+#include "infra/util/VarPool.hpp"
 #include <vector>
 //---------------------------------------------------------------------------
 /// A hash based aggregation
@@ -9,7 +10,18 @@ class HashGroupify : public Operator
 {
    private:
    /// A group
-   struct Group;
+   struct Group {
+      /// The next group
+      Group* next;
+      /// The hash value
+      unsigned hash;
+      /// The cound
+      unsigned count;
+      /// The values
+      unsigned values[];
+   };
+   /// Helper
+   class Rehasher;
 
    /// The input registers
    std::vector<Register*> values;
@@ -17,9 +29,8 @@ class HashGroupify : public Operator
    Operator* input;
    /// The groups
    Group* groups,*groupsIter;
-
-   /// Delete the groups
-   void deleteGroups();
+   /// The groups pool
+   VarPool<Group> groupsPool;
 
    public:
    /// Constructor
