@@ -7,6 +7,18 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
+static bool shouldSimplify(const string& subject,const string& predicate,const string& object)
+   // Simplfy for a comparison with the VLDB paper?
+{
+   if ((subject.length()>127)||(predicate.length()>127)||(object.length()>127))
+      return true;
+
+   if ((subject=="info:marc:/")||(subject=="http://libraries.mit.edu/barton//"))
+      return true;
+
+   return false;
+}
+//---------------------------------------------------------------------------
 static bool parseEntry(string::const_iterator& iter,string::const_iterator limit,string& result,unsigned remaining)
    // Parse an entry
 {
@@ -64,7 +76,7 @@ static bool parseEntry(string::const_iterator& iter,string::const_iterator limit
    } else return false;
 }
 //---------------------------------------------------------------------------
-static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName,bool firstPass)
+static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName,bool firstPass,bool simplify)
    // Collect all strings
 {
    ifstream in(fileName.c_str());
@@ -115,6 +127,10 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
          cout << "warning: invalid entries in line '" << s << "' in " << fileName << endl;
          continue;
       }
+
+      // Simplify?
+      if (simplify&&shouldSimplify(subject,predicate,object))
+         continue;
 
       // And write
       if (firstPass) {
@@ -176,7 +192,7 @@ static unsigned mapString(map<string,unsigned>& stringMap,map<unsigned,unsigned>
       return id;
 }
 //---------------------------------------------------------------------------
-static bool dumpFile(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName)
+static bool dumpFile(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName,bool simplify)
    // Dump the file into the facts table
 {
    ifstream in(fileName.c_str());
@@ -223,6 +239,10 @@ static bool dumpFile(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,
          continue;
       }
 
+      // Simplify?
+      if (simplify&&shouldSimplify(subject,predicate,object))
+         continue;
+
       // And write
       out << mapString(stringMap,hashMap,subject) << "\t" << mapString(stringMap,hashMap,predicate) << "\t" << mapString(stringMap,hashMap,object) << endl;
    }
@@ -233,10 +253,13 @@ static bool dumpFile(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
-   if (argc!=2) {
+   if ((argc!=2)&&(argc!=3)) {
       cout << "usage: " << argv[0] << " [redland-dump]" << endl;
       return 1;
    }
+
+   // Simplify the data set
+   bool simplify=((argc==3)&&(string(argv[2])=="--simplify"));
 
    // Collect the predicates and build the string map
    map<string,unsigned> stringMap;
@@ -244,10 +267,10 @@ int main(int argc,char* argv[])
    {
       ofstream out("strings");
       cout << "Collecting predicates..." << endl;
-      if (!collectStrings(out,stringMap,hashMap,argv[1],true))
+      if (!collectStrings(out,stringMap,hashMap,argv[1],true,simplify))
          return 1;
       cout << "Building the string map..." << endl;
-      if (!collectStrings(out,stringMap,hashMap,argv[1],false))
+      if (!collectStrings(out,stringMap,hashMap,argv[1],false,simplify))
          return 1;
    }
 
@@ -255,7 +278,7 @@ int main(int argc,char* argv[])
    {
       ofstream out("facts");
       cout << "Dumping facts..." << endl;
-      if (!dumpFile(out,stringMap,hashMap,argv[1]))
+      if (!dumpFile(out,stringMap,hashMap,argv[1],simplify))
          return 1;
    }
 }
