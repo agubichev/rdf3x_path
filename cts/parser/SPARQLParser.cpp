@@ -150,7 +150,7 @@ void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
 
    // 'in'?
    SPARQLLexer::Token token=lexer.getNext();
-   if ((token==SPARQLLexer::Identifier)&&(!lexer.isKeyword("in"))) {
+   if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("in"))) {
       // The values
       while (true) {
          Element e=parsePatternElement(localVars);
