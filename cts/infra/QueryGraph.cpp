@@ -31,8 +31,19 @@ bool QueryGraph::Node::canJoin(const Node& other) const
    return canJoin;
 }
 //---------------------------------------------------------------------------
+QueryGraph::Edge::Edge(unsigned from,unsigned to,const vector<unsigned>& common)
+   : from(from),to(to),common(common)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+QueryGraph::Edge::~Edge()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
 QueryGraph::QueryGraph()
-   : duplicateHandling(AllDuplicates)
+   : duplicateHandling(AllDuplicates),knownEmptyResult(false)
    // Constructor
 {
 }
@@ -45,54 +56,110 @@ QueryGraph::~QueryGraph()
 void QueryGraph::clear()
    // Clear the graph
 {
-   nodes.clear();
-   edges.clear();
-   projection.clear();
+   query=SubQuery();
    duplicateHandling=AllDuplicates;
+   knownEmptyResult=false;
 }
 //---------------------------------------------------------------------------
-void QueryGraph::addNode(const Node& node)
-   // Add a node
+static bool intersects(const set<unsigned>& a,const set<unsigned>& b,vector<unsigned>& common)
+   // Check if two sets overlap
 {
-   nodes.push_back(node);
+   common.clear();
+   set<unsigned>::const_iterator ia,la,ib,lb;
+   if (a.size()<b.size()) {
+      if (a.empty())
+         return false;
+      ia=a.begin(); la=a.end();
+      ib=b.lower_bound(*ia); lb=b.end();
+   } else {
+      if (b.empty())
+         return false;
+      ib=b.begin(); lb=b.end();
+      ia=a.lower_bound(*ib); la=a.end();
+   }
+   bool result=false;
+   while ((ia!=la)&&(ib!=lb)) {
+      unsigned va=*ia,vb=*ib;
+      if (va<vb) {
+         ++ia;
+      } else if (va>vb) {
+         ++ib;
+      } else {
+         result=true;
+         common.push_back(*ia);
+         ++ia; ++ib;
+      }
+   }
+   return result;
+}
+//---------------------------------------------------------------------------
+static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& bindings)
+   // Construct the edges for a specfic subquery
+{
+   // Collect all variable bindings
+   vector<set<unsigned> > patternBindings,optionalBindings,unionBindings;
+   patternBindings.resize(subQuery.nodes.size());
+   for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
+      const QueryGraph::Node& n=subQuery.nodes[index];
+      if (!n.constSubject) {
+         patternBindings[index].insert(n.subject);
+         bindings.insert(n.subject);
+      }
+      if (!n.constPredicate) {
+         patternBindings[index].insert(n.predicate);
+         bindings.insert(n.predicate);
+      }
+      if (!n.constObject) {
+         patternBindings[index].insert(n.object);
+         bindings.insert(n.object);
+      }
+   }
+   optionalBindings.resize(subQuery.optional.size());
+   for (unsigned index=0,limit=optionalBindings.size();index<limit;++index) {
+      constructEdges(subQuery.optional[index],optionalBindings[index]);
+      bindings.insert(optionalBindings[index].begin(),optionalBindings[index].end());
+   }
+   unionBindings.resize(subQuery.unions.size());
+   for (unsigned index=0,limit=unionBindings.size();index<limit;++index) {
+      for (vector<QueryGraph::SubQuery>::iterator iter=subQuery.unions[index].begin(),limit=subQuery.unions[index].end();iter!=limit;++iter)
+         constructEdges(*iter,unionBindings[index]);
+      bindings.insert(unionBindings[index].begin(),unionBindings[index].end());
+   }
+
+   // Derive all edges
+   subQuery.edges.clear();
+   unsigned optionalOfs=patternBindings.size(),unionOfs=optionalOfs+optionalBindings.size();
+   vector<unsigned> common;
+   for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
+      for (unsigned index2=index+1;index2<limit;index2++)
+         if (intersects(patternBindings[index],patternBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(index,index2,common));
+      for (unsigned index2=0,limit2=optionalBindings.size();index2<limit2;index2++)
+         if (intersects(patternBindings[index],optionalBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(index,optionalOfs+index2,common));
+      for (unsigned index2=0,limit2=unionBindings.size();index2<limit2;index2++)
+         if (intersects(patternBindings[index],unionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(index,unionOfs+index2,common));
+   }
+   for (unsigned index=0,limit=optionalBindings.size();index<limit;++index) {
+      for (unsigned index2=index+1;index2<limit;index2++)
+         if (intersects(optionalBindings[index],optionalBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(optionalOfs+index,optionalOfs+index2,common));
+      for (unsigned index2=0,limit2=unionBindings.size();index2<limit2;index2++)
+         if (intersects(optionalBindings[index],unionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(optionalOfs+index,unionOfs+index2,common));
+   }
+   for (unsigned index=0,limit=unionBindings.size();index<limit;++index) {
+      for (unsigned index2=index+1;index2<limit;index2++)
+         if (intersects(unionBindings[index],unionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(unionOfs+index,unionOfs+index2,common));
+   }
 }
 //---------------------------------------------------------------------------
 void QueryGraph::constructEdges()
    // Construct the edges
 {
-   edges.clear();
-   for (vector<Node>::const_iterator iter=nodes.begin(),limit=nodes.end();iter!=limit;++iter) {
-      const Node& n1=(*iter);
-      for (vector<Node>::const_iterator iter2=iter+1;iter2!=limit;++iter2) {
-         const Node& n2=(*iter2);
-         // Store an edge if they can be joined
-         if (n1.canJoin(n2)) {
-            Edge e;
-            e.from=&n1; e.to=&n2;
-            edges.push_back(e);
-         }
-      }
-   }
-}
-//---------------------------------------------------------------------------
-void QueryGraph::addFilter(const Filter& filter)
-   // Add a filter condition
-{
-   // Does a filter on the same variable already exist?
-   for (vector<Filter>::iterator iter=filters.begin(),limit=filters.end();iter!=limit;++iter) {
-      if ((*iter).id==filter.id) {
-         // Yes, intersect the two filters
-         set<unsigned> oldValues;
-         oldValues.insert((*iter).values.begin(),(*iter).values.end());
-         (*iter).values.clear();
-         for (vector<unsigned>::const_iterator iter2=filter.values.begin(),limit2=filter.values.end();iter2!=limit2;++iter2)
-            if (oldValues.count(*iter2))
-               (*iter).values.push_back(*iter2);
-         return;
-      }
-   }
-
-   // No, add it
-   filters.push_back(filter);
+   set<unsigned> bindings;
+   ::constructEdges(query,bindings);
 }
 //---------------------------------------------------------------------------

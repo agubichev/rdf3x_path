@@ -7,7 +7,7 @@
 struct Plan
 {
    /// Possible operators
-   enum Op { IndexScan, AggregatedIndexScan, NestedLoopJoin, MergeJoin, HashJoin, HashGroupify, Filter, NestedLoopFilter };
+   enum Op { IndexScan, AggregatedIndexScan, NestedLoopJoin, MergeJoin, HashJoin, HashGroupify, Filter, NestedLoopFilter, Union };
    /// The cardinalits type
    typedef double card_t;
    /// The cost type

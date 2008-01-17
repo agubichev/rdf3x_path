@@ -132,7 +132,7 @@ void SPARQLParser::parseFrom()
    }
 }
 //---------------------------------------------------------------------------
-void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
+void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars)
    // Parse a filter condition
 {
    // '('
@@ -140,7 +140,7 @@ void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
       throw ParserException("'(' expected");
 
    // Variable
-   Element var=parsePatternElement(localVars);
+   Element var=parsePatternElement(group,localVars);
    if (var.type!=Element::Variable)
       throw ParserException("filter variable expected");
 
@@ -153,7 +153,7 @@ void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
    if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("in"))) {
       // The values
       while (true) {
-         Element e=parsePatternElement(localVars);
+         Element e=parsePatternElement(group,localVars);
          if (e.type==Element::Variable)
             throw ParserException("constant values required in 'in' filter");
          values.push_back(e);
@@ -167,7 +167,7 @@ void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
       }
    } else if ((token==SPARQLLexer::Equal)||(token==SPARQLLexer::NotEqual)) {
       negation=(token==SPARQLLexer::NotEqual);
-      Element e=parsePatternElement(localVars);
+      Element e=parsePatternElement(group,localVars);
       if (e.type==Element::Variable)
          throw ParserException("variable filters not yet implemented");
       values.push_back(e);
@@ -180,10 +180,10 @@ void SPARQLParser::parseFilter(std::map<std::string,unsigned>& localVars)
    f.id=var.id;
    f.values=values;
    f.exclude=negation;
-   filters.push_back(f);
+   group.filters.push_back(f);
 }
 //---------------------------------------------------------------------------
-SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned>& localVars)
+SPARQLParser::Element SPARQLParser::parseBlankNode(PatternGroup& group,std::map<std::string,unsigned>& localVars)
    // Parse blank node patterns
 {
    // The subject is a blank node
@@ -192,21 +192,21 @@ SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned
    subject.id=variableCount++;
 
    // Parse the the remaining part of the pattern
-   SPARQLParser::Element predicate=parsePatternElement(localVars);
-   SPARQLParser::Element object=parsePatternElement(localVars);
-   patterns.push_back(Pattern(subject,predicate,object));
+   SPARQLParser::Element predicate=parsePatternElement(group,localVars);
+   SPARQLParser::Element object=parsePatternElement(group,localVars);
+   group.patterns.push_back(Pattern(subject,predicate,object));
 
    // Check for the tail
    while (true) {
       SPARQLLexer::Token token=lexer.getNext();
       if (token==SPARQLLexer::Semicolon) {
-         predicate=parsePatternElement(localVars);
-         object=parsePatternElement(localVars);
-         patterns.push_back(Pattern(subject,predicate,object));
+         predicate=parsePatternElement(group,localVars);
+         object=parsePatternElement(group,localVars);
+         group.patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Comma) {
-         object=parsePatternElement(localVars);
-         patterns.push_back(Pattern(subject,predicate,object));
+         object=parsePatternElement(group,localVars);
+         group.patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Dot) {
          return subject;
@@ -216,7 +216,7 @@ SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned
       } else if (token==SPARQLLexer::Identifier) {
          if (!lexer.isKeyword("filter"))
             throw ParserException("'filter' expected");
-         parseFilter(localVars);
+         parseFilter(group,localVars);
          continue;
       } else {
          // Error while parsing, let out caller handle it
@@ -226,7 +226,7 @@ SPARQLParser::Element SPARQLParser::parseBlankNode(std::map<std::string,unsigned
    }
 }
 //---------------------------------------------------------------------------
-SPARQLParser::Element SPARQLParser::parsePatternElement(std::map<std::string,unsigned>& localVars)
+SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,std::map<std::string,unsigned>& localVars)
    // Parse an entry in a pattern
 {
    Element result;
@@ -244,7 +244,7 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(std::map<std::string,uns
       result.type=Element::Variable;
       result.id=variableCount++;
    } else if (token==SPARQLLexer::LBracket) {
-      result=parseBlankNode(localVars);
+      result=parseBlankNode(group,localVars);
       if (lexer.getNext()!=SPARQLLexer::RBracket)
          throw ParserException("']' expected");
    } else if (token==SPARQLLexer::Underscore) {
@@ -286,28 +286,28 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(std::map<std::string,uns
    return result;
 }
 //---------------------------------------------------------------------------
-void SPARQLParser::parseGraphPattern()
+void SPARQLParser::parseGraphPattern(PatternGroup& group)
    // Parse a graph pattern
 {
    std::map<std::string,unsigned> localVars;
 
    // Parse the first pattern
-   Element subject=parsePatternElement(localVars);
-   Element predicate=parsePatternElement(localVars);
-   Element object=parsePatternElement(localVars);
-   patterns.push_back(Pattern(subject,predicate,object));
+   Element subject=parsePatternElement(group,localVars);
+   Element predicate=parsePatternElement(group,localVars);
+   Element object=parsePatternElement(group,localVars);
+   group.patterns.push_back(Pattern(subject,predicate,object));
 
    // Check for the tail
    while (true) {
       SPARQLLexer::Token token=lexer.getNext();
       if (token==SPARQLLexer::Semicolon) {
-         predicate=parsePatternElement(localVars);
-         object=parsePatternElement(localVars);
-         patterns.push_back(Pattern(subject,predicate,object));
+         predicate=parsePatternElement(group,localVars);
+         object=parsePatternElement(group,localVars);
+         group.patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Comma) {
-         object=parsePatternElement(localVars);
-         patterns.push_back(Pattern(subject,predicate,object));
+         object=parsePatternElement(group,localVars);
+         group.patterns.push_back(Pattern(subject,predicate,object));
          continue;
       } else if (token==SPARQLLexer::Dot) {
          return;
@@ -317,32 +317,62 @@ void SPARQLParser::parseGraphPattern()
       } else if (token==SPARQLLexer::Identifier) {
          if (!lexer.isKeyword("filter"))
             throw ParserException("'filter' expected");
-         parseFilter(localVars);
+         parseFilter(group,localVars);
          continue;
       } else {
-         // Error while parsing, let out caller handle it
+         // Error while parsing, let our caller handle it
          lexer.unget(token);
          return;
       }
    }
 }
 //---------------------------------------------------------------------------
-void SPARQLParser::parseGroupGraphPattern()
+void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
    // Parse a group of patterns
 {
    while (true) {
       SPARQLLexer::Token token=lexer.getNext();
 
       if (token==SPARQLLexer::LCurly) {
-         parseGroupGraphPattern();
+         // Parse the group
+         PatternGroup newGroup;
+         parseGroupGraphPattern(newGroup);
+
+         // Union statement?
+         token=lexer.getNext();
+         if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("union"))) {
+            group.unions.push_back(std::vector<PatternGroup>());
+            std::vector<PatternGroup>& currentUnion=group.unions.back();
+            currentUnion.push_back(newGroup);
+            while (true) {
+               if (lexer.getNext()!=SPARQLLexer::LCurly)
+                  throw ParserException("'{' expected");
+               PatternGroup subGroup;
+               parseGroupGraphPattern(subGroup);
+               currentUnion.push_back(subGroup);
+
+               // Another union?
+               token=lexer.getNext();
+               if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("union")))
+                  continue;
+               break;
+            }
+         } else {
+            // No, simply merge it
+            group.patterns.insert(group.patterns.end(),newGroup.patterns.begin(),newGroup.patterns.end());
+            group.filters.insert(group.filters.end(),newGroup.filters.begin(),newGroup.filters.end());
+            group.optional.insert(group.optional.end(),newGroup.optional.begin(),newGroup.optional.end());
+            group.unions.insert(group.unions.end(),newGroup.unions.begin(),newGroup.unions.end());
+         }
+         lexer.unget(token);
       } else if ((token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
          // Distinguish filter conditions
          if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("filter"))) {
             std::map<std::string,unsigned> localVars;
-            parseFilter(localVars);
+            parseFilter(group,localVars);
          } else {
             lexer.unget(token);
-            parseGraphPattern();
+            parseGraphPattern(group);
          }
       } else if (token==SPARQLLexer::RCurly) {
          break;
@@ -361,7 +391,9 @@ void SPARQLParser::parseWhere()
       if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("where"))) {
          if (lexer.getNext()!=SPARQLLexer::LCurly)
             throw ParserException("'{' expected");
-         parseGroupGraphPattern();
+
+         patterns=PatternGroup();
+         parseGroupGraphPattern(patterns);
       } else {
          lexer.unget(token);
          return;

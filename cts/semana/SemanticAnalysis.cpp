@@ -29,19 +29,29 @@ static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& i
    }
 }
 //---------------------------------------------------------------------------
-static bool encode(Database& db,const SPARQLParser& query,const SPARQLParser::Filter& input,QueryGraph::Filter& filter)
+static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
+   // Check if a variable is bound in a pattern group
+{
+   for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter)
+      if ((((*iter).subject.type==SPARQLParser::Element::Variable)&&((*iter).subject.id==id))||
+          (((*iter).predicate.type==SPARQLParser::Element::Variable)&&((*iter).predicate.id==id))||
+          (((*iter).object.type==SPARQLParser::Element::Variable)&&((*iter).object.id==id)))
+         return true;
+   for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter=group.optional.begin(),limit=group.optional.end();iter!=limit;++iter)
+      if (binds(*iter,id))
+         return true;
+   for (std::vector<std::vector<SPARQLParser::PatternGroup> >::const_iterator iter=group.unions.begin(),limit=group.unions.end();iter!=limit;++iter)
+      for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         if (binds(*iter2,id))
+            return true;
+   return false;
+}
+//---------------------------------------------------------------------------
+static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& filter)
    // Encode an element for the query graph
 {
    // Check if the id is bound somewhere
-   bool found=false;
-   for (SPARQLParser::pattern_iterator iter=query.patternsBegin(),limit=query.patternsEnd();iter!=limit;++iter)
-      if ((((*iter).subject.type==SPARQLParser::Element::Variable)&&((*iter).subject.id==input.id))||
-          (((*iter).predicate.type==SPARQLParser::Element::Variable)&&((*iter).predicate.id==input.id))||
-          (((*iter).object.type==SPARQLParser::Element::Variable)&&((*iter).object.id==input.id))) {
-         found=true;
-         break;
-      }
-   if (!found)
+   if (!binds(group,input.id))
       return false;
 
    // Resolve all values
@@ -62,34 +72,71 @@ static bool encode(Database& db,const SPARQLParser& query,const SPARQLParser::Fi
    return true;
 }
 //---------------------------------------------------------------------------
-bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
-   // Perform the transformation
+static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& group,QueryGraph::SubQuery& output)
+   // Transform a subquery
 {
-   output.clear();
-
    // Encode all patterns
-   for (SPARQLParser::pattern_iterator iter=input.patternsBegin(),limit=input.patternsEnd();iter!=limit;++iter) {
+   for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter) {
       // Encode the entries
       QueryGraph::Node node;
       if ((!encode(db,(*iter).subject,node.subject,node.constSubject))||
           (!encode(db,(*iter).predicate,node.predicate,node.constPredicate))||
           (!encode(db,(*iter).object,node.object,node.constObject))) {
          // A constant could not be resolved. This will produce an empty result
-         output.clear();
-         return true;
+         return false;
       }
-      output.addNode(node);
+      output.nodes.push_back(node);
    }
 
    // Encode the filter conditions
-   for (SPARQLParser::filter_iterator iter=input.filtersBegin(),limit=input.filtersEnd();iter!=limit;++iter) {
+   for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.filters.begin(),limit=group.filters.end();iter!=limit;++iter) {
       QueryGraph::Filter filter;
-      if (!encode(db,input,*iter,filter)) {
+      if (!encodeFilter(db,group,*iter,filter)) {
          // The filter variable is not bound. This will produce an empty result
-         output.clear();
-         return true;
+         return false;
       }
-      output.addFilter(filter);
+      output.filters.push_back(filter);
+   }
+
+   // Encode all optional parts
+   for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter=group.optional.begin(),limit=group.optional.end();iter!=limit;++iter) {
+      QueryGraph::SubQuery subQuery;
+      if (!transformSubquery(db,*iter,subQuery)) {
+         // Known to produce an empty result, skip it
+         continue;
+      }
+      output.optional.push_back(subQuery);
+   }
+
+   // Encode all union parts
+   for (std::vector<std::vector<SPARQLParser::PatternGroup> >::const_iterator iter=group.unions.begin(),limit=group.unions.end();iter!=limit;++iter) {
+      std::vector<QueryGraph::SubQuery> unionParts;
+      for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2) {
+         QueryGraph::SubQuery subQuery;
+         if (!transformSubquery(db,*iter2,subQuery)) {
+            // Known to produce an empty result, skip it
+            continue;
+         }
+         unionParts.push_back(subQuery);
+      }
+      // Empty union?
+      if (unionParts.empty())
+         return false;
+      output.unions.push_back(unionParts);
+   }
+
+   return true;
+}
+//---------------------------------------------------------------------------
+bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
+   // Perform the transformation
+{
+   output.clear();
+
+   if (!transformSubquery(db,input.getPatterns(),output.getQuery())) {
+      // A constant could not be resolved. This will produce an empty result
+      output.markAsKnownEmpty();
+      return true;
    }
 
    // Compute the edges

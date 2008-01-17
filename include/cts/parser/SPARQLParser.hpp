@@ -53,6 +53,17 @@ class SPARQLParser
       /// Negative filter?
       bool exclude;
    };
+   /// A group of patterns
+   struct PatternGroup {
+      /// The patterns
+      std::vector<Pattern> patterns;
+      /// The filter conditions
+      std::vector<Filter> filters;
+      /// The optional parts
+      std::vector<PatternGroup> optional;
+      /// The union parts
+      std::vector<std::vector<PatternGroup> > unions;
+   };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };
 
@@ -70,24 +81,22 @@ class SPARQLParser
    ProjectionModifier projectionModifier;
    /// The projection clause
    std::vector<unsigned> projection;
-   /// The patterns in the where clause
-   std::vector<Pattern> patterns;
-   /// The filter conditions
-   std::vector<Filter> filters;
+   /// The pattern
+   PatternGroup patterns;
 
    /// Lookup or create a named variable
    unsigned nameVariable(const std::string& name);
 
    /// Parse a filter condition
-   void parseFilter(std::map<std::string,unsigned>& localVars);
+   void parseFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse an entry in a pattern
-   Element parsePatternElement(std::map<std::string,unsigned>& localVars);
+   Element parsePatternElement(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse blank node patterns
-   Element parseBlankNode(std::map<std::string,unsigned>& localVars);
+   Element parseBlankNode(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    // Parse a graph pattern
-   void parseGraphPattern();
+   void parseGraphPattern(PatternGroup& group);
    // Parse a group of patterns
-   void parseGroupGraphPattern();
+   void parseGroupGraphPattern(PatternGroup& group);
 
    /// Parse the prefix part if any
    void parsePrefix();
@@ -107,19 +116,8 @@ class SPARQLParser
    /// Parse the input. Throws an exception in the case of an error
    void parse();
 
-   /// Iterator over the patterns
-   typedef std::vector<Pattern>::const_iterator pattern_iterator;
-   /// Iterator over the patterns
-   pattern_iterator patternsBegin() const { return patterns.begin(); }
-   /// Iterator over the patterns
-   pattern_iterator patternsEnd() const { return patterns.end(); }
-
-   /// Iterator over the filters
-   typedef std::vector<Filter>::const_iterator filter_iterator;
-   /// Iterator over the filters
-   filter_iterator filtersBegin() const { return filters.begin(); }
-   /// Iterator over the filters
-   filter_iterator filtersEnd() const { return filters.end(); }
+   /// Get the patterns
+   const PatternGroup& getPatterns() const { return patterns; }
 
    /// Iterator over the projection clause
    typedef std::vector<unsigned>::const_iterator projection_iterator;

@@ -40,7 +40,7 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
          std::cout << "parse error: " << e.message << std::endl;
          return;
       }
-      if (parser.patternsBegin()==parser.patternsEnd()) {
+      if (parser.getPatterns().patterns.empty()) {
          std::cout << "<empty tuple produced>" << std::endl;
          return;
       }
@@ -48,7 +48,7 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
       // And perform the semantic anaylsis
       SemanticAnalysis semana(db);
       semana.transform(parser,queryGraph);
-      if (queryGraph.nodesBegin()==queryGraph.nodesEnd()) {
+      if (queryGraph.knownEmpty()) {
          std::cout << "<empty result>" << std::endl;
          return;
       }

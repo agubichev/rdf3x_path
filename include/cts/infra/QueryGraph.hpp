@@ -23,7 +23,14 @@ class QueryGraph
    /// The potential join edges
    struct Edge {
       /// The endpoints
-      const Node* from,*to;
+      unsigned from,to;
+      /// Common variables
+      std::vector<unsigned> common;
+
+      /// Constructor
+      Edge(unsigned from,unsigned to,const std::vector<unsigned>& common);
+      /// Destructor
+      ~Edge();
    };
    /// A value filter
    struct Filter {
@@ -34,17 +41,28 @@ class QueryGraph
       /// Negative filter?
       bool exclude;
    };
+   /// Description of a subquery
+   struct SubQuery {
+      /// The nodes
+      std::vector<Node> nodes;
+      /// The edges
+      std::vector<Edge> edges;
+      /// The filter conditions
+      std::vector<Filter> filters;
+      /// Optional subqueries
+      std::vector<SubQuery> optional;
+      /// Union subqueries
+      std::vector<std::vector<SubQuery> > unions;
+   };
    private:
-   /// The nodes
-   std::vector<Node> nodes;
-   /// The edges
-   std::vector<Edge> edges;
-   /// The filter conditions
-   std::vector<Filter> filters;
+   /// The query itself
+   SubQuery query;
    /// The projection
    std::vector<unsigned> projection;
    /// The duplicate handling
    DuplicateHandling duplicateHandling;
+   /// Is the query known to produce an empty result?
+   bool knownEmptyResult;
 
    QueryGraph(const QueryGraph&);
    void operator=(const QueryGraph&);
@@ -57,8 +75,6 @@ class QueryGraph
 
    /// Clear the graph
    void clear();
-   /// Add a node
-   void addNode(const Node& node);
    /// Construct the edges
    void constructEdges();
 
@@ -66,34 +82,18 @@ class QueryGraph
    void setDuplicateHandling(DuplicateHandling d) { duplicateHandling=d; }
    /// Get the duplicate handling mode
    DuplicateHandling getDuplicateHandling() const { return duplicateHandling; }
-   /// Add a filter condition
-   void addFilter(const Filter& filter);
+   /// Known empty result
+   void markAsKnownEmpty() { knownEmptyResult=true; }
+   /// Known empty result?
+   bool knownEmpty() const { return knownEmptyResult; }
+
+   /// Get the query
+   SubQuery& getQuery() { return query; }
+   /// Get the query
+   const SubQuery& getQuery() const { return query; }
+
    /// Add an entry to the output projection
    void addProjection(unsigned id) { projection.push_back(id); }
-
-   /// The number of nodes
-   unsigned getNodeCount() const { return nodes.size(); }
-   /// Iterator over the nodes
-   typedef std::vector<Node>::const_iterator node_iterator;
-   /// Iterator over the nodes
-   node_iterator nodesBegin() const { return nodes.begin(); }
-   /// Iterator over the nodes
-   node_iterator nodesEnd() const { return nodes.end(); }
-
-   /// Iterator over the edges
-   typedef std::vector<Edge>::const_iterator edge_iterator;
-   /// Iterator over the edges
-   edge_iterator edgesBegin() const { return edges.begin(); }
-   /// Iterator over the edges
-   edge_iterator edgesEnd() const { return edges.end(); }
-
-   /// Iterator over the filters
-   typedef std::vector<Filter>::const_iterator filter_iterator;
-   /// Iterator over the filters
-   filter_iterator filtersBegin() const { return filters.begin(); }
-   /// Iterator over the filter
-   filter_iterator filtersEnd() const { return filters.end(); }
-
    /// Iterator over the projection
    typedef std::vector<unsigned>::const_iterator projection_iterator;
    /// Iterator over the projection

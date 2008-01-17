@@ -25,8 +25,10 @@ class PlanGen
    PlanContainer plans;
    /// The problems
    StructPool<Problem> problems;
-   /// The DP table
-   std::vector<Problem*> dpTable;
+   /// The database
+   Database* db;
+   /// The current query
+   const QueryGraph* fullQuery;
 
    PlanGen(const PlanGen&);
    void operator=(const PlanGen&);
@@ -34,13 +36,20 @@ class PlanGen
    /// Add a plan to a subproblem
    void addPlan(Problem* problem,Plan* plan);
    /// Generate an index scan
-   void buildIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2,unsigned value3);
+   void buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2,unsigned value3);
    /// Generate an aggregated index scan
-   void buildAggregatedIndexScan(Database& db,const QueryGraph& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2);
+   void buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value2);
    /// Generate base table accesses
-   Problem* buildScan(Database& db,const QueryGraph& query,const QueryGraph::Node& node,unsigned id);
+   Problem* buildScan(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned id);
    /// Build the informaion about a join
-   JoinDescription buildJoinInfo(Database& db,const QueryGraph& query,const QueryGraph::Edge& edge);
+   JoinDescription buildJoinInfo(const QueryGraph::SubQuery& query,const QueryGraph::Edge& edge);
+   /// Generate an optional part
+   Problem* buildOptional(const QueryGraph::SubQuery& query,unsigned id);
+   /// Generate a union part
+   Problem* buildUnion(const std::vector<QueryGraph::SubQuery>& query,unsigned id);
+
+   /// Translate a query into an operator tree
+   Plan* translate(const QueryGraph::SubQuery& query);
 
    public:
    /// Constructor
