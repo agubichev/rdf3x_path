@@ -7,6 +7,7 @@ src_rts_operator:=				\
 	rts/operator/HashJoin.cpp		\
 	rts/operator/IndexScan.cpp		\
 	rts/operator/MergeJoin.cpp		\
+	rts/operator/MergeUnion.cpp		\
 	rts/operator/NestedLoopFilter.cpp	\
 	rts/operator/NestedLoopJoin.cpp		\
 	rts/operator/ResultsPrinter.cpp		\
