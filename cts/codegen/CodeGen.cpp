@@ -8,6 +8,7 @@
 #include "rts/operator/HashJoin.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
+#include "rts/operator/MergeUnion.hpp"
 #include "rts/operator/NestedLoopFilter.hpp"
 #include "rts/operator/NestedLoopJoin.hpp"
 #include "rts/operator/ResultsPrinter.hpp"
@@ -103,6 +104,7 @@ static void collectVariables(const std::map<unsigned,Register*>& context,std::se
       case Plan::MergeJoin:
       case Plan::HashJoin:
       case Plan::Union:
+      case Plan::MergeUnion:
          collectVariables(context,variables,plan->left);
          collectVariables(context,variables,plan->right);
          break;
@@ -381,6 +383,27 @@ static Operator* translateUnion(Runtime& runtime,const std::map<unsigned,Registe
    return result;
 }
 //---------------------------------------------------------------------------
+static Operator* translateMergeUnion(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate a merge union into an operator tree
+{
+   // Translate the input
+   std::map<unsigned,Register*> leftBinding,rightBinding;
+   Operator* left=translatePlan(runtime,context,projection,leftBinding,registers,plan->left);
+   Operator* right=translatePlan(runtime,context,projection,rightBinding,registers,plan->right);
+
+   // Collect the binding
+   assert(leftBinding.size()==1);
+   assert(rightBinding.size()==1);
+   unsigned resultVar=(*(leftBinding.begin())).first;
+   Register* leftReg=(*(leftBinding.begin())).second,*rightReg=(*(rightBinding.begin())).second;
+   bindings[resultVar]=leftReg;
+
+   // Build the operator
+   Operator* result=new MergeUnion(leftReg,left,leftReg,right,rightReg);
+
+   return result;
+}
+//---------------------------------------------------------------------------
 static Operator* translatePlan(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a plan into an operator tree
 {
@@ -394,6 +417,7 @@ static Operator* translatePlan(Runtime& runtime,const std::map<unsigned,Register
       case Plan::Filter: return translateFilter(runtime,context,projection,bindings,registers,plan);
       case Plan::NestedLoopFilter: return translateNestedLoopFilter(runtime,context,projection,bindings,registers,plan);
       case Plan::Union: return translateUnion(runtime,context,projection,bindings,registers,plan);
+      case Plan::MergeUnion: return translateMergeUnion(runtime,context,projection,bindings,registers,plan);
    }
    return 0;
 }

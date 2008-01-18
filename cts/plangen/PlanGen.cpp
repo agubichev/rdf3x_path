@@ -3,6 +3,8 @@
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <map>
+#include <set>
+#include <algorithm>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -338,17 +340,60 @@ PlanGen::Problem* PlanGen::buildOptional(const QueryGraph::SubQuery& query,unsig
    return result;
 }
 //---------------------------------------------------------------------------
+static void collectVariables(const QueryGraph::SubQuery& query,set<unsigned>& vars,const void* except)
+   // Collect all variables used in a subquery
+{
+   for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
+      if (except!=(&(*iter)))
+         vars.insert((*iter).id);
+   for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
+      const QueryGraph::Node& n=*iter;
+      if (except==(&n))
+         continue;
+      if (!n.constSubject) vars.insert(n.subject);
+      if (!n.constPredicate) vars.insert(n.predicate);
+      if (!n.constObject) vars.insert(n.object);
+   }
+   for (vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter)
+      if (except!=(&(*iter)))
+         collectVariables(*iter,vars,except);
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter)
+      if (except!=(&(*iter)))
+         for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+            if (except!=(&(*iter2)))
+               collectVariables(*iter2,vars,except);
+}
+//---------------------------------------------------------------------------
+static void collectVariables(const QueryGraph& query,set<unsigned>& vars,const void* except)
+   // Collect all variables used in a query
+{
+   for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
+      vars.insert(*iter);
+   if (except!=(&(query.getQuery())))
+      collectVariables(query.getQuery(),vars,except);
+}
+//---------------------------------------------------------------------------
+static Plan* findOrdering(Plan* root,unsigned ordering)
+   // Find a plan with a specific ordering
+{
+   for (;root;root=root->next)
+      if (root->ordering==ordering)
+         return root;
+   return 0;
+}
+//---------------------------------------------------------------------------
 PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,unsigned id)
    // Generate a union part
 {
    // Solve the subproblems
-   vector<Plan*> parts;
+   vector<Plan*> parts,solutions;
    for (unsigned index=0;index<query.size();index++) {
       Plan* p=translate(query[index]),*bp=p;
       for (Plan* iter=p;iter;iter=iter->next)
          if (iter->costs<bp->costs)
             bp=iter;
       parts.push_back(bp);
+      solutions.push_back(p);
    }
 
    // Compute statistics
@@ -375,6 +420,7 @@ PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,
    last->cardinality=card;
    last->costs=costs;
    last->ordering=~0u;
+   last->next=0;
    result->plans=last;
    for (unsigned index=2;index<parts.size();index++) {
       Plan* nextPlan=plans.alloc();
@@ -387,6 +433,55 @@ PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,
       last->cardinality=card;
       last->costs=costs;
       last->ordering=~0u;
+      last->next=0;
+   }
+
+   // Could we also use a merge union?
+   set<unsigned> otherVars,unionVars;
+   vector<unsigned> commonVars;
+   collectVariables(*fullQuery,otherVars,&query);
+   for (vector<QueryGraph::SubQuery>::const_iterator iter=query.begin(),limit=query.end();iter!=limit;++iter)
+      collectVariables(*iter,unionVars,0);
+   set_intersection(otherVars.begin(),otherVars.end(),unionVars.begin(),unionVars.end(),back_inserter(commonVars));
+   if (commonVars.size()==1) {
+      unsigned resultVar=commonVars[0];
+      // Can we get all plans sorted in this way?
+      bool canMerge=true;
+      costs=0;
+      for (vector<Plan*>::const_iterator iter=solutions.begin(),limit=solutions.end();iter!=limit;++iter) {
+         Plan* p;
+         if ((p=findOrdering(*iter,resultVar))==0) {
+            canMerge=false;
+            break;
+         }
+         costs+=p->costs;
+      }
+      // Yes, build the plan
+      if (canMerge) {
+         Plan* last=plans.alloc();
+         last->op=Plan::MergeUnion;
+         last->opArg=0;
+         last->left=findOrdering(solutions[0],resultVar);
+         last->right=findOrdering(solutions[1],resultVar);
+         last->cardinality=card;
+         last->costs=costs;
+         last->ordering=resultVar;
+         last->next=0;
+         result->plans->next=last;
+         for (unsigned index=2;index<solutions.size();index++) {
+            Plan* nextPlan=plans.alloc();
+            nextPlan->left=last->right;
+            last->right=nextPlan;
+            last=nextPlan;
+            last->op=Plan::MergeUnion;
+            last->opArg=0;
+            last->right=findOrdering(solutions[index],resultVar);
+            last->cardinality=card;
+            last->costs=costs;
+            last->ordering=resultVar;
+            last->next=0;
+         }
+      }
    }
 
    return result;
