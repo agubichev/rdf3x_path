@@ -73,7 +73,7 @@ bool AggregatedFactsSegment::Scan::first(AggregatedFactsSegment& segment)
 {
    current=segment.readShared(segment.tableStart);
    seg=&segment;
-   pos=headerSize;
+   pos=~0u;
 
    return next();
 }
