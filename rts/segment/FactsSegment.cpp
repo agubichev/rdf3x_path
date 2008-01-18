@@ -90,7 +90,7 @@ bool FactsSegment::Scan::first(FactsSegment& segment,unsigned start1,unsigned st
 
    // Place the iterator
    seg=&segment;
-   pos=headerSize;
+   pos=~0u;
 
    // Skip over leading entries that are too small
    while (true) {
