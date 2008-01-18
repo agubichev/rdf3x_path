@@ -122,6 +122,8 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
          plan->cardinality=static_cast<double>(db->getFacts(order).getCardinality())/db->getFacts(order).getLevel1Groups();
          plan->ordering=value2;
          if (!~value3) div=10;
+         if (plan->cardinality<=20)
+            div=1;
       }
    } else {
       plan->cardinality=db->getFacts(order).getCardinality();
@@ -131,6 +133,8 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
             div=20; else
             div=10;
       } else if (!~value3) div=10;
+      if (plan->cardinality<=20)
+         div=1;
    }
    unsigned pages=1+static_cast<unsigned>(db->getFacts(order).getPages()*(plan->cardinality/static_cast<double>(db->getFacts(order).getCardinality())));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
@@ -170,6 +174,8 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
       plan->ordering=value1;
       if (~!value2)
          div=10;
+      if (plan->cardinality<=20)
+         div=1;
    }
    unsigned pages=1+static_cast<unsigned>(db->getAggregatedFacts(order).getPages()*(plan->cardinality/static_cast<double>(db->getAggregatedFacts(order).getLevel2Groups())));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
@@ -228,9 +234,9 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    result->relations.set(id);
 
    // Check which parts of the pattern are unused
-   bool unusedSubject=node.constSubject||isUnused(*fullQuery,node,node.subject);
-   bool unusedPredicate=node.constPredicate||isUnused(*fullQuery,node,node.predicate);
-   bool unusedObject=node.constObject||isUnused(*fullQuery,node,node.object);
+   bool unusedSubject=(!node.constSubject)&&isUnused(*fullQuery,node,node.subject);
+   bool unusedPredicate=(!node.constPredicate)&&isUnused(*fullQuery,node,node.predicate);
+   bool unusedObject=(!node.constObject)&&isUnused(*fullQuery,node,node.object);
 
    // Lookup variables
    unsigned s=node.constSubject?~0u:node.subject,p=node.constPredicate?~0u:node.predicate,o=node.constObject?~0u:node.object;
@@ -638,7 +644,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       return 0;
    Plan* best=0;
    for (Plan* iter=plan;iter;iter=iter->next)
-      if ((!best)||(iter->costs<best->costs))
+      if ((!best)||(iter->costs<best->costs)||((iter->costs==best->costs)&&(iter->cardinality<best->cardinality)))
          best=iter;
    if (!best)
       return 0;
