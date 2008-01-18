@@ -37,14 +37,24 @@ class FactsSegment : public Segment
    /// A scan over the facts segment
    class Scan {
       private:
+      /// The maximum number of entries per page
+      static const unsigned maxCount = BufferManager::pageSize;
+      /// A tripple
+      struct Tripple {
+         unsigned value1,value2,value3;
+      };
+
       /// The current page
       BufferReference current;
       /// The segment
       FactsSegment* seg;
       /// The position on the current page
-      unsigned pos;
-      /// The last triple read
-      unsigned value1,value2,value3;
+      const Tripple* pos,*posLimit;
+      /// The decompressed tripples
+      Tripple tripples[maxCount];
+
+      /// Read the next page
+      bool readNextPage();
 
       Scan(const Scan&);
       void operator=(const Scan&);
@@ -61,13 +71,13 @@ class FactsSegment : public Segment
       bool first(FactsSegment& segment,unsigned start1,unsigned start2,unsigned start3);
 
       /// Read the next entry
-      bool next();
+      bool next() { if ((++pos)>=posLimit) return readNextPage(); else return true; }
       /// Get the first value
-      unsigned getValue1() const { return value1; }
+      unsigned getValue1() const { return (*pos).value1; }
       /// Get the second value
-      unsigned getValue2() const { return value2; }
+      unsigned getValue2() const { return (*pos).value2; }
       /// Get the third value
-      unsigned getValue3() const { return value3; }
+      unsigned getValue3() const { return (*pos).value3; }
 
       /// Close the scan
       void close();
