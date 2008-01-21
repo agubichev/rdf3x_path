@@ -35,17 +35,27 @@ class AggregatedFactsSegment : public Segment
    /// A scan over the facts segment
    class Scan {
       private:
+      /// The maximum number of entries per page
+      static const unsigned maxCount = BufferManager::pageSize;
+      /// A tripple
+      struct Tripple {
+         unsigned value1,value2,count;
+      };
+
       /// The current page
       BufferReference current;
       /// The segment
       AggregatedFactsSegment* seg;
       /// The position on the current page
-      unsigned pos;
-      /// The last triple read
-      unsigned value1,value2,count;
+      const Tripple* pos,*posLimit;
+      /// The decompressed tripples
+      Tripple tripples[maxCount];
 
       Scan(const Scan&);
       void operator=(const Scan&);
+
+      /// Read the next page
+      bool readNextPage();
 
       public:
       /// Constructor
@@ -59,13 +69,13 @@ class AggregatedFactsSegment : public Segment
       bool first(AggregatedFactsSegment& segment,unsigned start1,unsigned start2);
 
       /// Read the next entry
-      bool next();
+      bool next() { if ((++pos)>=posLimit) return readNextPage(); else return true; }
       /// Get the first value
-      unsigned getValue1() const { return value1; }
+      unsigned getValue1() const { return (*pos).value1; }
       /// Get the second value
-      unsigned getValue2() const { return value2; }
+      unsigned getValue2() const { return (*pos).value2; }
       /// Get the count
-      unsigned getCount() const { return count; }
+      unsigned getCount() const { return (*pos).count; }
 
       /// Close the scan
       void close();
