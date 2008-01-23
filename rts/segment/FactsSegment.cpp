@@ -113,7 +113,7 @@ bool FactsSegment::Scan::readNextPage()
    // Read the next entry
 {
    // Alread read the first page? Then read the next one
-   if (pos) {
+   if (pos-1) {
       const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
       unsigned nextPage=readUint32Aligned(page);
       if (!nextPage)
