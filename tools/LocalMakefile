@@ -1,5 +1,6 @@
 include tools/buildmonetdb/LocalMakefile
 include tools/buildrdfstore/LocalMakefile
+include tools/buildstatistics/LocalMakefile
 include tools/checkrdfstore/LocalMakefile
 include tools/evalsparql/LocalMakefile
 include tools/dictionarytest/LocalMakefile
