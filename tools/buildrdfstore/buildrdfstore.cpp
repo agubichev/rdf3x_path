@@ -1,4 +1,5 @@
 #include "infra/util/Hash.hpp"
+#include "rts/database/Database.hpp"
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -8,6 +9,8 @@ using namespace std;
 //---------------------------------------------------------------------------
 /// The desired page size
 const unsigned pageSize = 16384;
+//---------------------------------------------------------------------------
+void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* page);
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
@@ -43,6 +46,8 @@ struct Directory
    unsigned stringMapping;
    /// Root of the string index
    unsigned stringIndex;
+   /// Pages with statistics
+   unsigned statistics[6];
 };
 //---------------------------------------------------------------------------
 /// A RDF tripple
@@ -864,18 +869,11 @@ void writeDirectory(ofstream& out,Directory& directory)
    writePage(out,0,buffer);
 }
 //---------------------------------------------------------------------------
-}
-//---------------------------------------------------------------------------
-int main(int argc,char* argv[])
+bool buildDatabase(const char* dbFile,const char* factsFile,const char* stringsFile,Directory& directory)
+   // Build the initial database
 {
-   if (argc!=4) {
-      cout << "usage: " << argv[0] << " <facts> <strings> <target>" << endl;
-      return 1;
-   }
-
    // Prepare the output
-   ofstream out(argv[3],ios::out|ios::binary);
-   Directory directory;
+   ofstream out(dbFile,ios::out|ios::trunc|ios::binary);
    {
       // Clear the first page, it will be written later
       char buffer[pageSize];
@@ -890,8 +888,8 @@ int main(int argc,char* argv[])
       // Read the facts table
       cout << "Reading the facts table..." << endl;
       vector<Tripple> facts;
-      if (!readFacts(facts,argv[1]))
-         return 1;
+      if (!readFacts(facts,factsFile))
+         return false;
 
       // Produce the different orderings
       page=dumpFacts(out,directory,facts,page);
@@ -902,7 +900,7 @@ int main(int argc,char* argv[])
       // Read the strings table
       cout << "Reading the strings table..." << endl;
       vector<StringEntry> strings;
-      if ((page=readAndPackStrings(out,directory,strings,argv[2],page))==0)
+      if ((page=readAndPackStrings(out,directory,strings,stringsFile,page))==0)
          return 1;
 
       // Write the string mapping
@@ -914,7 +912,74 @@ int main(int argc,char* argv[])
       page=writeStringIndex(out,directory,strings,page);
    }
 
+   // Prepare empty pages for statistics
+   {
+      char buffer[pageSize];
+      for (unsigned index=0;index<pageSize;index++)
+         buffer[index]=0;
+      for (unsigned index=0;index<6;index++) {
+         writePage(out,page,buffer);
+         directory.statistics[index]=page;
+         ++page;
+      }
+   }
+
    // Finally write the directory page
    writeDirectory(out,directory);
+
+   return true;
+}
+//---------------------------------------------------------------------------
+bool buildDatabaseStatistics(const char* dbFile,const Directory& directory)
+   // Build the database statistics
+{
+   // Open the database again
+   Database db;
+   if (!db.open(dbFile)) {
+      cout << "Unable to open " << dbFile << endl;
+      return false;
+   }
+
+   // Compute the individual statistics
+   cout << "Computing statistics..." << endl;
+   unsigned char statisticPages[6][pageSize];
+   for (unsigned index=0;index<6;index++) {
+      cout << "Building statistic " << (index+1) << "..." << endl;
+      buildStatisticsPage(db,static_cast<Database::DataOrder>(index),statisticPages[index]);
+   }
+
+   // Close the database
+   db.close();
+
+   // And patch the statistics
+   ofstream out(dbFile,ios::in|ios::out|ios::ate|ios::binary);
+   if (!out.is_open()) {
+      cout << "Unable to write " << dbFile << endl;
+      return false;
+   }
+   out.seekp(directory.statistics[0]*pageSize,ios::beg);
+   for (unsigned index=0;index<6;index++)
+      writePage(out,directory.statistics[index],statisticPages[index]);
+
+   return true;
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+int main(int argc,char* argv[])
+{
+   if (argc!=4) {
+      cout << "usage: " << argv[0] << " <facts> <strings> <target>" << endl;
+      return 1;
+   }
+
+   // Build the initial database
+   Directory directory;
+   if (!buildDatabase(argv[3],argv[1],argv[2],directory))
+      return 1;
+
+   // Compute the missing statistics
+   if (!buildDatabaseStatistics(argv[3],directory))
+      return 1;
 }
 //---------------------------------------------------------------------------
