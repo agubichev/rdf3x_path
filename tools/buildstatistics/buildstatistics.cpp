@@ -174,9 +174,11 @@ void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
    bucket.val3O=findJoins(db,Database::Order_Object_Predicate_Subject,counts3);
 }
 //---------------------------------------------------------------------------
-void buildBuckets(Database& db,Database::DataOrder order)
+void buildBuckets(Database& db,Database::DataOrder order,vector<Bucket>& buckets)
    // Build the buckets for a specific order
 {
+   buckets.clear();
+
    // Open the appropriate segment
    FactsSegment::Scan scan;
    scan.first(db.getFacts(order));
@@ -185,7 +187,6 @@ void buildBuckets(Database& db,Database::DataOrder order)
    unsigned firstSize=db.getFacts(order).getCardinality()/(bucketsPerPage*100),tinySize=(firstSize+99)/100;
 
    // Initial pass, aggregate only by value1/value2
-   vector<Bucket> buckets;
    vector<ReorderedTriple> triples;
    bool couldMerge=false;
    triples.push_back(buildTriple(scan));
@@ -232,7 +233,65 @@ void buildBuckets(Database& db,Database::DataOrder order)
    for (vector<Bucket>::iterator iter=buckets.begin(),limit=buckets.end();iter!=limit;++iter) {
       resolveBucketJoins(db,order,*iter);
    }
-   cout << endl;
+}
+//---------------------------------------------------------------------------
+void writeUint32(unsigned char* target,unsigned value)
+   // Write a 32bit value
+{
+   target[0]=value>>24;
+   target[1]=(value>>16)&0xFF;
+   target[2]=(value>>8)&0xFF;
+   target[3]=value&0xFF;
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* page)
+   // Prepare a page with statistics
+{
+   // Build the buckets
+   vector<Bucket> buckets;
+   buildBuckets(db,order,buckets);
+
+   // Write the header
+   unsigned char* writer=page;
+   writeUint32(writer,buckets.size());
+   writer+=4;
+
+   // Write the buckets
+   for (unsigned index=0;index<buckets.size();index++) {
+      const Bucket& b=buckets[index];
+      writeUint32(writer,b.start1); writer+=4;
+      writeUint32(writer,b.start2); writer+=4;
+      writeUint32(writer,b.start3); writer+=4;
+      writeUint32(writer,b.stop1); writer+=4;
+      writeUint32(writer,b.stop2); writer+=4;
+      writeUint32(writer,b.stop3); writer+=4;
+      writeUint32(writer,b.prefix1Card); writer+=4;
+      writeUint32(writer,b.prefix2Card); writer+=4;
+      writeUint32(writer,b.card); writer+=4;
+      writeUint32(writer,b.val1S); writer+=4;
+      writeUint32(writer,b.val1P); writer+=4;
+      writeUint32(writer,b.val1O); writer+=4;
+      writeUint32(writer,b.val2S); writer+=4;
+      writeUint32(writer,b.val2P); writer+=4;
+      writeUint32(writer,b.val2O); writer+=4;
+      writeUint32(writer,b.val3S); writer+=4;
+      writeUint32(writer,b.val3P); writer+=4;
+      writeUint32(writer,b.val3O); writer+=4;
+   }
+
+   // Padding
+   for (unsigned char* limit=page+BufferManager::pageSize;writer<limit;++writer)
+      *writer=0;
+}
+//---------------------------------------------------------------------------
+void buildAndShowStatistics(Database& db,Database::DataOrder order)
+   // Build some statistics and dump the results
+{
+   // Build the buckets
+   vector<Bucket> buckets;
+   buildBuckets(db,order,buckets);
 
    // Show statistics
 #define R(x) (static_cast<double>(x)/static_cast<double>(b.card))
@@ -246,25 +305,5 @@ void buildBuckets(Database& db,Database::DataOrder order)
            << endl;
    }
 #undef R
-}
-//---------------------------------------------------------------------------
-}
-//---------------------------------------------------------------------------
-int main(int argc,char* argv[])
-{
-   if (argc!=2) {
-      cout << "usage: " << argv[0] << " <db>" << endl;
-      return 1;
-   }
-
-   // Open the database
-   Database db;
-   if (!db.open(argv[1])) {
-      cout << "Unable to open " << argv[1] << endl;
-      return 1;
-   }
-
-   // Build the statistics
-   buildBuckets(db,Database::Order_Subject_Predicate_Object);
 }
 //---------------------------------------------------------------------------

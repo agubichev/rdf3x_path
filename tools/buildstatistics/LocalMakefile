@@ -1,5 +1,6 @@
 src_tools_buildstatistics:=				\
-	tools/buildstatistics/buildstatistics.cpp
+	tools/buildstatistics/buildstatistics.cpp	\
+	tools/buildstatistics/buildstatisticstest.cpp
 
 $(PREFIX)buildstatistics$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_buildstatistics:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT)))
 	$(buildexe)
