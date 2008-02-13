@@ -1,0 +1,16 @@
+select ?name ?country
+where {
+   ?p <isCalled> ?name.
+   { ?p <type> "wordnet_actor_109765278" }
+   union
+   { ?p <type> "wordnet_athlete_109820263" }
+   ?p <bornInLocation> ?city.
+   ?city <locatedIn> ?state.
+   ?state <locatedIn> ?country.
+   { ?p <type> "wordnet_politician_110451263" }
+   union
+   { ?p <type> "wordnet_governor_110140314" }
+   union
+   { ?p <type> "wordnet_president_110468559" }
+}
+
