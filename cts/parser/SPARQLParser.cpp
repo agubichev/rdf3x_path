@@ -146,7 +146,7 @@ void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned
 
    // Prepare the setuo
    std::vector<Element> values;
-   bool negation=false;
+   Filter::Type type;
 
    // 'in'?
    SPARQLLexer::Token token=lexer.getNext();
@@ -165,21 +165,41 @@ void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned
             break;
          throw ParserException("',' or ')' expected");
       }
+      type=Filter::Normal;
+   } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("reaches"))) {
+      Element target=parsePatternElement(group,localVars);
+      if (target.type==Element::Variable)
+         throw ParserException("constant values required in 'reaches' filter");
+
+       token=lexer.getNext();
+      if ((token!=SPARQLLexer::Identifier)||(!lexer.isKeyword("via")))
+         throw ParserException("'via' expected");
+
+      Element path=parsePatternElement(group,localVars);
+      if (target.type==Element::Variable)
+         throw ParserException("constant values required in 'reaches' filter");
+
+      values.push_back(target);
+      values.push_back(path);
+      type=Filter::Path;
+
+      if (lexer.getNext()!=SPARQLLexer::RParen)
+         throw ParserException("')' expected");
    } else if ((token==SPARQLLexer::Equal)||(token==SPARQLLexer::NotEqual)) {
-      negation=(token==SPARQLLexer::NotEqual);
       Element e=parsePatternElement(group,localVars);
       if (e.type==Element::Variable)
          throw ParserException("variable filters not yet implemented");
       values.push_back(e);
       if (lexer.getNext()!=SPARQLLexer::RParen)
          throw ParserException("')' expected");
-   } else throw ParserException("'=', '!=', or 'in' expected");
+      type=(token==SPARQLLexer::Equal)?Filter::Normal:Filter::Exclude;
+   } else throw ParserException("'=', '!=', 'in', or 'reachable' expected");
 
    // Remember the filter
    Filter f;
    f.id=var.id;
    f.values=values;
-   f.exclude=negation;
+   f.type=type;
    group.filters.push_back(f);
 }
 //---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "rts/segment/FactsSegment.hpp"
 #include <set>
 //---------------------------------------------------------------------------
 SemanticAnalysis::SemanticAnalysis(Database& db)
@@ -65,9 +66,39 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
    // Construct the filter
    filter.id=input.id;
    filter.values.clear();
-   for (std::set<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter)
-      filter.values.push_back(*iter);
-   filter.exclude=input.exclude;
+   if (input.type!=SPARQLParser::Filter::Path) {
+      for (std::set<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter)
+         filter.values.push_back(*iter);
+      filter.exclude=(input.type==SPARQLParser::Filter::Exclude);
+   } else if (values.size()==2) {
+      unsigned target,via;
+      db.getDictionary().lookup(input.values[0].value,target);
+      db.getDictionary().lookup(input.values[1].value,via);
+
+      // Explore the path
+      std::set<unsigned> explored;
+      std::vector<unsigned> toDo;
+      toDo.push_back(target);
+      while (!toDo.empty()) {
+         // Examine the next reachable node
+         unsigned current=toDo.front();
+         toDo.erase(toDo.begin());
+         if (explored.count(current))
+            continue;
+         explored.insert(current);
+         filter.values.push_back(current);
+
+         // Request all other reachable nodes
+         FactsSegment::Scan scan;
+         if (scan.first(db.getFacts(Database::Order_Predicate_Object_Subject),via,current,0)) {
+            while ((scan.getValue1()==via)&&(scan.getValue2()==current)) {
+               toDo.push_back(scan.getValue3());
+               if (!scan.next())
+                  break;
+            }
+         }
+      }
+   }
 
    return true;
 }

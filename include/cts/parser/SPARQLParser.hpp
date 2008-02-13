@@ -46,12 +46,15 @@ class SPARQLParser
    };
    /// A filter condition
    struct Filter {
+      /// Possible types
+      enum Type { Normal, Exclude, Path };
+
       /// The filtered variable
       unsigned id;
       /// Valid entries
       std::vector<Element> values;
-      /// Negative filter?
-      bool exclude;
+      /// The type
+      Type type;
    };
    /// A group of patterns
    struct PatternGroup {

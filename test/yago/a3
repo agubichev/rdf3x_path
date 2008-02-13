@@ -7,10 +7,7 @@ where {
    ?p <bornInLocation> ?city.
    ?city <locatedIn> ?state.
    ?state <locatedIn> ?country.
-   { ?p <type> "wordnet_politician_110451263" }
-   union
-   { ?p <type> "wordnet_governor_110140314" }
-   union
-   { ?p <type> "wordnet_president_110468559" }
+   ?p <type> ?t.
+   FILTER(?t reaches "wordnet_politician_110451263" via <subClassOf>)
 }
 
