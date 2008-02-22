@@ -196,13 +196,15 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const map<unsigned,u
    }
    out << ";" << endl;
    //out << "drop view filteredproperties;" << endl
-   out << "create view filteredproperties as ";
-   for (set<unsigned>::const_iterator iter=filteredProperties.begin(),limit=filteredProperties.end();iter!=limit;++iter) {
-      if (iter!=filteredProperties.begin())
-         out << " union all";
-      out << " (select subject," << (*iter) << " as predicate,object from p" << (*iter) <<")";
+   if (filteredProperties.size()>2) {
+      out << "create view filteredproperties as ";
+      for (set<unsigned>::const_iterator iter=filteredProperties.begin(),limit=filteredProperties.end();iter!=limit;++iter) {
+         if (iter!=filteredProperties.begin())
+            out << " union all";
+         out << " (select subject," << (*iter) << " as predicate,object from p" << (*iter) <<")";
+      }
+      out << ";" << endl;
    }
-   out << ";" << endl;
 
    return true;
 }
