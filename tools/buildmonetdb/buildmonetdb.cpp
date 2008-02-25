@@ -59,7 +59,7 @@ bool readFacts(vector<Tripple>& facts,const char* fileName)
    return true;
 }
 //---------------------------------------------------------------------------
-void dumpFacts(ofstream& out,vector<Tripple>& facts,map<unsigned,unsigned>& predicates)
+void dumpFacts(ofstream& out,vector<Tripple>& facts,set<unsigned>& predicates,set<unsigned>& partitionedPredicates)
    // Dump the facts
 {
    // Sort the facts
@@ -76,28 +76,66 @@ void dumpFacts(ofstream& out,vector<Tripple>& facts,map<unsigned,unsigned>& pred
       }
    facts.resize(writer-facts.begin());
 
+   // Compute the predicate statistics
+   unsigned cutOff=0;
+   {
+      vector<unsigned> statistics;
+      statistics.resize(facts.back().predicate+1);
+      for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+         statistics[(*iter).predicate]++;
+      sort(statistics.begin(),statistics.end(),greater<unsigned>());
+      if (statistics.size()>1000)
+         cutOff=statistics[999]; else
+         cutOff=0;
+   }
+
    // And dump them
    vector<Tripple>::const_iterator lastStart=facts.begin();
+   unsigned smallCount=0;
    lastPredicate=~0u;
-   unsigned predicateId=0;
+   bool needsBigTable=false;
    for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-      if ((*iter).predicate!=lastPredicate) {
+      if ((iter==facts.end())||((*iter).predicate!=lastPredicate)) {
          if (iter!=lastStart) {
-            out << "create table p" << predicateId << "(subject int not null, object int not null);" << endl;
-            out << "copy " << (iter-lastStart) << " records into \"p" << predicateId << "\" from stdin using delimiters '\\t';" << endl;
-            for (;lastStart!=iter;++lastStart)
-               out << (*lastStart).subject << "\t" << (*lastStart).object << endl;
-            ++predicateId;
+            if ((iter-lastStart)>=cutOff) {
+               out << "create table p" << lastPredicate << "(subject int not null, object int not null);" << endl;
+               out << "copy " << (iter-lastStart) << " records into \"p" << lastPredicate << "\" from stdin using delimiters '\\t';" << endl;
+               for (;lastStart!=iter;++lastStart)
+                  out << (*lastStart).subject << "\t" << (*lastStart).object << endl;
+               partitionedPredicates.insert(lastPredicate);
+            } else {
+               smallCount+=iter-lastStart;
+               lastStart=iter;
+               needsBigTable=true;
+            }
+            predicates.insert(lastPredicate);
          }
+         if (iter==facts.end())
+            break;
          lastPredicate=(*iter).predicate;
-         predicates[lastPredicate]=predicateId;
       }
    }
-   if (facts.end()!=lastStart) {
-      out << "create table p" << predicateId << "(subject int not null, object int not null);" << endl;
-      out << "copy " << (facts.end()-lastStart) << " records into \"p" << predicateId << "\" from stdin using delimiters '\\t';" << endl;
-      for (;lastStart!=facts.end();++lastStart)
-         out << (*lastStart).subject << "\t" << (*lastStart).object << endl;
+
+   // Dump the remaining predicate into a big tible if required
+   if (needsBigTable) {
+      out << "create table otherpredicates(subject int not null, predicate int not null, object int not null);" << endl;
+      out << "copy " << smallCount << " records into \"otherpredicates\" from stdin using delimiters '\\t';" << endl;
+      lastStart=facts.begin(); lastPredicate=~0u;
+      for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+         if ((iter==facts.end())||((*iter).predicate!=lastPredicate)) {
+            if (iter!=lastStart) {
+               if ((iter-lastStart)>=cutOff) {
+                  lastStart=iter;
+               } else {
+                  for (;lastStart!=iter;++lastStart)
+                     out << (*lastStart).subject << "\t" << (*lastStart).predicate << "\t" << (*lastStart).object << endl;
+               }
+            }
+            if (iter==facts.end())
+               break;
+            lastPredicate=(*iter).predicate;
+         }
+      }
    }
 }
 //---------------------------------------------------------------------------
@@ -107,16 +145,21 @@ string escapeCopy(const string& s)
    string result;
    for (string::const_iterator iter=s.begin(),limit=s.end();iter!=limit;++iter) {
       char c=(*iter);
-      if (c=='\\')
-         result+="\\\\"; else
-      if (c=='\"') 
-         result+="\\\""; else
-         result+=c;
+      switch (c) {
+         case '\\': result+="\\\\"; break;
+         case '\"': result+="\\\""; break;
+         case '\'': result+="\\\'"; break;
+         default:
+            /* if (c<' ') {
+               result+='\\';
+               result+=c;
+            } else */ result+=c;
+      }
    }
    return result;
 }
 //---------------------------------------------------------------------------
-bool readAndStoreStrings(ofstream& out,const char* fileName,const map<unsigned,unsigned>& properties)
+bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>& properties,const set<unsigned>& partitionedProperties)
    // Read the facts table and store it in the database
 {
    // Now open the strings again
@@ -163,10 +206,11 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const map<unsigned,u
 
       // A known property?
       if (properties.count(id)) {
-         propertyNames.push_back(pair<unsigned,string>((*(properties.find(id))).second,s));
+         propertyNames.push_back(pair<unsigned,string>(id,s));
          for (const char** iter=filterStrings;*iter;++iter)
             if (s==(*iter)) {
-               filteredProperties.insert((*(properties.find(id))).second);
+               if (partitionedProperties.count(id))
+                  filteredProperties.insert(id);
                break;
             }
       }
@@ -183,17 +227,23 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const map<unsigned,u
    out << "create table propertynames (id int not null primary key, name varchar(4000) not null);" << endl;
    out << "copy " << propertyNames.size() << " records into \"propertynames\" from stdin using delimiters '\\t';" << endl;
    for (vector<pair<unsigned,string> >::const_iterator iter=propertyNames.begin(),limit=propertyNames.end();iter!=limit;++iter) {
-      out << ((*iter).first) << "\t" << escapeCopy((*iter).second) << endl;
+      out << ((*iter).first) << "\t\"" << escapeCopy((*iter).second) << "\"" << endl;
    }
 
    // Build the views
    //out << "drop view allproperties;" << endl
    out << "create view allproperties as ";
+   bool first=true;
    for (vector<pair<unsigned,string> >::const_iterator iter=propertyNames.begin(),limit=propertyNames.end();iter!=limit;++iter) {
-      if (iter!=propertyNames.begin())
+      if (!partitionedProperties.count((*iter).first))
+         continue;
+      if (!first)
          out << " union all";
+      first=false;
       out << " (select subject," << (*iter).first << " as predicate,object from p" << (*iter).first <<")";
    }
+   if (properties.size()>partitionedProperties.size())
+      out << " union all (select subject, predicate, object from otherpredicates)";
    out << ";" << endl;
    //out << "drop view filteredproperties;" << endl
    if (filteredProperties.size()>2) {
@@ -222,7 +272,7 @@ int main(int argc,char* argv[])
    ofstream out("commands.sql");
 
    // Process the facts
-   map<unsigned,unsigned> properties;
+   set<unsigned> properties,partitionedProperties;
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
@@ -231,16 +281,16 @@ int main(int argc,char* argv[])
          return 1;
 
       // Write them to the database
-      dumpFacts(out,facts,properties);
+      dumpFacts(out,facts,properties,partitionedProperties);
    }
 
    // Process the strings
-out.close();
+   out.close();
    ofstream out2("commands2.sql");
    {
       // Read the strings table
       cout << "Reading the strings table..." << endl;
-      if (!readAndStoreStrings(out2,argv[2],properties))
+      if (!readAndStoreStrings(out2,argv[2],properties,partitionedProperties))
          return 1;
    }
 
