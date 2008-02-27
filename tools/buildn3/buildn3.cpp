@@ -78,9 +78,36 @@ static bool findSubjects(const char* name,vector<bool>& subjects)
    return true;
 }
 //---------------------------------------------------------------------------
+static void escapeChar(ofstream& out,char c)
+   // Escape a character forbidden in a URI
+{
+   const char hex[17]="0123456789ABCDEF";
+   unsigned v=c&0xFF;
+   out << '%'  << hex[v>>4] << hex[v&0xF];
+}
+//---------------------------------------------------------------------------
+static void writeURI(ofstream& out,const char* start,const char* limit)
+   // Write a URI
+{
+   for (;start<limit;++start) {
+      char c=*start;
+      switch (c) {
+         case '[': case ']': case '<': case '>': case '#': case '(': case ')': case '%': case '\\':
+            escapeChar(out,c);
+            break;
+         default:
+            if (c<=' ')
+                escapeChar(out,c); else
+                out << c;
+      }
+   }
+}
+//---------------------------------------------------------------------------
 static bool dumpTriples(ofstream& out,const char* name,const vector<bool>& subjects,const vector<const char*>& indices)
    // Dump the triples in N3 format
 {
+   cout << "Writing N3 data..." << endl;
+
    ifstream in(name);
    if (!in) {
       cout << "Unable to open " << name << endl;
@@ -88,17 +115,21 @@ static bool dumpTriples(ofstream& out,const char* name,const vector<bool>& subje
    }
    while (in) {
       unsigned subject,predicate,object;
-      in >> subject >> predicate >> object;
-      out << "<" << string(indices[2*subject+0],indices[2*subject+1]) << ">";
+      in >> subject >> predicate; if (!in) break; in >> object;
+      out << "<"; writeURI(out,indices[2*subject+0],indices[2*subject+1]); out << ">";
       out << " <" << string(indices[2*predicate+0],indices[2*predicate+1]) << ">";
       if (subjects[object]) {
-         out << " <" << string(indices[2*object+0],indices[2*object+1]) << ">";
+         out << " <"; writeURI(out,indices[2*object+0],indices[2*object+1]); out << ">";
       } else {
          out << " \"";
-         for (const char* iter=indices[2*object+0],*limit=indices[2*object+1];iter!=limit;++iter)
-            if ((*iter)=='\"')
+         for (const char* iter=indices[2*object+0],*limit=indices[2*object+1];iter!=limit;++iter) {
+            char c=*iter;
+            if (c=='\"')
                out << "\\\""; else
-               out << *iter;
+            if (c=='\\')
+               out << "\\\\"; else
+               out << c;
+         }
          out << "\"";
       }
       out << " ." << endl;
