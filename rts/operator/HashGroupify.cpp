@@ -20,6 +20,29 @@ class HashGroupify::Rehasher {
    }
 };
 //---------------------------------------------------------------------------
+/// Helper
+class HashGroupify::Chainer {
+   private:
+   /// The chain
+   Group* head,*tail;
+
+   public:
+   /// Constructor
+   Chainer() : head(0),tail(0) {}
+
+   /// Get the head
+   Group* getHead() const { return head; }
+
+   /// Rehash
+   void operator()(Group* g) {
+      if (tail)
+         tail->next=g; else
+         head=g;
+      g->next=0;
+      tail=g;
+   }
+};
+//---------------------------------------------------------------------------
 HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values)
    : values(values),input(input),groups(0),groupsPool(values.size()*sizeof(unsigned))
    // Constructor
@@ -83,12 +106,10 @@ unsigned HashGroupify::first()
    }
 
    // Form a chain out of the groups
-   hashTable.clear();
-   hashTable.resize(1);
-   Rehasher rehasher(hashTable);
-   groupsPool.enumAll(rehasher);
+   Chainer chainer;
+   groupsPool.enumAll(chainer);
 
-   groups=hashTable[0];
+   groups=chainer.getHead();
    groupsIter=groups;
 
    return next();

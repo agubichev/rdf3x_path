@@ -22,6 +22,8 @@ class HashGroupify : public Operator
    };
    /// Helper
    class Rehasher;
+   /// Helper
+   class Chainer;
 
    /// The input registers
    std::vector<Register*> values;
