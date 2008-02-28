@@ -87,4 +87,18 @@ void MemoryMappedFile::close()
       begin=end=0;
    }
 }
+unsigned sumOfItAll;
+//----------------------------------------------------------------------------
+void MemoryMappedFile::prefetch(const char* start,const char* end)
+   // Ask the operating system to prefetch a part of the file
+{
+   if ((end<start)||(!data))
+      return;
+
+#ifdef CONFIG_WINDOWS
+   // XXX todo
+#else
+   posix_fadvise(data->file,start-begin,end-start+1,POSIX_FADV_WILLNEED);
+#endif
+}
 //----------------------------------------------------------------------------

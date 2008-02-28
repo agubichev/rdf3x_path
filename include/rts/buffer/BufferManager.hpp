@@ -81,6 +81,11 @@ class BufferManager
    void readShared(BufferReference& ref,unsigned page) { ref.page=file.getBegin()+(page*pageSize); }
    /// Access a page
    void readExclusive(BufferReference& ref,unsigned page) { ref.page=file.getBegin()+(page*pageSize); }
+   /// Prefetch a number of pages
+   void prefetchPages(unsigned start,unsigned stop);
+
+   /// Get the ID of a reference
+   unsigned getPageId(const BufferReference& ref) const { return (static_cast<const char*>(ref.page)-file.getBegin())/pageSize; }
 };
 //---------------------------------------------------------------------------
 BufferReference::BufferReference(const BufferRequest& request)

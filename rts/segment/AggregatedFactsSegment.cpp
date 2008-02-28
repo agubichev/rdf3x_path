@@ -56,6 +56,39 @@ bool AggregatedFactsSegment::lookup(unsigned start1,unsigned start2,BufferRefere
    }
 }
 //---------------------------------------------------------------------------
+void AggregatedFactsSegment::prefetchRange(unsigned start1,unsigned start2,unsigned stop1,unsigned stop2)
+   // Prefetch a range in the segment
+{
+   // Find the start page
+   unsigned startPage;
+   if ((!start1)&&(!start2)) {
+      startPage=tableStart;
+   } else if ((!(~start1))&&(!(~start2))) {
+      startPage=tableStart+pages-1;
+   } else {
+      BufferReference ref;
+      if (!lookup(start1,start2,ref))
+         startPage=tableStart+pages-1; else
+         startPage=getPageId(ref);
+   }
+
+   // Find the stop page
+   unsigned stopPage;
+   if ((!stop1)&&(!stop2)) {
+      stopPage=tableStart;
+   } else if ((!(~stop1))&&(!(~stop2))) {
+      stopPage=tableStart+pages-1;
+   } else {
+      BufferReference ref;
+      if (!lookup(stop1,stop2,ref))
+         stopPage=tableStart+pages-1; else
+         stopPage=getPageId(ref);
+   }
+
+   // And prefetch
+   prefetchPages(startPage,stopPage);
+}
+//---------------------------------------------------------------------------
 AggregatedFactsSegment::Scan::Scan()
    : seg(0)
    // Constructor

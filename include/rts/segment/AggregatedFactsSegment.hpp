@@ -32,6 +32,9 @@ class AggregatedFactsSegment : public Segment
    /// Get the number of level 2 groups
    unsigned getLevel2Groups() const { return groups2; }
 
+   /// Prefetch a range in the segment
+   void prefetchRange(unsigned start1,unsigned start2,unsigned stop1,unsigned stop2);
+
    /// A scan over the facts segment
    class Scan {
       private:

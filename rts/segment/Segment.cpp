@@ -24,3 +24,15 @@ BufferRequest Segment::readExclusive(unsigned page)
    return BufferRequest(bufferManager,page,false);
 }
 //---------------------------------------------------------------------------
+unsigned Segment::getPageId(const BufferReference& ref)
+   /// Get the page ID
+{
+   return bufferManager.getPageId(ref);
+}
+//---------------------------------------------------------------------------
+void Segment::prefetchPages(unsigned start,unsigned stop)
+   // Prefetch a range of patches
+{
+   bufferManager.prefetchPages(start,stop);
+}
+//---------------------------------------------------------------------------

@@ -12,6 +12,8 @@ DictionarySegment::DictionarySegment(BufferManager& bufferManager,unsigned table
    : Segment(bufferManager),tableStart(tableStart),mappingStart(mappingStart),indexRoot(indexRoot)
    // Constructor
 {
+   // Prefetch the predicates, they will most likely be needed
+   bufferManager.prefetchPages(mappingStart,mappingStart+5);
 }
 //---------------------------------------------------------------------------
 bool DictionarySegment::lookupOnPage(unsigned pageNo,const std::string& text,unsigned hash,unsigned& id)

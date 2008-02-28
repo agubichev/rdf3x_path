@@ -3,6 +3,7 @@
 //---------------------------------------------------------------------------
 class BufferManager;
 class BufferRequest;
+class BufferReference;
 //---------------------------------------------------------------------------
 /// Base class for all segments
 class Segment
@@ -19,6 +20,10 @@ class Segment
    BufferRequest readShared(unsigned page);
    /// Read a specific page
    BufferRequest readExclusive(unsigned page);
+   /// Get the page ID
+   unsigned getPageId(const BufferReference& ref);
+   /// Prefetch a range of patches
+   void prefetchPages(unsigned start,unsigned stop);
 
    /// Change the byte order
    static inline unsigned flipByteOrder(unsigned value) { return (value<<24)|((value&0xFF00)<<8)|((value&0xFF0000)>>8)|(value>>24); }
