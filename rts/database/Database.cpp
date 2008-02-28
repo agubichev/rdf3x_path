@@ -37,6 +37,7 @@ bool Database::open(const char* fileName)
       if ((readUint32(page)==(('R'<<24)|('D'<<16)|('F'<<8)))&&(readUint32(page+4)==1)) {
          // Read the page infos
          unsigned factStarts[6],factIndices[6],aggregatedFactStarts[6],aggregatedFactIndices[6];
+         unsigned fullyAggregatedFactStarts[3],fullyAggregatedFactIndices[3];
          unsigned pageCounts[6],aggregatedPageCounts[6],groups1[6],groups2[6],cardinalities[6];
          for (unsigned index=0;index<6;index++) {
             factStarts[index]=readUint32(page+8+index*36);
@@ -49,9 +50,13 @@ bool Database::open(const char* fileName)
             groups2[index]=readUint32(page+8+index*36+28);
             cardinalities[index]=readUint32(page+8+index*36+32);
          }
-         unsigned stringStart=readUint32(page+224);
-         unsigned stringMapping=readUint32(page+228);
-         unsigned stringIndex=readUint32(page+232);
+         for (unsigned index=0;index<3;index++) {
+            fullyAggregatedFactStarts[index]=readUint32(page+224+index*8);
+            fullyAggregatedFactIndices[index]=readUint32(page+224+index*8+4);
+         }
+         unsigned stringStart=readUint32(page+248);
+         unsigned stringMapping=readUint32(page+252);
+         unsigned stringIndex=readUint32(page+256);
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
