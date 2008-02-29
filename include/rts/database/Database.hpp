@@ -5,6 +5,7 @@ class BufferManager;
 class FactsSegment;
 class AggregatedFactsSegment;
 class DictionarySegment;
+class StatisticsSegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
 class Database
@@ -25,6 +26,8 @@ class Database
    AggregatedFactsSegment* aggregatedFacts[6];
    /// The dictionary segment
    DictionarySegment* dictionary;
+   /// The statistics
+   StatisticsSegment* statistics[6];
 
    Database(const Database&);
    void operator=(const Database&);
@@ -44,6 +47,8 @@ class Database
    FactsSegment& getFacts(DataOrder order);
    /// Get an aggregated facts table
    AggregatedFactsSegment& getAggregatedFacts(DataOrder order);
+   /// Get fact statistics
+   StatisticsSegment& getStatistics(DataOrder order);
    /// Get the dictionary
    DictionarySegment& getDictionary();
 };
