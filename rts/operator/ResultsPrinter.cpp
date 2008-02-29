@@ -5,7 +5,9 @@
 #include <iostream>
 #include <map>
 //---------------------------------------------------------------------------
-ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,bool silent)
+using namespace std;
+//---------------------------------------------------------------------------
+ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,bool silent)
    : output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),silent(silent)
    // Constructor
 {
@@ -16,6 +18,43 @@ ResultsPrinter::~ResultsPrinter()
 {
 }
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// A wrapper to avoid duplicating the strings in memory
+struct CacheEntry {
+   /// The string boundaries
+   const char* start,*stop;
+
+   /// Constructor
+   CacheEntry() : start(0),stop(0) {}
+   /// Print it
+   void print() const;
+};
+//---------------------------------------------------------------------------
+void CacheEntry::print() const
+   // Print it
+{
+   for (const char* iter=start,*limit=stop;iter!=limit;++iter)
+      cout << *iter;
+}
+//---------------------------------------------------------------------------
+static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::const_iterator start,vector<unsigned>::const_iterator stop)
+   // Print a result row
+{
+   if (start==stop) return;
+   if (!~(*start))
+      cout << "NULL"; else
+      stringCache[*start].print();
+   for (++start;start!=stop;++start) {
+      cout << ' ';
+      if (!~(*start))
+         cout << "NULL"; else
+         stringCache[*start].print();
+   }
+}
+//---------------------------------------------------------------------------
+};
+//---------------------------------------------------------------------------
 unsigned ResultsPrinter::first()
    // Produce the first tuple
 {
@@ -23,91 +62,55 @@ unsigned ResultsPrinter::first()
    unsigned count;
    if ((count=input->first())==0) {
       if (!silent)
-         std::cout << "<empty result>" << std::endl;
+         cout << "<empty result>" << endl;
       return true;
    }
 
-   // Prepare the constants cache
-   static const unsigned cacheSize = 65536;
-   unsigned constantCache[cacheSize];
-   const char* cacheStart[cacheSize],*cacheStop[cacheSize];
-   for (unsigned index=0;index<cacheSize;index++)
-      constantCache[index]=~0u;
+   // Collect the values
+   vector<unsigned> results;
+   map<unsigned,CacheEntry> stringCache;
+   unsigned minCount=(duplicateHandling==ShowDuplicates)?2:1;
+   do {
+      if (count<minCount) continue;
+      results.push_back(count);
+      for (vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
+         unsigned id=(*iter)->value;
+         results.push_back(id);
+         if (~id) stringCache[id];
+      }
+   } while ((count=input->next())!=0);
+
+   // Lookup the strings
+   for (map<unsigned,CacheEntry>::iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter) {
+      CacheEntry& c=(*iter).second;
+      dictionary.lookupById((*iter).first,c.start,c.stop);
+   }
+
+   // Skip printing the results?
+   if (silent)
+      return 1;
 
    // Expand duplicates?
+   unsigned columns=output.size();
    if (duplicateHandling==ExpandDuplicates) {
-      do {
-         bool first=true;
-         std::string s;
-         for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
-            if (first) first=false; else if (!silent) s+=' ';
-            if (~((*iter)->value)) {
-               unsigned value=(*iter)->value,slot=value%cacheSize;
-               if (constantCache[slot]!=value) {
-                  constantCache[slot]=value;
-                  dictionary.lookupById(value,cacheStart[slot],cacheStop[slot]);
-               }
-               if (!silent)
-                  s+=std::string(cacheStart[slot],cacheStop[slot]);
-            } else {
-               if (!silent)
-                  s+="NULL";
-            }
+      for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
+         unsigned count=*iter; ++iter;
+         for (unsigned index=0;index<count;index++) {
+            printResult(stringCache,iter,iter+columns);
+            cout << endl;
          }
-         if (!silent) {
-            for (unsigned index=0;index<count;index++)
-               std::cout << s << std::endl;
-         }
-      } while ((count=input->next())!=0);
-   } else if (duplicateHandling==ShowDuplicates) {
-      // Show only duplicates?
-      do {
-         if (count<=1) continue;
-         bool first=true;
-         for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
-            if (first) first=false; else if (!silent) std::cout << ' ';
-            if (~((*iter)->value)) {
-               unsigned value=(*iter)->value,slot=value%cacheSize;
-               if (constantCache[slot]!=value) {
-                  constantCache[slot]=value;
-                  dictionary.lookupById(value,cacheStart[slot],cacheStop[slot]);
-               }
-               if (!silent)
-                  std::cout << std::string(cacheStart[slot],cacheStop[slot]);
-            } else {
-               if (!silent)
-                  std::cout << "NULL";
-            }
-         }
-         if (!silent) {
-            std::cout << " x" << count << std::endl;
-         }
-      } while ((count=input->next())!=0);
+         iter+=columns;
+      }
    } else {
-      // No, reduce or count duplicates
-      do {
-         bool first=true;
-         for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
-            if (first) first=false; else if (!silent) std::cout << ' ';
-            if (~((*iter)->value)) {
-               unsigned value=(*iter)->value,slot=value%cacheSize;
-               if (constantCache[slot]!=value) {
-                  constantCache[slot]=value;
-                  dictionary.lookupById(value,cacheStart[slot],cacheStop[slot]);
-               }
-               if (!silent)
-                  std::cout << std::string(cacheStart[slot],cacheStop[slot]);
-            } else {
-               if (!silent)
-                  std::cout << "NULL";
-            }
-         }
-         if (!silent) {
-            if ((count!=1)&&(duplicateHandling==CountDuplicates))
-               std::cout << " x" << count;
-            std::cout << std::endl;
-         }
-      } while ((count=input->next())!=0);
+      // No, reduced, count, or duplicates
+      for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
+         unsigned count=*iter; ++iter;
+         printResult(stringCache,iter,iter+columns);
+         if (duplicateHandling!=ReduceDuplicates)
+            cout << " " << count;
+         cout << endl;
+         iter+=columns;
+      }
    }
 
    return 1;
@@ -122,12 +125,12 @@ unsigned ResultsPrinter::next()
 void ResultsPrinter::print(unsigned level)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<ResultsPrinter";
-   for (std::vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(*iter);
+   indent(level); cout << "<ResultsPrinter";
+   for (vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
+      cout << " "; printRegister(*iter);
    }
-   std::cout << std::endl;
+   cout << endl;
    input->print(level+1);
-   indent(level); std::cout << ">" << std::endl;
+   indent(level); cout << ">" << endl;
 }
 //---------------------------------------------------------------------------
