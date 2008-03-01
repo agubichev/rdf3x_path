@@ -1,0 +1,19 @@
+select s1.value
+from strings s1, p64 t1,p88 t2, p1 t3, p74 t4, p63 t5, p0 t6, p88 t7, p70 t8, p9 t9, p88 t10, p70 t11
+where s1.id=t1.object and t2.subject=t1.subject and t2.object=20368053 and t3.subject=t1.subject and t4.subject=t3.object and t5.subject=t4.object and t5.object=17922976 and t6.subject=t1.subject and t7.subject=t6.object and t7.object=3102452 and t8.subject=t6.object and t8.object=3154267 and t9.subject=t1.subject and t10.subject=t9.object and t10.object=3102452 and t11.subject=t9.object and t11.object=3180078; 
+
+
+# isCalled 64
+# type 88
+# wordnet_actor_109765278 20368053
+# bornInLocation 1
+# locatedIn 74
+# isCalled 63
+# USA 17922976
+# actedIn 0
+# wordnet_movie_106613686 3102452
+# isOfGenre 70
+# Western 3154267
+# directed 9
+# Crime 3180078
+
