@@ -4,6 +4,7 @@
 class BufferManager;
 class FactsSegment;
 class AggregatedFactsSegment;
+class FullyAggregatedFactsSegment;
 class DictionarySegment;
 class StatisticsSegment;
 //---------------------------------------------------------------------------
@@ -24,6 +25,8 @@ class Database
    FactsSegment* facts[6];
    /// The aggregated fact segments
    AggregatedFactsSegment* aggregatedFacts[6];
+   /// The fully aggregated facts
+   FullyAggregatedFactsSegment* fullyAggregatedFacts[3];
    /// The dictionary segment
    DictionarySegment* dictionary;
    /// The statistics
@@ -47,6 +50,8 @@ class Database
    FactsSegment& getFacts(DataOrder order);
    /// Get an aggregated facts table
    AggregatedFactsSegment& getAggregatedFacts(DataOrder order);
+   /// Get fully aggregated fcats
+   FullyAggregatedFactsSegment& getFullyAggregatedFacts(DataOrder order);
    /// Get fact statistics
    StatisticsSegment& getStatistics(DataOrder order);
    /// Get the dictionary

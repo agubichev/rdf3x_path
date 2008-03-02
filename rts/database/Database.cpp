@@ -3,6 +3,7 @@
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
+#include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
 //---------------------------------------------------------------------------
 Database::Database()
@@ -71,6 +72,8 @@ bool Database::open(const char* fileName)
             aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
             statistics[index]=new StatisticsSegment(*bufferManager,statisticsPages[index]);
          }
+         for (unsigned index=0;index<3;index++)
+            fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*bufferManager,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
@@ -110,6 +113,12 @@ AggregatedFactsSegment& Database::getAggregatedFacts(DataOrder order)
    // Get the facts
 {
    return *(aggregatedFacts[order]);
+}
+//---------------------------------------------------------------------------
+FullyAggregatedFactsSegment& Database::getFullyAggregatedFacts(DataOrder order)
+   // Get fully aggregated fcats
+{
+   return *(fullyAggregatedFacts[order/2]);
 }
 //---------------------------------------------------------------------------
 StatisticsSegment& Database::getStatistics(DataOrder order)

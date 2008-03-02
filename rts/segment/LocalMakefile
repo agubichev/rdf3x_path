@@ -1,8 +1,9 @@
-src_rts_segment:=				\
-	rts/segment/Segment.cpp			\
-	rts/segment/AggregatedFactsSegment.cpp	\
-	rts/segment/DictionarySegment.cpp	\
-	rts/segment/FactsSegment.cpp		\
+src_rts_segment:=					\
+	rts/segment/Segment.cpp				\
+	rts/segment/AggregatedFactsSegment.cpp		\
+	rts/segment/DictionarySegment.cpp		\
+	rts/segment/FactsSegment.cpp			\
+	rts/segment/FullyAggregatedFactsSegment.cpp	\
 	rts/segment/StatisticsSegment.cpp
 
 
