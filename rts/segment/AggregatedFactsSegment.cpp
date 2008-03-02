@@ -155,7 +155,7 @@ bool AggregatedFactsSegment::Scan::readNextPage()
    unsigned value1=readUint32Aligned(reader); reader+=4;
    unsigned value2=readUint32Aligned(reader); reader+=4;
    unsigned count=readUint32Aligned(reader); reader+=4;
-   Tripple* writer=tripples;
+   Triple* writer=tripples;
    (*writer).value1=value1;
    (*writer).value2=value2;
    (*writer).count=count;

@@ -41,7 +41,7 @@ class AggregatedFactsSegment : public Segment
       /// The maximum number of entries per page
       static const unsigned maxCount = BufferManager::pageSize;
       /// A tripple
-      struct Tripple {
+      struct Triple {
          unsigned value1,value2,count;
       };
 
@@ -50,9 +50,9 @@ class AggregatedFactsSegment : public Segment
       /// The segment
       AggregatedFactsSegment* seg;
       /// The position on the current page
-      const Tripple* pos,*posLimit;
+      const Triple* pos,*posLimit;
       /// The decompressed tripples
-      Tripple tripples[maxCount];
+      Triple tripples[maxCount];
 
       Scan(const Scan&);
       void operator=(const Scan&);

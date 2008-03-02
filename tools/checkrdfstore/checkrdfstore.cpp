@@ -12,21 +12,21 @@ using namespace std;
 namespace {
 //---------------------------------------------------------------------------
 /// A RDF tripple
-struct Tripple {
+struct Triple {
    /// The values as IDs
    unsigned subject,predicate,object;
 };
 //---------------------------------------------------------------------------
 /// Order a RDF tripple lexicographically
-struct OrderTripple {
-   bool operator()(const Tripple& a,const Tripple& b) const {
+struct OrderTriple {
+   bool operator()(const Triple& a,const Triple& b) const {
       return (a.subject<b.subject)||
              ((a.subject==b.subject)&&((a.predicate<b.predicate)||
              ((a.predicate==b.predicate)&&(a.object<b.object))));
    }
 };
 //---------------------------------------------------------------------------
-bool readFacts(vector<Tripple>& facts,const char* fileName)
+bool readFacts(vector<Triple>& facts,const char* fileName)
    // Read the facts table
 {
    ifstream in(fileName);
@@ -37,7 +37,7 @@ bool readFacts(vector<Tripple>& facts,const char* fileName)
 
    facts.clear();
    while (true) {
-      Tripple t;
+      Triple t;
       in >> t.subject >> t.predicate >> t.object;
       if (!in.good()) break;
       facts.push_back(t);
@@ -46,13 +46,13 @@ bool readFacts(vector<Tripple>& facts,const char* fileName)
    return true;
 }
 //---------------------------------------------------------------------------
-bool checkFacts(Database& db,unsigned order,const vector<Tripple>& facts)
+bool checkFacts(Database& db,unsigned order,const vector<Triple>& facts)
    // Check the facts table
 {
    FactsSegment& table=db.getFacts(static_cast<Database::DataOrder>(order));
    FactsSegment::Scan scan;
 
-   vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();
+   vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();
    unsigned readTuples=0;
    if (scan.first(table)) {
       do {
@@ -91,13 +91,13 @@ bool checkFacts(Database& db,unsigned order,const vector<Tripple>& facts)
    return true;
 }
 //---------------------------------------------------------------------------
-bool checkAggregatedFacts(Database& db,unsigned order,const vector<Tripple>& facts)
+bool checkAggregatedFacts(Database& db,unsigned order,const vector<Triple>& facts)
    // Check the aggregated facts table
 {
    AggregatedFactsSegment& table=db.getAggregatedFacts(static_cast<Database::DataOrder>(order));
    AggregatedFactsSegment::Scan scan;
 
-   vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();
+   vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();
    if (scan.first(table)) {
       do {
          if (iter==limit) {
@@ -129,7 +129,7 @@ bool checkAggregatedFacts(Database& db,unsigned order,const vector<Tripple>& fac
    return true;
 }
 //---------------------------------------------------------------------------
-bool checkFacts(Database& db,vector<Tripple>& facts)
+bool checkFacts(Database& db,vector<Triple>& facts)
    // Check all 6 orderings
 {
    // Produce the different orderings
@@ -141,25 +141,25 @@ bool checkFacts(Database& db,vector<Tripple>& facts)
          case 0: // subject,predicate,object
             break;
          case 1: // subject,object,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).predicate);
             break;
          case 2: // object,predicate,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).subject);
             break;
          case 3: // object,subject,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).subject);
                std::swap((*iter).object,(*iter).predicate);
             }
             break;
          case 4: // predicate,subject,object
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).subject,(*iter).predicate);
             break;
          case 5: // predicate,object,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).subject,(*iter).predicate);
                std::swap((*iter).object,(*iter).predicate);
             }
@@ -167,7 +167,7 @@ bool checkFacts(Database& db,vector<Tripple>& facts)
       }
 
       // Sort the facts accordingly
-      sort(facts.begin(),facts.end(),OrderTripple());
+      sort(facts.begin(),facts.end(),OrderTriple());
 
       // And compare them with the database
       if (!checkFacts(db,index,facts))
@@ -180,25 +180,25 @@ bool checkFacts(Database& db,vector<Tripple>& facts)
          case 0: // subject,predicate,object
             break;
          case 1: // subject,object,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).predicate);
             break;
          case 2: // object,predicate,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).subject);
             break;
          case 3: // object,subject,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).predicate);
                std::swap((*iter).object,(*iter).subject);
             }
             break;
          case 4: // predicate,subject,object
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).subject,(*iter).predicate);
             break;
          case 5: // predicate,object,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).predicate);
                std::swap((*iter).subject,(*iter).predicate);
             }
@@ -228,7 +228,7 @@ int main(int argc,char* argv[])
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
-      vector<Tripple> facts;
+      vector<Triple> facts;
       if (!readFacts(facts,argv[1]))
          return 1;
 

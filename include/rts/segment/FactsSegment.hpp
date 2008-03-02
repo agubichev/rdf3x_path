@@ -40,7 +40,7 @@ class FactsSegment : public Segment
       /// The maximum number of entries per page
       static const unsigned maxCount = BufferManager::pageSize;
       /// A tripple
-      struct Tripple {
+      struct Triple {
          unsigned value1,value2,value3;
       };
 
@@ -49,9 +49,9 @@ class FactsSegment : public Segment
       /// The segment
       FactsSegment* seg;
       /// The position on the current page
-      const Tripple* pos,*posLimit;
+      const Triple* pos,*posLimit;
       /// The decompressed tripples
-      Tripple tripples[maxCount];
+      Triple tripples[maxCount];
 
       /// Read the next page
       bool readNextPage();
