@@ -55,14 +55,14 @@ struct Directory
 };
 //---------------------------------------------------------------------------
 /// A RDF tripple
-struct Tripple {
+struct Triple {
    /// The values as IDs
    unsigned subject,predicate,object;
 };
 //---------------------------------------------------------------------------
 /// Order a RDF tripple lexicographically
-struct OrderTripple {
-   bool operator()(const Tripple& a,const Tripple& b) const {
+struct OrderTriple {
+   bool operator()(const Triple& a,const Triple& b) const {
       return (a.subject<b.subject)||
              ((a.subject==b.subject)&&((a.predicate<b.predicate)||
              ((a.predicate==b.predicate)&&(a.object<b.object))));
@@ -79,7 +79,7 @@ void writePage(ofstream& out,unsigned page,const void* data)
    out.write(static_cast<const char*>(data),pageSize);
 }
 //---------------------------------------------------------------------------
-bool readFacts(vector<Tripple>& facts,const char* fileName)
+bool readFacts(vector<Triple>& facts,const char* fileName)
    // Read the facts table
 {
    ifstream in(fileName);
@@ -90,7 +90,7 @@ bool readFacts(vector<Tripple>& facts,const char* fileName)
 
    facts.clear();
    while (true) {
-      Tripple t;
+      Triple t;
       in >> t.subject >> t.predicate >> t.object;
       if (!in.good()) break;
       facts.push_back(t);
@@ -174,7 +174,7 @@ unsigned writeDelta0(unsigned char* buffer,unsigned ofs,unsigned value)
    } else return ofs;
 }
 //---------------------------------------------------------------------------
-unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripple,unsigned> >& boundaries,unsigned page)
+unsigned packLeaves(ofstream& out,const vector<Triple>& facts,vector<pair<Triple,unsigned> >& boundaries,unsigned page)
    // Pack the facts into leaves using prefix compression
 {
    const unsigned headerSize = 4; // Next pointer
@@ -182,7 +182,7 @@ unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripp
    unsigned bufferPos=headerSize;
    unsigned lastSubject=0,lastPredicate=0,lastObject=0;
 
-   for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+   for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
       // Access the current tripple
       unsigned subject=(*iter).subject,predicate=(*iter).predicate,object=(*iter).object;
 
@@ -213,8 +213,8 @@ unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripp
             for (unsigned index=bufferPos;index<pageSize;index++)
                buffer[index]=0;
             writePage(out,page,buffer);
-            Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
-            boundaries.push_back(pair<Tripple,unsigned>(t,page));
+            Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
+            boundaries.push_back(pair<Triple,unsigned>(t,page));
             ++page;
          }
          // Write the first element fully
@@ -258,21 +258,21 @@ unsigned packLeaves(ofstream& out,const vector<Tripple>& facts,vector<pair<Tripp
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
-   Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
-    boundaries.push_back(pair<Tripple,unsigned>(t,page));
+   Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
+    boundaries.push_back(pair<Triple,unsigned>(t,page));
    ++page;
 
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packInner(ofstream& out,const vector<pair<Tripple,unsigned> >& data,vector<pair<Tripple,unsigned> >& boundaries,unsigned page)
+unsigned packInner(ofstream& out,const vector<pair<Triple,unsigned> >& data,vector<pair<Triple,unsigned> >& boundaries,unsigned page)
    // Create inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
    unsigned char buffer[pageSize];
    unsigned bufferPos=headerSize,bufferCount=0;
 
-   for (vector<pair<Tripple,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+   for (vector<pair<Triple,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
       // Do we have to start a new page?
       if ((bufferPos+16)>pageSize) {
          writeUint32(buffer,0xFFFFFFFF);
@@ -282,7 +282,7 @@ unsigned packInner(ofstream& out,const vector<pair<Tripple,unsigned> >& data,vec
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
          writePage(out,page,buffer);
-         boundaries.push_back(pair<Tripple,unsigned>((*(iter-1)).first,page));
+         boundaries.push_back(pair<Triple,unsigned>((*(iter-1)).first,page));
          ++page;
          bufferPos=headerSize; bufferCount=0;
       }
@@ -301,24 +301,24 @@ unsigned packInner(ofstream& out,const vector<pair<Tripple,unsigned> >& data,vec
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
-   boundaries.push_back(pair<Tripple,unsigned>(data.back().first,page));
+   boundaries.push_back(pair<Triple,unsigned>(data.back().first,page));
    ++page;
 
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Tripple>& facts,unsigned page)
+unsigned packFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Triple>& facts,unsigned page)
    // Pack the facts using prefix compression
 {
    // Write the leave nodes
-   vector<pair<Tripple,unsigned> > boundaries;
+   vector<pair<Triple,unsigned> > boundaries;
    directory.factStarts[ordering]=page;
    page=packLeaves(out,facts,boundaries,page);
    directory.factStatistics[ordering].pages=page-directory.factStarts[ordering];
 
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
-      vector<pair<Tripple,unsigned> > newBoundaries;
+      vector<pair<Triple,unsigned> > newBoundaries;
       page=packInner(out,boundaries,newBoundaries,page);
       directory.factIndices[ordering]=page-1;
       return page;
@@ -326,7 +326,7 @@ unsigned packFacts(ofstream& out,Directory& directory,unsigned ordering,const ve
 
    // Write the inner nodes
    while (boundaries.size()>1) {
-      vector<pair<Tripple,unsigned> > newBoundaries;
+      vector<pair<Triple,unsigned> > newBoundaries;
       page=packInner(out,boundaries,newBoundaries,page);
       swap(boundaries,newBoundaries);
    }
@@ -334,7 +334,7 @@ unsigned packFacts(ofstream& out,Directory& directory,unsigned ordering,const ve
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<Tripple>& boundaries,unsigned page)
+unsigned packAggregatedLeaves(ofstream& out,const vector<Triple>& facts,vector<Triple>& boundaries,unsigned page)
    // Pack the aggregated facts into leaves using prefix compression
 {
    const unsigned headerSize = 4; // Next pointer
@@ -342,7 +342,7 @@ unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<
    unsigned bufferPos=headerSize;
    unsigned lastSubject=0,lastPredicate=0;
 
-   for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;) {
+   for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;) {
       // Access the current tripple
       unsigned subject=(*iter).subject,predicate=(*iter).predicate;
       unsigned object=(*iter).object,count=1;
@@ -369,7 +369,7 @@ unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<
             for (unsigned index=bufferPos;index<pageSize;index++)
                buffer[index]=0;
             writePage(out,page,buffer);
-            Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=page;
+            Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=page;
             boundaries.push_back(t);
             ++page;
          }
@@ -398,21 +398,21 @@ unsigned packAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
-   Tripple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=page;
+   Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=page;
    boundaries.push_back(t);
    ++page;
 
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packAggregatedInner(ofstream& out,const vector<Tripple>& data,vector<Tripple>& boundaries,unsigned page)
+unsigned packAggregatedInner(ofstream& out,const vector<Triple>& data,vector<Triple>& boundaries,unsigned page)
    // Create aggregated inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
    unsigned char buffer[pageSize];
    unsigned bufferPos=headerSize,bufferCount=0;
 
-   for (vector<Tripple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+   for (vector<Triple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
       // Do we have to start a new page?
       if ((bufferPos+12)>pageSize) {
          writeUint32(buffer,0xFFFFFFFF);
@@ -422,7 +422,7 @@ unsigned packAggregatedInner(ofstream& out,const vector<Tripple>& data,vector<Tr
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
          writePage(out,page,buffer);
-         Tripple t=*(iter-1); t.object=page;
+         Triple t=*(iter-1); t.object=page;
          boundaries.push_back(t);
          ++page;
          bufferPos=headerSize; bufferCount=0;
@@ -441,25 +441,25 @@ unsigned packAggregatedInner(ofstream& out,const vector<Tripple>& data,vector<Tr
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
-   Tripple t=data.back(); t.object=page;
+   Triple t=data.back(); t.object=page;
    boundaries.push_back(t);
    ++page;
 
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packAggregatedFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Tripple>& facts,unsigned page)
+unsigned packAggregatedFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Triple>& facts,unsigned page)
    // Pack the aggregated facts using prefix compression
 {
    // Write the leave nodes
-   vector<Tripple> boundaries;
+   vector<Triple> boundaries;
    directory.aggregatedFactStarts[ordering]=page;
    page=packAggregatedLeaves(out,facts,boundaries,page);
    directory.factStatistics[ordering].aggregatedPages=page-directory.aggregatedFactStarts[ordering];
 
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
-      vector<Tripple> newBoundaries;
+      vector<Triple> newBoundaries;
       page=packAggregatedInner(out,boundaries,newBoundaries,page);
       directory.aggregatedFactIndices[ordering]=page-1;
       return page;
@@ -467,7 +467,7 @@ unsigned packAggregatedFacts(ofstream& out,Directory& directory,unsigned orderin
 
    // Write the inner nodes
    while (boundaries.size()>1) {
-      vector<Tripple> newBoundaries;
+      vector<Triple> newBoundaries;
       page=packAggregatedInner(out,boundaries,newBoundaries,page);
       swap(boundaries,newBoundaries);
    }
@@ -475,7 +475,7 @@ unsigned packAggregatedFacts(ofstream& out,Directory& directory,unsigned orderin
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packFullyAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,vector<Tripple>& boundaries,unsigned page)
+unsigned packFullyAggregatedLeaves(ofstream& out,const vector<Triple>& facts,vector<Triple>& boundaries,unsigned page)
    // Pack the fully aggregated facts into leaves using prefix compression
 {
    const unsigned headerSize = 4; // Next pointer
@@ -483,7 +483,7 @@ unsigned packFullyAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,ve
    unsigned bufferPos=headerSize;
    unsigned lastSubject=0;
 
-   for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;) {
+   for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;) {
       // Access the current tripple
       unsigned subject=(*iter).subject,predicate=(*iter).predicate;
       unsigned object=(*iter).object,count=1;
@@ -511,7 +511,7 @@ unsigned packFullyAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,ve
             for (unsigned index=bufferPos;index<pageSize;index++)
                buffer[index]=0;
             writePage(out,page,buffer);
-            Tripple t; t.subject=lastSubject; t.predicate=0; t.object=page;
+            Triple t; t.subject=lastSubject; t.predicate=0; t.object=page;
             boundaries.push_back(t);
             ++page;
          }
@@ -538,21 +538,21 @@ unsigned packFullyAggregatedLeaves(ofstream& out,const vector<Tripple>& facts,ve
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
-   Tripple t; t.subject=lastSubject; t.predicate=0; t.object=page;
+   Triple t; t.subject=lastSubject; t.predicate=0; t.object=page;
    boundaries.push_back(t);
    ++page;
 
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packFullyAggregatedInner(ofstream& out,const vector<Tripple>& data,vector<Tripple>& boundaries,unsigned page)
+unsigned packFullyAggregatedInner(ofstream& out,const vector<Triple>& data,vector<Triple>& boundaries,unsigned page)
    // Create fully aggregated inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
    unsigned char buffer[pageSize];
    unsigned bufferPos=headerSize,bufferCount=0;
 
-   for (vector<Tripple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+   for (vector<Triple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
       // Do we have to start a new page?
       if ((bufferPos+8)>pageSize) {
          writeUint32(buffer,0xFFFFFFFF);
@@ -562,7 +562,7 @@ unsigned packFullyAggregatedInner(ofstream& out,const vector<Tripple>& data,vect
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
          writePage(out,page,buffer);
-         Tripple t=*(iter-1); t.object=page;
+         Triple t=*(iter-1); t.object=page;
          boundaries.push_back(t);
          ++page;
          bufferPos=headerSize; bufferCount=0;
@@ -580,24 +580,24 @@ unsigned packFullyAggregatedInner(ofstream& out,const vector<Tripple>& data,vect
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
-   Tripple t=data.back(); t.object=page;
+   Triple t=data.back(); t.object=page;
    boundaries.push_back(t);
    ++page;
 
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned packFullyAggregatedFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Tripple>& facts,unsigned page)
+unsigned packFullyAggregatedFacts(ofstream& out,Directory& directory,unsigned ordering,const vector<Triple>& facts,unsigned page)
    // Pack the fully aggregated facts using prefix compression
 {
    // Write the leave nodes
-   vector<Tripple> boundaries;
+   vector<Triple> boundaries;
    directory.fullyAggregatedFactStarts[ordering]=page;
    page=packFullyAggregatedLeaves(out,facts,boundaries,page);
 
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
-      vector<Tripple> newBoundaries;
+      vector<Triple> newBoundaries;
       page=packFullyAggregatedInner(out,boundaries,newBoundaries,page);
       directory.fullyAggregatedFactIndices[ordering]=page-1;
       return page;
@@ -605,7 +605,7 @@ unsigned packFullyAggregatedFacts(ofstream& out,Directory& directory,unsigned or
 
    // Write the inner nodes
    while (boundaries.size()>1) {
-      vector<Tripple> newBoundaries;
+      vector<Triple> newBoundaries;
       page=packFullyAggregatedInner(out,boundaries,newBoundaries,page);
       swap(boundaries,newBoundaries);
    }
@@ -613,7 +613,7 @@ unsigned packFullyAggregatedFacts(ofstream& out,Directory& directory,unsigned or
    return page;
 }
 //---------------------------------------------------------------------------
-unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,unsigned page)
+unsigned dumpFacts(ofstream& out,Directory& directory,vector<Triple>& facts,unsigned page)
    // Dump all 6 orderings into the database
 {
    // Produce the different orderings
@@ -625,25 +625,25 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
          case 0: // subject,predicate,object
             break;
          case 1: // subject,object,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).predicate);
             break;
          case 2: // object,predicate,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).subject);
             break;
          case 3: // object,subject,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).subject);
                std::swap((*iter).object,(*iter).predicate);
             }
             break;
          case 4: // predicate,subject,object
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).subject,(*iter).predicate);
             break;
          case 5: // predicate,object,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).subject,(*iter).predicate);
                std::swap((*iter).object,(*iter).predicate);
             }
@@ -651,7 +651,7 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
       }
 
       // Sort the facts accordingly
-      sort(facts.begin(),facts.end(),OrderTripple());
+      sort(facts.begin(),facts.end(),OrderTriple());
 
       // Dump them in the table
       page=packFacts(out,directory,index,facts,page);
@@ -669,7 +669,7 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
          directory.factStatistics[index].groups2=0;
          directory.factStatistics[index].cardinality=0;
       } else {
-         vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();
+         vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();
          unsigned subject=(*iter).subject,predicate=(*iter).predicate,object=(*iter).object;
          directory.factStatistics[index].groups1=1;
          directory.factStatistics[index].groups2=1;
@@ -697,25 +697,25 @@ unsigned dumpFacts(ofstream& out,Directory& directory,vector<Tripple>& facts,uns
          case 0: // subject,predicate,object
             break;
          case 1: // subject,object,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).predicate);
             break;
          case 2: // object,predicate,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).object,(*iter).subject);
             break;
          case 3: // object,subject,predicate
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).predicate);
                std::swap((*iter).object,(*iter).subject);
             }
             break;
          case 4: // predicate,subject,object
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
                std::swap((*iter).subject,(*iter).predicate);
             break;
          case 5: // predicate,object,subject
-            for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
                std::swap((*iter).object,(*iter).predicate);
                std::swap((*iter).subject,(*iter).predicate);
             }
@@ -1037,7 +1037,7 @@ bool buildDatabase(const char* dbFile,const char* factsFile,const char* stringsF
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
-      vector<Tripple> facts;
+      vector<Triple> facts;
       if (!readFacts(facts,factsFile))
          return false;
 

@@ -2,6 +2,7 @@
 #include "cts/plangen/Costs.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
+#include "rts/segment/StatisticsSegment.hpp"
 #include <map>
 #include <set>
 #include <algorithm>
@@ -96,7 +97,62 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query
    return plan;
 }
 //---------------------------------------------------------------------------
-void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2,unsigned value3)
+static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,unsigned& c3)
+   // Reshuffle values to maximize the constant prefix
+{
+   // Reconstruct the original assignments first
+   unsigned s=~0u,p=~0u,o=~0u;
+   switch (order) {
+      case Database::Order_Subject_Predicate_Object: s=c1; p=c2; o=c3; break;
+      case Database::Order_Subject_Object_Predicate: s=c1; o=c2; p=c3; break;
+      case Database::Order_Object_Predicate_Subject: o=c1; p=c2; s=c3; break;
+      case Database::Order_Object_Subject_Predicate: o=c1; s=c2; p=c3; break;
+      case Database::Order_Predicate_Subject_Object: p=c1; s=c2; o=c3; break;
+      case Database::Order_Predicate_Object_Subject: p=c1; o=c2; s=c3; break;
+   }
+
+   // Now find the maximum prefix
+   if (!~s) {
+      if ((!~p)||(~o)) {
+         order=Database::Order_Subject_Predicate_Object;
+         c1=s; c2=p; c3=o;
+      } else {
+         order=Database::Order_Subject_Object_Predicate;
+         c1=s; c2=o; c3=p;
+      }
+   } else if (!~p) {
+      order=Database::Order_Predicate_Object_Subject;
+      c1=p; c2=o; c3=s;
+   } else if (!~o) {
+      order=Database::Order_Object_Predicate_Subject;
+      c1=o; c2=p; c3=s;
+   } else {
+      order=Database::Order_Subject_Predicate_Object;
+      c1=s; c2=p; c3=o;
+   }
+}
+//---------------------------------------------------------------------------
+static unsigned getCardinality(Database& db,Database::DataOrder order,unsigned c1,unsigned c2,unsigned c3)
+   // Estimate the cardinality of a predicate
+{
+   maximizePrefix(order,c1,c2,c3);
+
+   // Query the statistics
+   StatisticsSegment::Bucket result;
+   if (~c3) {
+      return 1;
+   } else if (~c2) {
+      db.getStatistics(order).lookup(c1,c2,result);
+      return result.card;
+   } else if (~c1) {
+      db.getStatistics(order).lookup(c1,result);
+      return result.card;
+   } else {
+      return db.getFacts(order).getCardinality();
+   }
+}
+//---------------------------------------------------------------------------
+void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C)
    // Build an index scan
 {
    // Initialize a new plan
@@ -108,38 +164,21 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
    plan->next=0;
 
    // Compute the statistics
-   unsigned div=0;
+   unsigned scanned;
+   plan->cardinality=scanned=getCardinality(*db,order,value1C,value2C,value3C);
    if (!~value1) {
       if (!~value2) {
-         if (!~value3) {
-            plan->cardinality=1;
-            plan->ordering=value3;
-         } else {
-            plan->cardinality=static_cast<double>(db->getFacts(order).getCardinality())/db->getFacts(order).getLevel2Groups();
-            plan->ordering=value3;
-         }
+         plan->ordering=value3;
       } else {
-         plan->cardinality=static_cast<double>(db->getFacts(order).getCardinality())/db->getFacts(order).getLevel1Groups();
+         scanned=getCardinality(*db,order,value1C,value2C,~0u);
          plan->ordering=value2;
-         if (!~value3) div=10;
-         if (plan->cardinality<=20)
-            div=1;
       }
    } else {
-      plan->cardinality=db->getFacts(order).getCardinality();
+      scanned=getCardinality(*db,order,value1C,~0u,~0u);
       plan->ordering=value1;
-      if (~!value2) {
-         if (!~value3)
-            div=20; else
-            div=10;
-      } else if (!~value3) div=10;
-      if (plan->cardinality<=20)
-         div=1;
    }
-   unsigned pages=1+static_cast<unsigned>(db->getFacts(order).getPages()*(plan->cardinality/static_cast<double>(db->getFacts(order).getCardinality())));
+   unsigned pages=1+static_cast<unsigned>(db->getFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getFacts(order).getCardinality())));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
-   if (div)
-      plan->cardinality=plan->cardinality/div;
 
    // Apply filters
    plan=buildFilters(plans,query,plan,value1,value2,value3);
@@ -148,7 +187,25 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
    addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
-void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value2)
+static unsigned getAggregatedCardinality(Database& db,Database::DataOrder order,unsigned c1,unsigned c2)
+   // Estimate the cardinality of a predicate
+{
+   unsigned c3=~0u;
+   maximizePrefix(order,c1,c2,c3);
+
+   // Query the statistics
+   StatisticsSegment::Bucket result;
+   if ((~c3)||(~c2)) {
+      return 1;
+   } else if (~c1) {
+      db.getStatistics(order).lookup(c1,result);
+      return (result.card+result.prefix1Card-1)/result.prefix1Card;
+   } else {
+      return db.getFacts(order).getCardinality();
+   }
+}
+//---------------------------------------------------------------------------
+void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C)
    // Build an aggregated index scan
 {
    // Initialize a new plan
@@ -160,27 +217,16 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
    plan->next=0;
 
    // Compute the statistics
-   unsigned div=0;
+   unsigned scanned;
+   plan->cardinality=scanned=getAggregatedCardinality(*db,order,value1C,value2C);
    if (!~value1) {
-      if (!~value2) {
-         plan->cardinality=1;
-         plan->ordering=value2;
-      } else {
-         plan->cardinality=static_cast<double>(db->getAggregatedFacts(order).getLevel2Groups())/db->getAggregatedFacts(order).getLevel1Groups();
-         plan->ordering=value2;
-      }
+      plan->ordering=value2;
    } else {
-      plan->cardinality=db->getAggregatedFacts(order).getLevel2Groups();
+      scanned=getAggregatedCardinality(*db,order,value1C,~0u);
       plan->ordering=value1;
-      if (~!value2)
-         div=10;
-      if (plan->cardinality<=20)
-         div=1;
    }
-   unsigned pages=1+static_cast<unsigned>(db->getAggregatedFacts(order).getPages()*(plan->cardinality/static_cast<double>(db->getAggregatedFacts(order).getLevel2Groups())));
+   unsigned pages=1+static_cast<unsigned>(db->getAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getAggregatedFacts(order).getLevel2Groups())));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
-   if (div)
-      plan->cardinality=plan->cardinality/div;
 
    // Apply filters
    plan=buildFilters(plans,query,plan,value1,value2,~0u);
@@ -240,26 +286,27 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
 
    // Lookup variables
    unsigned s=node.constSubject?~0u:node.subject,p=node.constPredicate?~0u:node.predicate,o=node.constObject?~0u:node.object;
+   unsigned sc=node.constSubject?node.subject:~0u,pc=node.constPredicate?node.predicate:~0u,oc=node.constObject?node.object:~0u;
 
    // Build all relevant scans
    if (unusedObject)
-      buildAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,p); else
-      buildIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,p,o);
+      buildAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc); else
+      buildIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc,o,oc);
    if (unusedPredicate)
-      buildAggregatedIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,o); else
-      buildIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,o,p);
+      buildAggregatedIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc); else
+      buildIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc,p,pc);
    if (unusedSubject)
-      buildAggregatedIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,p); else
-      buildIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,p,s);
+      buildAggregatedIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc); else
+      buildIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc,s,sc);
    if (unusedPredicate)
-      buildAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,s); else
-      buildIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,s,p);
+      buildAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc); else
+      buildIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc,p,pc);
    if (unusedObject)
-      buildAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,s); else
-      buildIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,s,o);
+      buildAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc); else
+      buildIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc,o,oc);
    if (unusedSubject)
-      buildAggregatedIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,o); else
-      buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,o,s);
+      buildAggregatedIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc); else
+      buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc,s,sc);
 
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {

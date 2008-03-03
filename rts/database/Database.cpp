@@ -3,13 +3,18 @@
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
+#include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include "rts/segment/StatisticsSegment.hpp"
 //---------------------------------------------------------------------------
 Database::Database()
    : bufferManager(0),dictionary(0)
    // Constructor
 {
-   for (unsigned index=0;index<6;index++)
+   for (unsigned index=0;index<6;index++) {
       facts[index]=0;
+      aggregatedFacts[index]=0;
+      statistics[index]=0;
+   }
 }
 //---------------------------------------------------------------------------
 Database::~Database()
@@ -57,12 +62,18 @@ bool Database::open(const char* fileName)
          unsigned stringStart=readUint32(page+248);
          unsigned stringMapping=readUint32(page+252);
          unsigned stringIndex=readUint32(page+256);
+         unsigned statisticsPages[6];
+         for (unsigned index=0;index<6;index++)
+            statisticsPages[index]=readUint32(page+260+4*index);
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
             facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
             aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
+            statistics[index]=new StatisticsSegment(*bufferManager,statisticsPages[index]);
          }
+         for (unsigned index=0;index<3;index++)
+            fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*bufferManager,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
@@ -81,6 +92,10 @@ void Database::close()
    for (unsigned index=0;index<6;index++) {
       delete facts[index];
       facts[index]=0;
+      delete aggregatedFacts[index];
+      aggregatedFacts[index]=0;
+      delete statistics[index];
+      statistics[index]=0;
    }
    delete dictionary;
    dictionary=0;
@@ -98,6 +113,18 @@ AggregatedFactsSegment& Database::getAggregatedFacts(DataOrder order)
    // Get the facts
 {
    return *(aggregatedFacts[order]);
+}
+//---------------------------------------------------------------------------
+FullyAggregatedFactsSegment& Database::getFullyAggregatedFacts(DataOrder order)
+   // Get fully aggregated fcats
+{
+   return *(fullyAggregatedFacts[order/2]);
+}
+//---------------------------------------------------------------------------
+StatisticsSegment& Database::getStatistics(DataOrder order)
+   // Get fact statistics
+{
+   return *(statistics[order]);
 }
 //---------------------------------------------------------------------------
 DictionarySegment& Database::getDictionary()

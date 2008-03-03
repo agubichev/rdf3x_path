@@ -10,14 +10,14 @@ using namespace std;
 namespace {
 //---------------------------------------------------------------------------
 /// A RDF tripple
-struct Tripple {
+struct Triple {
    /// The values as IDs
    unsigned subject,predicate,object;
 };
 //---------------------------------------------------------------------------
 /// Order a RDF tripple lexicographically
-struct OrderTrippleByPredicate {
-   bool operator()(const Tripple& a,const Tripple& b) const {
+struct OrderTripleByPredicate {
+   bool operator()(const Triple& a,const Triple& b) const {
       return (a.predicate<b.predicate)||
              ((a.predicate==b.predicate)&&((a.subject<b.subject)||
              ((a.subject==b.subject)&&(a.object<b.object))));
@@ -39,7 +39,7 @@ bool executeSQLFile(const std::string& file)
    return true;
 }
 //---------------------------------------------------------------------------
-bool readFacts(vector<Tripple>& facts,const char* fileName)
+bool readFacts(vector<Triple>& facts,const char* fileName)
    // Read the facts table
 {
    ifstream in(fileName);
@@ -50,7 +50,7 @@ bool readFacts(vector<Tripple>& facts,const char* fileName)
 
    facts.clear();
    while (true) {
-      Tripple t;
+      Triple t;
       in >> t.subject >> t.predicate >> t.object;
       if (!in.good()) break;
       facts.push_back(t);
@@ -59,16 +59,16 @@ bool readFacts(vector<Tripple>& facts,const char* fileName)
    return true;
 }
 //---------------------------------------------------------------------------
-void dumpFacts(ofstream& out,vector<Tripple>& facts,set<unsigned>& predicates,set<unsigned>& partitionedPredicates)
+void dumpFacts(ofstream& out,vector<Triple>& facts,set<unsigned>& predicates,set<unsigned>& partitionedPredicates)
    // Dump the facts
 {
    // Sort the facts
-   sort(facts.begin(),facts.end(),OrderTrippleByPredicate());
+   sort(facts.begin(),facts.end(),OrderTripleByPredicate());
 
    // Eliminate duplicates
-   vector<Tripple>::iterator writer=facts.begin();
+   vector<Triple>::iterator writer=facts.begin();
    unsigned lastSubject=~0u,lastPredicate=~0u,lastObject=~0u;
-   for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+   for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
       if ((((*iter).subject)!=lastSubject)||(((*iter).predicate)!=lastPredicate)||(((*iter).object)!=lastObject)) {
          *writer=*iter;
          ++writer;
@@ -81,7 +81,7 @@ void dumpFacts(ofstream& out,vector<Tripple>& facts,set<unsigned>& predicates,se
    {
       vector<unsigned> statistics;
       statistics.resize(facts.back().predicate+1);
-      for (vector<Tripple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+      for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
          statistics[(*iter).predicate]++;
       sort(statistics.begin(),statistics.end(),greater<unsigned>());
       if (statistics.size()>1000)
@@ -90,11 +90,11 @@ void dumpFacts(ofstream& out,vector<Tripple>& facts,set<unsigned>& predicates,se
    }
 
    // And dump them
-   vector<Tripple>::const_iterator lastStart=facts.begin();
+   vector<Triple>::const_iterator lastStart=facts.begin();
    unsigned smallCount=0;
    lastPredicate=~0u;
    bool needsBigTable=false;
-   for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+   for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
       if ((iter==facts.end())||((*iter).predicate!=lastPredicate)) {
          if (iter!=lastStart) {
             if ((iter-lastStart)>=cutOff) {
@@ -121,7 +121,7 @@ void dumpFacts(ofstream& out,vector<Tripple>& facts,set<unsigned>& predicates,se
       out << "create table otherpredicates(subject int not null, predicate int not null, object int not null);" << endl;
       out << "copy " << smallCount << " records into \"otherpredicates\" from stdin using delimiters '\\t';" << endl;
       lastStart=facts.begin(); lastPredicate=~0u;
-      for (vector<Tripple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
+      for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
          if ((iter==facts.end())||((*iter).predicate!=lastPredicate)) {
             if (iter!=lastStart) {
                if ((iter-lastStart)>=cutOff) {
@@ -268,7 +268,7 @@ int main(int argc,char* argv[])
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
-      vector<Tripple> facts;
+      vector<Triple> facts;
       if (!readFacts(facts,argv[1]))
          return 1;
 
