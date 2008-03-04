@@ -63,7 +63,8 @@ void dumpFacts(ofstream& out,const string& name,vector<Triple>& facts)
 
    // Dump the facts
    {
-      ofstream out("facts.sql");
+      unlink("/tmp/facts.sql");
+      ofstream out("/tmp/facts.sql");
       for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
          out << (*iter).subject << "\t" << (*iter).predicate << "\t" << (*iter).object << std::endl;
    }
@@ -72,7 +73,7 @@ void dumpFacts(ofstream& out,const string& name,vector<Triple>& facts)
    out << "drop schema if exists " << name << " cascade;" << endl;
    out << "create schema " << name << ";" << endl;
    out << "create table " << name << ".facts(subject int not null, predicate int not null, object int not null);" << endl;
-   out << "copy " << name << ".facts from 'facts.sql';" << endl;
+   out << "copy " << name << ".facts from '/tmp/facts.sql';" << endl;
 
    // Create indices
    out << "create index facts_spo on " << name << ".facts (subject, predicate, object);" << endl;
@@ -115,7 +116,8 @@ bool readAndStoreStrings(ofstream& out,const string& name,const char* fileName)
 
    // Scan the strings and dump them
    {
-      ofstream out("strings.sql");
+      unlink("/tmp/strings.sql");
+      ofstream out("/tmp/strings.sql");
       string s;
       while (true) {
          unsigned id;
@@ -132,7 +134,7 @@ bool readAndStoreStrings(ofstream& out,const string& name,const char* fileName)
    }
 
    // Add the copy statement
-   out << "copy " << name << ".strings from 'strings.sql';" << endl;
+   out << "copy " << name << ".strings from '/tmp/strings.sql';" << endl;
 
    return true;
 }
