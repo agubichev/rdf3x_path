@@ -1,0 +1,6 @@
+src_tools_testcompression:=				\
+	tools/testcompression/testcompression.cpp
+
+$(PREFIX)testcompression$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_testcompression:.cpp=$(OBJEXT))) $(addprefix $(PREFIX),$(src_rts:.cpp=$(OBJEXT))) $(addprefix $(PREFIX),$(src_infra:.cpp=$(OBJEXT)))
+	$(buildexe)
+
