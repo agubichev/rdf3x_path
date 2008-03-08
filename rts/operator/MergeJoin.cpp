@@ -30,6 +30,15 @@ unsigned MergeJoin::first()
    return next();
 }
 //---------------------------------------------------------------------------
+void MergeJoin::copyLeft()
+   // Copy the left tuple into its shadow
+{
+   leftShadow[0]=leftCount;
+   leftShadow[1]=leftValue->value;
+   for (unsigned index=0,limit=leftTail.size();index<limit;index++)
+      leftShadow[2+index]=leftTail[index]->value;
+}
+//---------------------------------------------------------------------------
 void MergeJoin::swapLeft()
    // Swap the left tuple with its shadow
 {
@@ -37,6 +46,15 @@ void MergeJoin::swapLeft()
    std::swap(leftValue->value,leftShadow[1]);
    for (unsigned index=0,limit=leftTail.size();index<limit;index++)
       std::swap(leftTail[index]->value,leftShadow[index+2]);
+}
+//---------------------------------------------------------------------------
+void MergeJoin::copyRight()
+   // Copy the right tuple into its shadow
+{
+   rightShadow[0]=rightCount;
+   rightShadow[1]=rightValue->value;
+   for (unsigned index=0,limit=rightTail.size();index<limit;index++)
+      rightShadow[2+index]=rightTail[index]->value;
 }
 //---------------------------------------------------------------------------
 void MergeJoin::swapRight()
@@ -133,13 +151,13 @@ unsigned MergeJoin::next()
                }
             }
             // Match. Store the current values and examine the next tuples
-            swapLeft();
+            copyLeft();
             if ((leftCount=left->next())==0) {
                swapLeft();
                scanState=loopEmptyLeft;
                return leftCount*rightCount;
             }
-            swapRight();
+            copyRight();
             if ((rightCount=right->next())==0) {
                swapLeft();
                swapRight();

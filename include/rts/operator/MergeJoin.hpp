@@ -40,8 +40,12 @@ class MergeJoin : public Operator
    /// Is a copy of the left hand side available? Only used for loopSpooled*
    bool leftInCopy;
 
+   /// Copy the left tuple into its shadow
+   void copyLeft();
    /// Swap the left tuple with its shadow
    void swapLeft();
+   /// Copy the right tuple into its shadow
+   void copyRight();
    /// Swap the right tuple with its shadow
    void swapRight();
 
