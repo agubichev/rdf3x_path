@@ -40,10 +40,6 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
          std::cout << "parse error: " << e.message << std::endl;
          return;
       }
-      if (parser.getPatterns().patterns.empty()) {
-         std::cout << "<empty tuple produced>" << std::endl;
-         return;
-      }
 
       // And perform the semantic anaylsis
       SemanticAnalysis semana(db);
