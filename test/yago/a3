@@ -1,4 +1,4 @@
-select ?name ?country
+select distinct ?name ?country
 where {
    ?p <isCalled> ?name.
    { ?p <type> "wordnet_actor_109765278" }
