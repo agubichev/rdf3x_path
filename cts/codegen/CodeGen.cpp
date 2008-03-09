@@ -148,6 +148,24 @@ static void mergeBindings(const std::set<unsigned>& projection,std::map<unsigned
          bindings[(*iter).first]=(*iter).second;
 }
 //---------------------------------------------------------------------------
+static Operator* addAdditionalSelections(Operator* input,const std::set<unsigned>& joinVariables,std::map<unsigned,Register*>& leftBindings,std::map<unsigned,Register*>& rightBindings,unsigned joinedOn)
+   // Convert additional join predicates into a selection
+{
+   // Examine join conditions
+   std::vector<Register*> conditions;
+   for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+      if ((*iter)!=joinedOn) {
+         conditions.push_back(leftBindings[*iter]);
+         conditions.push_back(rightBindings[*iter]);
+      }
+   }
+
+   // Build the results
+   if (!conditions.empty())
+      return Selection::create(input,conditions,true); else
+      return input;
+}
+//---------------------------------------------------------------------------
 static Operator* translateNestedLoopJoin(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a nested loop join into an operator tree
 {
@@ -166,14 +184,7 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const std::map<unsigne
    Operator* result=new NestedLoopJoin(leftTree,rightTree);
 
    // And apply additional selections if necessary
-   if (!joinVariables.empty()) {
-      std::vector<Register*> conditions;
-      for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
-         conditions.push_back(leftBindings[*iter]);
-         conditions.push_back(rightBindings[*iter]);
-      }
-      result=new Selection(result,conditions);
-   }
+   result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,~0u);
 
    return result;
 }
@@ -208,16 +219,7 @@ static Operator* translateMergeJoin(Runtime& runtime,const std::map<unsigned,Reg
    Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail);
 
    // And apply additional selections if necessary
-   if (joinVariables.size()>1) {
-      std::vector<Register*> conditions;
-      for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
-         if ((*iter)!=joinOn) {
-            conditions.push_back(leftBindings[*iter]);
-            conditions.push_back(rightBindings[*iter]);
-         }
-      }
-      result=new Selection(result,conditions);
-   }
+   result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,joinOn);
 
    return result;
 }
@@ -251,16 +253,7 @@ static Operator* translateHashJoin(Runtime& runtime,const std::map<unsigned,Regi
    Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail);
 
    // And apply additional selections if necessary
-   if (joinVariables.size()>1) {
-      std::vector<Register*> conditions;
-      for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
-         if ((*iter)!=joinOn) {
-            conditions.push_back(leftBindings[*iter]);
-            conditions.push_back(rightBindings[*iter]);
-         }
-      }
-      result=new Selection(result,conditions);
-   }
+   result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,joinOn);
 
    return result;
 }

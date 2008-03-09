@@ -14,18 +14,28 @@ class Selection : public Operator
    std::vector<Register*> predicates;
    /// The input
    Operator* input;
+   /// Check for equal?
+   bool equal;
+
+   /// Equal
+   class Equal;
+   /// Not eqaul
+   class NotEqual;
+
+   /// Constructor
+   Selection(Operator* input,const std::vector<Register*>& predicates,bool equal);
 
    public:
-   /// Constructor
-   Selection(Operator* input,const std::vector<Register*>& predicates);
    /// Destructor
    ~Selection();
 
    /// Produce the first tuple
-   unsigned first();
+   virtual unsigned first() = 0;
    /// Produce the next tuple
-   unsigned next();
+   virtual unsigned next() = 0;
 
+   /// Create a selection
+   static Selection* create(Operator* input,const std::vector<Register*>& predicates,bool equal);
    /// Print the operator tree. Debugging only.
    void print(unsigned indent);
 };
