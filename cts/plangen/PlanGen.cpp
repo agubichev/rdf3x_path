@@ -202,7 +202,7 @@ static unsigned getAggregatedCardinality(Database& db,Database::DataOrder order,
       db.getStatistics(order).lookup(c1,result);
       return (result.card+result.prefix1Card-1)/result.prefix1Card;
    } else {
-      return db.getFacts(order).getCardinality();
+      return db.getAggregatedFacts(order).getLevel2Groups();
    }
 }
 //---------------------------------------------------------------------------
