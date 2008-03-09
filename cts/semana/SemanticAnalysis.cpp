@@ -48,12 +48,24 @@ static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
    return false;
 }
 //---------------------------------------------------------------------------
-static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& filter)
+static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
    // Encode an element for the query graph
 {
    // Check if the id is bound somewhere
    if (!binds(group,input.id))
       return false;
+
+   // A complex filter? XXX handles only primitive filters
+   if ((input.values.size()==1)&&(input.values[0].type==SPARQLParser::Element::Variable)) {
+      if (!binds(group,input.id))
+         return input.type==SPARQLParser::Filter::Exclude;
+      QueryGraph::ComplexFilter filter;
+      filter.id1=input.id;
+      filter.id2=input.values[0].id;
+      filter.equal=(input.type==SPARQLParser::Filter::Normal);
+      output.complexFilters.push_back(filter);
+      return true;
+   }
 
    // Resolve all values
    std::set<unsigned> values;
@@ -64,6 +76,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
    }
 
    // Construct the filter
+   QueryGraph::Filter filter;
    filter.id=input.id;
    filter.values.clear();
    if (input.type!=SPARQLParser::Filter::Path) {
@@ -100,6 +113,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
       }
    }
 
+   output.filters.push_back(filter);
    return true;
 }
 //---------------------------------------------------------------------------
@@ -121,12 +135,10 @@ static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& gro
 
    // Encode the filter conditions
    for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.filters.begin(),limit=group.filters.end();iter!=limit;++iter) {
-      QueryGraph::Filter filter;
-      if (!encodeFilter(db,group,*iter,filter)) {
+      if (!encodeFilter(db,group,*iter,output)) {
          // The filter variable is not bound. This will produce an empty result
          return false;
       }
-      output.filters.push_back(filter);
    }
 
    // Encode all optional parts

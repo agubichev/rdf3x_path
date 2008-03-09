@@ -187,8 +187,6 @@ void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned
          throw ParserException("')' expected");
    } else if ((token==SPARQLLexer::Equal)||(token==SPARQLLexer::NotEqual)) {
       Element e=parsePatternElement(group,localVars);
-      if (e.type==Element::Variable)
-         throw ParserException("variable filters not yet implemented");
       values.push_back(e);
       if (lexer.getNext()!=SPARQLLexer::RParen)
          throw ParserException("')' expected");

@@ -48,6 +48,8 @@ class PlanGen
    /// Generate a union part
    Problem* buildUnion(const std::vector<QueryGraph::SubQuery>& query,unsigned id);
 
+   /// Greedily add complex filter expressions
+   Plan* addComplexFilters(Plan* plan,const QueryGraph::SubQuery& query);
    /// Translate a query into an operator tree
    Plan* translate(const QueryGraph::SubQuery& query);
 

@@ -1,5 +1,6 @@
 #include "cts/plangen/PlanGen.hpp"
 #include "cts/plangen/Costs.hpp"
+#include "cts/codegen/CodeGen.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
@@ -540,6 +541,67 @@ PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,
    return result;
 }
 //---------------------------------------------------------------------------
+static bool isComplexFilterApplicable(const QueryGraph::ComplexFilter& filter,const std::set<unsigned> leftVariables,const std::set<unsigned>& rightVariables)
+   // Check if a complex filter is applicable here
+{
+   if ((leftVariables.count(filter.id1))&&(!rightVariables.count(filter.id1))&&(!leftVariables.count(filter.id2))&&(rightVariables.count(filter.id2)))
+      return true;
+   if ((!leftVariables.count(filter.id1))&&(rightVariables.count(filter.id1))&&(leftVariables.count(filter.id2))&&(!rightVariables.count(filter.id2)))
+      return true;
+   return false;
+}
+//---------------------------------------------------------------------------
+Plan* PlanGen::addComplexFilters(Plan* plan,const QueryGraph::SubQuery& query)
+   // Greedily add complex filter expressions
+{
+   switch (plan->op) {
+      case Plan::ComplexFilter:
+         // Should never happen!
+         break;
+      case Plan::Union:
+      case Plan::MergeUnion:
+         // A nested subquery starts here, stop
+         break;
+      case Plan::IndexScan:
+      case Plan::AggregatedIndexScan:
+      case Plan::Filter:
+      case Plan::NestedLoopFilter:
+         // We reached a leaf. XXX check for complex filters involving a single pattern
+         break;
+      case Plan::NestedLoopJoin:
+      case Plan::MergeJoin:
+      case Plan::HashJoin:
+         // A join
+         {
+            plan->left=addComplexFilters(plan->left,query);
+            plan->right=addComplexFilters(plan->right,query);
+            std::set<unsigned> leftVariables,rightVariables;
+            CodeGen::collectVariables(leftVariables,plan->left);
+            CodeGen::collectVariables(rightVariables,plan->right);
+            for (vector<QueryGraph::ComplexFilter>::const_iterator iter=query.complexFilters.begin(),limit=query.complexFilters.end();iter!=limit;++iter) {
+               if (isComplexFilterApplicable(*iter,leftVariables,rightVariables)) {
+                  Plan* p=plans.alloc();
+                  p->op=Plan::ComplexFilter;
+                  p->opArg=0;
+                  p->left=plan;
+                  p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::ComplexFilter*>(&(*iter)));
+                  // XXX derive correct statistics, propagate up!
+                  p->cardinality=plan->cardinality;
+                  p->costs=plan->costs;
+                  p->ordering=plan->ordering;
+                  p->next=0;
+                  plan=p;
+               }
+            }
+         }
+         break;
+      case Plan::HashGroupify:
+         plan->left=addComplexFilters(plan->left,query);
+         break;
+   }
+   return plan;
+}
+//---------------------------------------------------------------------------
 Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    // Translate a query into an operator tree
 {
@@ -669,11 +731,19 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
          }
       }
    }
-
-   // Return the complete plan
+   // Extract the bestplan
    if (!dpTable.back())
       return 0;
-   return dpTable.back()->plans;
+   Plan* plan=dpTable.back()->plans;
+   if (!plan)
+      return 0;
+
+   // Greedily add complex filter predicates
+   if (!query.complexFilters.empty())
+      plan=addComplexFilters(plan,query);
+
+   // Return the complete plan
+   return plan;
 }
 //---------------------------------------------------------------------------
 Plan* PlanGen::translate(Database& db,const QueryGraph& query)

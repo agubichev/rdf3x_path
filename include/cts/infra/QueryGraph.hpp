@@ -41,6 +41,13 @@ class QueryGraph
       /// Negative filter?
       bool exclude;
    };
+   /// A (potentially) complex filter. Currently very limited.
+   struct ComplexFilter {
+      /// The ids
+      unsigned id1,id2;
+      /// Test for  equal?
+      bool equal;
+   };
    /// Description of a subquery
    struct SubQuery {
       /// The nodes
@@ -49,6 +56,8 @@ class QueryGraph
       std::vector<Edge> edges;
       /// The filter conditions
       std::vector<Filter> filters;
+      /// The complex filter conditions
+      std::vector<ComplexFilter> complexFilters;
       /// Optional subqueries
       std::vector<SubQuery> optional;
       /// Union subqueries

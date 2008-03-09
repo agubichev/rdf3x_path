@@ -111,6 +111,7 @@ static void collectVariables(const std::map<unsigned,Register*>& context,std::se
       case Plan::HashGroupify:
       case Plan::Filter:
       case Plan::NestedLoopFilter:
+      case Plan::ComplexFilter:
          collectVariables(context,variables,plan->left);
          break;
 
@@ -328,6 +329,32 @@ static Operator* translateNestedLoopFilter(Runtime& runtime,const std::map<unsig
    return result;
 }
 //---------------------------------------------------------------------------
+static Operator* translateComplexFilter(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate a complex filter into an operator tree
+{
+   const QueryGraph::ComplexFilter& filter=*reinterpret_cast<QueryGraph::ComplexFilter*>(plan->right);
+
+   // Build the input trees
+   std::set<unsigned> newProjection=projection;
+   newProjection.insert(filter.id1);
+   newProjection.insert(filter.id2);
+   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
+
+   // Build the operator
+   std::vector<Register*> condition;
+   condition.push_back(bindings[filter.id1]);
+   condition.push_back(bindings[filter.id2]);
+   Operator* result=Selection::create(tree,condition,filter.equal);
+
+   // Cleanup the binding
+   if (!projection.count(filter.id1))
+      bindings.erase(filter.id1);
+   if (!projection.count(filter.id2))
+      bindings.erase(filter.id2);
+
+   return result;
+}
+//---------------------------------------------------------------------------
 static Operator* translateUnion(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a union into an operator tree
 {
@@ -409,6 +436,7 @@ static Operator* translatePlan(Runtime& runtime,const std::map<unsigned,Register
       case Plan::HashGroupify: return translateHashGroupify(runtime,context,projection,bindings,registers,plan);
       case Plan::Filter: return translateFilter(runtime,context,projection,bindings,registers,plan);
       case Plan::NestedLoopFilter: return translateNestedLoopFilter(runtime,context,projection,bindings,registers,plan);
+      case Plan::ComplexFilter: return translateComplexFilter(runtime,context,projection,bindings,registers,plan);
       case Plan::Union: return translateUnion(runtime,context,projection,bindings,registers,plan);
       case Plan::MergeUnion: return translateMergeUnion(runtime,context,projection,bindings,registers,plan);
    }
@@ -475,5 +503,11 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
    tree=new ResultsPrinter(runtime.getDatabase(),tree,output,duplicateHandling,silent);
 
    return tree;
+}
+//---------------------------------------------------------------------------
+void CodeGen::collectVariables(std::set<unsigned>& variables,Plan* plan)
+   // Collect all variables contained in a plan
+{
+   ::collectVariables(std::map<unsigned,Register*>(),variables,plan);
 }
 //---------------------------------------------------------------------------
