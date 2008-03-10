@@ -321,6 +321,14 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    return result;
 }
 //---------------------------------------------------------------------------
+static double buildMaxSel(double sel,unsigned hits1,unsigned card1,unsigned hits2,unsigned card2)
+   // Update the maximum selectivity
+{
+   double s1=static_cast<double>(hits1)/static_cast<double>(card1);
+   double s2=static_cast<double>(hits2)/static_cast<double>(card2);
+   return max(sel,max(s1,s2));
+}
+//---------------------------------------------------------------------------
 PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& query,const QueryGraph::Edge& edge)
    // Build the informaion about a join
 {
@@ -329,50 +337,75 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
    result.left.set(edge.from);
    result.right.set(edge.to);
 
+   // Extract patterns
+   const QueryGraph::Node& l=query.nodes[edge.from],&r=query.nodes[edge.to];
+   Database::DataOrder lo=Database::Order_Subject_Predicate_Object,ro=Database::Order_Subject_Predicate_Object;
+   unsigned l1=l.constSubject?l.subject:~0u,l2=l.constPredicate?l.predicate:~0u,l3=l.constObject?l.object:~0u;
+   unsigned r1=l.constSubject?r.subject:~0u,r2=r.constPredicate?r.predicate:~0u,r3=r.constObject?r.object:~0u;
+   maximizePrefix(lo,l1,l2,l3);
+   maximizePrefix(ro,r1,r2,r3);
+
+   // Query the statistics
+   StatisticsSegment::Bucket ls,rs;
+   if (~l3) {
+      db->getStatistics(lo).lookup(l1,l2,l3,ls);
+   } else if (~l2) {
+      db->getStatistics(lo).lookup(l1,l2,ls);
+   } else if (~l1) {
+      db->getStatistics(lo).lookup(l1,ls);
+   } else {
+      db->getStatistics(lo).lookup(ls);
+   }
+   if (~r3) {
+      db->getStatistics(ro).lookup(r1,r2,r3,rs);
+   } else if (~r2) {
+      db->getStatistics(ro).lookup(r1,r2,rs);
+   } else if (~r1) {
+      db->getStatistics(ro).lookup(r1,rs);
+   } else {
+      db->getStatistics(ro).lookup(rs);
+   }
+   if (!ls.card) ls.card=1;
+   if (!rs.card) rs.card=1;
+
    // Estimate the selectivity
-   double sel=0.1; bool first=true;
-   for (unsigned index=0;index<2;index++) {
-      unsigned id=index?edge.from:edge.to;
-      if (id>=query.nodes.size())
-          continue;
-      const QueryGraph::Node& n=query.nodes[id];
-      unsigned card;
-      if (n.constSubject) {
-         if (n.constPredicate) {
-            if (n.constObject)
-               card=1; else
-               card=db->getFacts(Database::Order_Object_Subject_Predicate).getLevel1Groups();
-         } else {
-            if (n.constObject)
-               card=db->getFacts(Database::Order_Predicate_Object_Subject).getLevel1Groups(); else
-               card=db->getFacts(Database::Order_Predicate_Object_Subject).getLevel2Groups();
-         }
-      } else if (n.constPredicate) {
-         if (n.constObject)
-            card=db->getFacts(Database::Order_Subject_Predicate_Object).getLevel1Groups(); else
-            card=db->getFacts(Database::Order_Subject_Object_Predicate).getLevel2Groups();
-      } else if (n.constObject) {
-         card=db->getFacts(Database::Order_Subject_Predicate_Object).getLevel2Groups();
-      } else {
-         card=db->getFacts(Database::Order_Subject_Predicate_Object).getCardinality();
+   double sel=max(1/ls.card,1/rs.card);
+   for (vector<unsigned>::const_iterator iter=edge.common.begin(),limit=edge.common.end();iter!=limit;++iter) {
+      unsigned v=(*iter);
+      if ((v==l.subject)&&(!l.constSubject)) {
+         if ((v==r.subject)&&(!r.constSubject))
+            sel=buildMaxSel(sel,ls.val1S,ls.card,rs.val1S,rs.card);
+         if ((v==r.predicate)&&(!r.constPredicate))
+            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.val2S,rs.card);
+         if ((v==r.object)&&(!r.constObject))
+            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.val3S,rs.card);
       }
-      double s=static_cast<double>(card)/db->getFacts(Database::Order_Subject_Predicate_Object).getCardinality();
-      if (first||(s>sel)) {
-         sel=s;
-         first=false;
+      if ((v==l.predicate)&&(!l.constPredicate)) {
+         if ((v==r.subject)&&(!r.constSubject))
+            sel=buildMaxSel(sel,ls.val2S,ls.card,rs.val1P,rs.card);
+         if ((v==r.predicate)&&(!r.constPredicate))
+            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.val2P,rs.card);
+         if ((v==r.object)&&(!r.constObject))
+            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.val3P,rs.card);
+      }
+      if ((v==l.object)&&(!l.constObject)) {
+         if ((v==r.subject)&&(!r.constSubject))
+            sel=buildMaxSel(sel,ls.val3S,ls.card,rs.val1O,rs.card);
+         if ((v==r.predicate)&&(!r.constPredicate))
+            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.val2O,rs.card);
+         if ((v==r.object)&&(!r.constObject))
+            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.val3O,rs.card);
       }
    }
    result.selectivity=sel;
 
    // Look up suitable orderings
-   if (result.selectivity==1) // Distinguish real joins from cross products
-      result.selectivity=0.999;
    if (!edge.common.empty()) {
       result.ordering=edge.common.front(); // XXX multiple orderings possible
    } else {
       // Cross product
       result.ordering=(~0u)-1;
-      result.selectivity=1;
+      result.selectivity=-1;
    }
 
    return result;
@@ -676,7 +709,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                      selectivity=(*iter3).selectivity;
                      for (++iter3;iter3!=limit3;++iter3) {
                         joinOrderings.push_back((*iter3).ordering);
-                        selectivity*=(*iter3).selectivity;
+                        selectivity=min(selectivity,(*iter3).selectivity);
                      }
                      break;
                   }
@@ -703,13 +736,13 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         }
                      }
                      // Try a hash join
-                     if (selectivity<1) {
+                     if (selectivity>=0) {
                         Plan* p=plans.alloc();
                         p->op=Plan::HashJoin;
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        p->cardinality=min(leftPlan->cardinality*min(selectivity,rightPlan->cardinality),rightPlan->cardinality*min(selectivity,leftPlan->cardinality));
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
