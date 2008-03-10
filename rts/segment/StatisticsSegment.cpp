@@ -31,6 +31,43 @@ static void readBucket(const unsigned char* pos,StatisticsSegment::Bucket& resul
    result.val3O=Segment::readUint32Aligned(pos+68);
 }
 //---------------------------------------------------------------------------
+void StatisticsSegment::lookup(Bucket& result)
+   // Derive a bucket
+{
+   // Prepare the boundaries
+   memset(&result,0,sizeof(result));
+   result.start1=0;
+   result.start2=0;
+   result.start3=0;
+   result.stop1=~0u;
+   result.stop2=~0u;
+   result.stop3=~0u;
+
+   // Aggregate over all buckers
+   {
+      BufferReference page(readShared(statisticsPage));
+      const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+      unsigned count=Segment::readUint32Aligned(data);
+      data+=4;
+      for (unsigned index=0;index<count;index++) {
+         Bucket b;
+         readBucket(data+(index*(18*4)),b);
+         result.prefix1Card+=b.prefix1Card;
+         result.prefix2Card+=b.prefix2Card;
+         result.card+=b.card;
+         result.val1S+=b.val1S;
+         result.val1P+=b.val1P;
+         result.val1O+=b.val1O;
+         result.val2S+=b.val2S;
+         result.val2P+=b.val2P;
+         result.val2O+=b.val2O;
+         result.val3S+=b.val3S;
+         result.val3P+=b.val3P;
+         result.val3O+=b.val3O;
+      }
+   }
+}
+//---------------------------------------------------------------------------
 static bool findBucket(BufferReference& page,unsigned value1,StatisticsSegment::Bucket& result)
    // Find the first bucket containing value1
 {

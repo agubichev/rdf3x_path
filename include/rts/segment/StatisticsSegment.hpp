@@ -32,6 +32,8 @@ class StatisticsSegment : public Segment
    StatisticsSegment(BufferManager& bufferManager,unsigned statisticsPage);
 
    /// Derive a bucket
+   void lookup(Bucket& result);
+   /// Derive a bucket
    void lookup(unsigned value1,Bucket& result);
    /// Derive a bucket
    void lookup(unsigned value1,unsigned value2,Bucket& result);
