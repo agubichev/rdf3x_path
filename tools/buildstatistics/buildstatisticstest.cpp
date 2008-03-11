@@ -20,6 +20,6 @@ int main(int argc,char* argv[])
    }
 
    // Compute the statistics
-   buildAndShowStatistics(db,Database::Order_Subject_Predicate_Object);
+   buildAndShowStatistics(db,Database::Order_Predicate_Object_Subject);
 }
 //---------------------------------------------------------------------------

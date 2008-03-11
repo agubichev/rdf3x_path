@@ -1,5 +1,5 @@
 #include "rts/database/Database.hpp"
-#include "rts/segment/AggregatedFactsSegment.hpp"
+#include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <iostream>
 #include <vector>
@@ -48,10 +48,10 @@ unsigned findJoins(Database& db,Database::DataOrder order,map<unsigned,unsigned>
    unsigned start=(*counts.begin()).first;
 
    // Scan the index
-   AggregatedFactsSegment::Scan scan;
+   FullyAggregatedFactsSegment::Scan scan;
    map<unsigned,unsigned>::const_iterator iter=counts.begin(),limit=counts.end();
    unsigned current=(*iter).first;
-   if (scan.first(db.getAggregatedFacts(order),start,0)) do {
+   if (scan.first(db.getFullyAggregatedFacts(order),start)) do {
       loopWithoutNext:
       if (scan.getValue1()==current) {
          result+=scan.getCount()*((*iter).second);
@@ -156,10 +156,19 @@ void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
 
    // Now project on individual values
    map<unsigned,unsigned> counts1,counts2,counts3;
+   bucket.prefix1Card=0; bucket.prefix2Card=0;
+   unsigned last1=~0,last2=~0u;
    for (vector<ReorderedTriple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter) {
       counts1[(*iter).value1]++;
       counts2[(*iter).value2]++;
       counts3[(*iter).value3]++;
+      if (last1!=(*iter).value1) {
+         bucket.prefix1Card++; bucket.prefix2Card++;
+         last1=(*iter).value1; last2=(*iter).value2;
+      } else if (last2!=(*iter).value2) {
+         bucket.prefix2Card++;
+         last2=(*iter).value2;
+      }
    }
 
    // And lookup join selecitivites

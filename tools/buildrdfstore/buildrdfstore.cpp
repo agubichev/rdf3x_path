@@ -1012,6 +1012,11 @@ void writeDirectory(ofstream& out,Directory& directory)
    writeUint32(buffer+bufferPos,directory.stringMapping); bufferPos+=4;
    writeUint32(buffer+bufferPos,directory.stringIndex); bufferPos+=4;
 
+   // Write the statistics
+   for (unsigned index=0;index<6;index++) {
+      writeUint32(buffer+bufferPos,directory.statistics[6]); bufferPos+=4;
+   }
+
    // Pad the page and write it to the beginning of the file
    for (unsigned index=bufferPos;index<pageSize;index++)
       buffer[index]=0;
