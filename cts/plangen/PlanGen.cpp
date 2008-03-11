@@ -2,6 +2,7 @@
 #include "cts/plangen/Costs.hpp"
 #include "cts/codegen/CodeGen.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
+#include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
 #include <map>
@@ -161,17 +162,20 @@ static unsigned getCardinality(Database& db,Database::DataOrder order,unsigned c
 {
    maximizePrefix(order,c1,c2,c3);
 
-   // Query the statistics
-   StatisticsSegment::Bucket result;
+   // Lookup the cardinality
    if (~c3) {
       return 1;
    } else if (~c2) {
-      db.getStatistics(order).lookup(c1,c2,result);
-      return result.card;
+      AggregatedFactsSegment::Scan scan;
+      if (scan.first(db.getAggregatedFacts(order),c1,c2))
+         return scan.getCount();
+      return 1;
    } else if (~c1) {
-      db.getStatistics(order).lookup(c1,result);
-      return result.card;
-   } else { 
+      FullyAggregatedFactsSegment::Scan scan;
+      if (scan.first(db.getFullyAggregatedFacts(order),c1))
+         return scan.getCount();
+      return 1;
+   } else {
       return db.getFacts(order).getCardinality();
    }
 }
@@ -223,7 +227,9 @@ static unsigned getAggregatedCardinality(Database& db,Database::DataOrder order,
       return 1;
    } else if (~c1) {
       db.getStatistics(order).lookup(c1,result);
-      return (result.card+result.prefix1Card-1)/result.prefix1Card;
+      if (result.prefix1Card)
+         return (result.card+result.prefix1Card-1)/result.prefix1Card;
+      return 1;
    } else {
       return db.getAggregatedFacts(order).getLevel2Groups();
    }
@@ -241,12 +247,20 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
    plan->next=0;
 
    // Compute the statistics
-   unsigned scanned;
-   plan->cardinality=scanned=getAggregatedCardinality(*db,order,value1C,value2C);
+   unsigned scanned=getAggregatedCardinality(*db,order,value1C,value2C);
+   unsigned fullSize=getCardinality(*db,order,value1C,value2C,~0u);
+   if (scanned>fullSize)
+      scanned=fullSize-1;
+   if (!scanned) scanned=1;
+   plan->cardinality=scanned;
    if (!~value1) {
       plan->ordering=value2;
    } else {
       scanned=getAggregatedCardinality(*db,order,value1C,~0u);
+      fullSize=getCardinality(*db,order,value1C,~0u,~0u);
+      if (scanned>fullSize)
+         scanned=fullSize-1;
+      if (!scanned) scanned=1;
       plan->ordering=value1;
    }
    unsigned pages=1+static_cast<unsigned>(db->getAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getAggregatedFacts(order).getLevel2Groups())));
@@ -395,59 +409,59 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
    if (!rs.card) rs.card=1;
 
    // Estimate the selectivity
-   double sel=(1.0/(ls.card*rs.card));
+   double lsel=(1.0/(ls.card*rs.card)),rsel=lsel;
    for (vector<unsigned>::const_iterator iter=edge.common.begin(),limit=edge.common.end();iter!=limit;++iter) {
       unsigned v=(*iter);
       if (v==lv1) {
          if ((v==r.subject)&&(!r.constSubject))
-            sel=buildMaxSel(sel,ls.val1S,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val1S,ls.card,rs.card);
          if ((v==r.predicate)&&(!r.constPredicate))
-            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val1P,ls.card,rs.card);
          if ((v==r.object)&&(!r.constObject))
-            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val1O,ls.card,rs.card);
       }
       if (v==lv2) {
          if ((v==r.subject)&&(!r.constSubject))
-            sel=buildMaxSel(sel,ls.val2S,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val2S,ls.card,rs.card);
          if ((v==r.predicate)&&(!r.constPredicate))
-            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val2P,ls.card,rs.card);
          if ((v==r.object)&&(!r.constObject))
-            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val2O,ls.card,rs.card);
       }
       if (v==lv3) {
          if ((v==r.subject)&&(!r.constSubject))
-            sel=buildMaxSel(sel,ls.val3S,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val3S,ls.card,rs.card);
          if ((v==r.predicate)&&(!r.constPredicate))
-            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val3P,ls.card,rs.card);
          if ((v==r.object)&&(!r.constObject))
-            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.card);
+            lsel=buildMaxSel(lsel,ls.val3O,ls.card,rs.card);
       }
       if (v==rv1) {
          if ((v==l.subject)&&(!l.constSubject))
-            sel=buildMaxSel(sel,rs.val1S,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val1S,rs.card,ls.card);
          if ((v==l.predicate)&&(!l.constPredicate))
-            sel=buildMaxSel(sel,rs.val1P,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val1P,rs.card,ls.card);
          if ((v==l.object)&&(!l.constObject))
-            sel=buildMaxSel(sel,ls.val1P,ls.card,ls.card);
+            rsel=buildMaxSel(rsel,ls.val1O,ls.card,ls.card);
       }
       if (v==rv2) {
          if ((v==l.subject)&&(!l.constSubject))
-            sel=buildMaxSel(sel,rs.val2S,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val2S,rs.card,ls.card);
          if ((v==l.predicate)&&(!l.constPredicate))
-            sel=buildMaxSel(sel,rs.val2P,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val2P,rs.card,ls.card);
          if ((v==l.object)&&(!l.constObject))
-            sel=buildMaxSel(sel,rs.val2P,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val2O,rs.card,ls.card);
       }
       if (v==rv3) {
          if ((v==l.subject)&&(!l.constSubject))
-            sel=buildMaxSel(sel,rs.val3S,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val3S,rs.card,ls.card);
          if ((v==l.predicate)&&(!l.constPredicate))
-            sel=buildMaxSel(sel,rs.val3P,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val3P,rs.card,ls.card);
          if ((v==l.object)&&(!l.constObject))
-            sel=buildMaxSel(sel,rs.val3P,rs.card,ls.card);
+            rsel=buildMaxSel(rsel,rs.val3O,rs.card,ls.card);
       }
    }
-   result.selectivity=sel;
+   result.selectivity=(lsel+rsel)/2.0;
 
    // Look up suitable orderings
    if (!edge.common.empty()) {
@@ -794,6 +808,16 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->right=rightPlan;
                         p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
+                        p->ordering=~0u;
+                        addPlan(problem,p);
+                        // Second order
+                        p=plans.alloc();
+                        p->op=Plan::HashJoin;
+                        p->opArg=0;
+                        p->left=rightPlan;
+                        p->right=leftPlan;
+                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(rightPlan->cardinality,leftPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
                      } else {

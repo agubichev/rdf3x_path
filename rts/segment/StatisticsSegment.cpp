@@ -128,6 +128,8 @@ void StatisticsSegment::lookup(Bucket& result)
 static bool findBucket(BufferReference& page,unsigned value1,StatisticsSegment::Bucket& result)
    // Find the first bucket containing value1
 {
+   memset(&result,0,sizeof(result));
+
    const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
    unsigned count=Segment::readUint32Aligned(data);
    data+=4;
