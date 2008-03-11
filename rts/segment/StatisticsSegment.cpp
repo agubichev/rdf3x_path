@@ -8,6 +8,48 @@ StatisticsSegment::StatisticsSegment(BufferManager& bufferManager,unsigned stati
 {
 }
 //---------------------------------------------------------------------------
+static unsigned readBucketStart1(BufferReference& page,unsigned slot)
+   // Read the start of a bucket
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   return Segment::readUint32Aligned(data+4+(slot*18*4));
+}
+//---------------------------------------------------------------------------
+static unsigned readBucketStart2(BufferReference& page,unsigned slot)
+   // Read the start of a bucket
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   return Segment::readUint32Aligned(data+4+(slot*18*4)+4);
+}
+//---------------------------------------------------------------------------
+static unsigned readBucketStart3(BufferReference& page,unsigned slot)
+   // Read the start of a bucket
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   return Segment::readUint32Aligned(data+4+(slot*18*4)+8);
+}
+//---------------------------------------------------------------------------
+static unsigned readBucketStop1(BufferReference& page,unsigned slot)
+   // Read the end of a bucket
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   return Segment::readUint32Aligned(data+4+(slot*18*4)+12);
+}
+//---------------------------------------------------------------------------
+static unsigned readBucketStop2(BufferReference& page,unsigned slot)
+   // Read the end of a bucket
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   return Segment::readUint32Aligned(data+4+(slot*18*4)+16);
+}
+//---------------------------------------------------------------------------
+static unsigned readBucketStop3(BufferReference& page,unsigned slot)
+   // Read the end of a bucket
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   return Segment::readUint32Aligned(data+4+(slot*18*4)+20);
+}
+//---------------------------------------------------------------------------
 static void readBucket(const unsigned char* pos,StatisticsSegment::Bucket& result)
    // Unpack a bucket
 {
@@ -31,6 +73,37 @@ static void readBucket(const unsigned char* pos,StatisticsSegment::Bucket& resul
    result.val3O=Segment::readUint32Aligned(pos+68);
 }
 //---------------------------------------------------------------------------
+static void aggregateBuckets(BufferReference& page,unsigned start,unsigned stop,StatisticsSegment::Bucket& result)
+   // Aggregate buckets
+{
+   const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
+   data+=4;
+   for (unsigned index=start;index<stop;index++) {
+      StatisticsSegment::Bucket b;
+      readBucket(data+(index*(18*4)),b);
+      result.prefix1Card+=b.prefix1Card;
+      result.prefix2Card+=b.prefix2Card;
+      result.card+=b.card;
+      result.val1S+=b.val1S;
+      result.val1P+=b.val1P;
+      result.val1O+=b.val1O;
+      result.val2S+=b.val2S;
+      result.val2P+=b.val2P;
+      result.val2O+=b.val2O;
+      result.val3S+=b.val3S;
+      result.val3P+=b.val3P;
+      result.val3O+=b.val3O;
+   }
+   if (start<stop) {
+      result.start1=readBucketStart1(page,start);
+      result.start2=readBucketStart2(page,start);
+      result.start3=readBucketStart3(page,start);
+      result.stop1=readBucketStop1(page,stop-1);
+      result.stop2=readBucketStop2(page,stop-1);
+      result.stop3=readBucketStop3(page,stop-1);
+   }
+}
+//---------------------------------------------------------------------------
 void StatisticsSegment::lookup(Bucket& result)
    // Derive a bucket
 {
@@ -48,23 +121,7 @@ void StatisticsSegment::lookup(Bucket& result)
       BufferReference page(readShared(statisticsPage));
       const unsigned char* data=static_cast<const unsigned char*>(page.getPage());
       unsigned count=Segment::readUint32Aligned(data);
-      data+=4;
-      for (unsigned index=0;index<count;index++) {
-         Bucket b;
-         readBucket(data+(index*(18*4)),b);
-         result.prefix1Card+=b.prefix1Card;
-         result.prefix2Card+=b.prefix2Card;
-         result.card+=b.card;
-         result.val1S+=b.val1S;
-         result.val1P+=b.val1P;
-         result.val1O+=b.val1O;
-         result.val2S+=b.val2S;
-         result.val2P+=b.val2P;
-         result.val2O+=b.val2O;
-         result.val3S+=b.val3S;
-         result.val3P+=b.val3P;
-         result.val3O+=b.val3O;
-      }
+      aggregateBuckets(page,0,count,result);
    }
 }
 //---------------------------------------------------------------------------
@@ -77,18 +134,24 @@ static bool findBucket(BufferReference& page,unsigned value1,StatisticsSegment::
    unsigned l=0,r=count;
    while (l<r) {
       unsigned m=(l+r)/2;
-      const unsigned char* pos=data+(m*(18*4));
-      unsigned start1=Segment::readUint32Aligned(pos),stop1=Segment::readUint32Aligned(pos+12);
+      unsigned start1=readBucketStart1(page,m),stop1=readBucketStop1(page,m);
       if ((start1<=value1)&&(value1<=stop1)) {
-         readBucket(pos,result);
-         return true;
+         l=m;
+         break;
+      } else if (value1<start1) {
+         r=m;
+      } else {
+         l=m+1;
       }
    }
    if (l<count) {
-      const unsigned char* pos=data+(l*(18*4));
-      unsigned start1=Segment::readUint32Aligned(pos),stop1=Segment::readUint32Aligned(pos+12);
-      if ((start1<=value1)&&(value1<=stop1)) {
-         readBucket(pos,result);
+      unsigned start=l+1,stop=l+1;
+      while ((start>0)&&(readBucketStop1(page,start-1)>value1))
+         --start;
+      while ((stop<count)&&(readBucketStart1(page,stop)<=value1))
+         ++stop;
+      if (start!=stop) {
+         aggregateBuckets(page,start,stop,result);
          return true;
       }
    }

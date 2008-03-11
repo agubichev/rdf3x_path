@@ -98,10 +98,9 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query
    return plan;
 }
 //---------------------------------------------------------------------------
-static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,unsigned& c3)
-   // Reshuffle values to maximize the constant prefix
+static void normalizePattern(Database::DataOrder order,unsigned& c1,unsigned& c2,unsigned& c3)
+    // Extract subject/predicate/object order
 {
-   // Reconstruct the original assignments first
    unsigned s=~0u,p=~0u,o=~0u;
    switch (order) {
       case Database::Order_Subject_Predicate_Object: s=c1; p=c2; o=c3; break;
@@ -111,20 +110,44 @@ static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,
       case Database::Order_Predicate_Subject_Object: p=c1; s=c2; o=c3; break;
       case Database::Order_Predicate_Object_Subject: p=c1; o=c2; s=c3; break;
    }
+   c1=s; c2=p; c3=o;
+}
+//---------------------------------------------------------------------------
+static void denormalizePattern(Database::DataOrder order,unsigned& s,unsigned& p,unsigned& o)
+    // Extract data order
+{
+   unsigned c1=~0u,c2=~0u,c3=~0u;
+   switch (order) {
+      case Database::Order_Subject_Predicate_Object: c1=s; c2=p; c3=o; break;
+      case Database::Order_Subject_Object_Predicate: c1=s; c2=o; c3=p; break;
+      case Database::Order_Object_Predicate_Subject: c1=o; c2=p; c3=s; break;
+      case Database::Order_Object_Subject_Predicate: c1=o; c2=s; c3=p; break;
+      case Database::Order_Predicate_Subject_Object: c1=p; c2=s; c3=o; break;
+      case Database::Order_Predicate_Object_Subject: c1=p; c2=o; c3=s; break;
+   }
+   s=c1; p=c2; o=c3;
+}
+//---------------------------------------------------------------------------
+static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,unsigned& c3)
+   // Reshuffle values to maximize the constant prefix
+{
+   // Reconstruct the original assignments first
+   unsigned s=c1,p=c2,o=c3;
+   normalizePattern(order,s,p,o);
 
    // Now find the maximum prefix
-   if (!~s) {
-      if ((!~p)||(~o)) {
+   if (~s) {
+      if ((~p)||(!~o)) {
          order=Database::Order_Subject_Predicate_Object;
          c1=s; c2=p; c3=o;
       } else {
          order=Database::Order_Subject_Object_Predicate;
          c1=s; c2=o; c3=p;
       }
-   } else if (!~p) {
+   } else if (~p) {
       order=Database::Order_Predicate_Object_Subject;
       c1=p; c2=o; c3=s;
-   } else if (!~o) {
+   } else if (~o) {
       order=Database::Order_Object_Predicate_Subject;
       c1=o; c2=p; c3=s;
    } else {
@@ -148,7 +171,7 @@ static unsigned getCardinality(Database& db,Database::DataOrder order,unsigned c
    } else if (~c1) {
       db.getStatistics(order).lookup(c1,result);
       return result.card;
-   } else {
+   } else { 
       return db.getFacts(order).getCardinality();
    }
 }
@@ -321,12 +344,11 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    return result;
 }
 //---------------------------------------------------------------------------
-static double buildMaxSel(double sel,unsigned hits1,unsigned card1,unsigned hits2,unsigned card2)
+static double buildMaxSel(double sel,unsigned hits1,unsigned card1,unsigned card2)
    // Update the maximum selectivity
 {
-   double s1=static_cast<double>(hits1)/static_cast<double>(card1);
-   double s2=static_cast<double>(hits2)/static_cast<double>(card2);
-   return max(sel,max(s1,s2));
+   double s1=static_cast<double>(hits1)/(static_cast<double>(card1)*card2);
+   return max(sel,s1);
 }
 //---------------------------------------------------------------------------
 PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& query,const QueryGraph::Edge& edge)
@@ -344,6 +366,10 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
    unsigned r1=l.constSubject?r.subject:~0u,r2=r.constPredicate?r.predicate:~0u,r3=r.constObject?r.object:~0u;
    maximizePrefix(lo,l1,l2,l3);
    maximizePrefix(ro,r1,r2,r3);
+   unsigned lv1=(!l.constSubject)?l.subject:~0u,lv2=(!l.constPredicate)?l.predicate:~0u,lv3=(!l.constObject)?l.object:~0u;
+   unsigned rv1=(!l.constSubject)?r.subject:~0u,rv2=(!r.constPredicate)?r.predicate:~0u,rv3=(!r.constObject)?r.object:~0u;
+   denormalizePattern(lo,lv1,lv2,lv3);
+   denormalizePattern(ro,rv1,rv2,rv3);
 
    // Query the statistics
    StatisticsSegment::Bucket ls,rs;
@@ -369,32 +395,56 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
    if (!rs.card) rs.card=1;
 
    // Estimate the selectivity
-   double sel=max(1/ls.card,1/rs.card);
+   double sel=(1.0/(ls.card*rs.card));
    for (vector<unsigned>::const_iterator iter=edge.common.begin(),limit=edge.common.end();iter!=limit;++iter) {
       unsigned v=(*iter);
-      if ((v==l.subject)&&(!l.constSubject)) {
+      if (v==lv1) {
          if ((v==r.subject)&&(!r.constSubject))
-            sel=buildMaxSel(sel,ls.val1S,ls.card,rs.val1S,rs.card);
+            sel=buildMaxSel(sel,ls.val1S,ls.card,rs.card);
          if ((v==r.predicate)&&(!r.constPredicate))
-            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.val2S,rs.card);
+            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.card);
          if ((v==r.object)&&(!r.constObject))
-            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.val3S,rs.card);
+            sel=buildMaxSel(sel,ls.val1P,ls.card,rs.card);
       }
-      if ((v==l.predicate)&&(!l.constPredicate)) {
+      if (v==lv2) {
          if ((v==r.subject)&&(!r.constSubject))
-            sel=buildMaxSel(sel,ls.val2S,ls.card,rs.val1P,rs.card);
+            sel=buildMaxSel(sel,ls.val2S,ls.card,rs.card);
          if ((v==r.predicate)&&(!r.constPredicate))
-            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.val2P,rs.card);
+            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.card);
          if ((v==r.object)&&(!r.constObject))
-            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.val3P,rs.card);
+            sel=buildMaxSel(sel,ls.val2P,ls.card,rs.card);
       }
-      if ((v==l.object)&&(!l.constObject)) {
+      if (v==lv3) {
          if ((v==r.subject)&&(!r.constSubject))
-            sel=buildMaxSel(sel,ls.val3S,ls.card,rs.val1O,rs.card);
+            sel=buildMaxSel(sel,ls.val3S,ls.card,rs.card);
          if ((v==r.predicate)&&(!r.constPredicate))
-            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.val2O,rs.card);
+            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.card);
          if ((v==r.object)&&(!r.constObject))
-            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.val3O,rs.card);
+            sel=buildMaxSel(sel,ls.val3P,ls.card,rs.card);
+      }
+      if (v==rv1) {
+         if ((v==l.subject)&&(!l.constSubject))
+            sel=buildMaxSel(sel,rs.val1S,rs.card,ls.card);
+         if ((v==l.predicate)&&(!l.constPredicate))
+            sel=buildMaxSel(sel,rs.val1P,rs.card,ls.card);
+         if ((v==l.object)&&(!l.constObject))
+            sel=buildMaxSel(sel,ls.val1P,ls.card,ls.card);
+      }
+      if (v==rv2) {
+         if ((v==l.subject)&&(!l.constSubject))
+            sel=buildMaxSel(sel,rs.val2S,rs.card,ls.card);
+         if ((v==l.predicate)&&(!l.constPredicate))
+            sel=buildMaxSel(sel,rs.val2P,rs.card,ls.card);
+         if ((v==l.object)&&(!l.constObject))
+            sel=buildMaxSel(sel,rs.val2P,rs.card,ls.card);
+      }
+      if (v==rv3) {
+         if ((v==l.subject)&&(!l.constSubject))
+            sel=buildMaxSel(sel,rs.val3S,rs.card,ls.card);
+         if ((v==l.predicate)&&(!l.constPredicate))
+            sel=buildMaxSel(sel,rs.val3P,rs.card,ls.card);
+         if ((v==l.object)&&(!l.constObject))
+            sel=buildMaxSel(sel,rs.val3P,rs.card,ls.card);
       }
    }
    result.selectivity=sel;
@@ -709,7 +759,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                      selectivity=(*iter3).selectivity;
                      for (++iter3;iter3!=limit3;++iter3) {
                         joinOrderings.push_back((*iter3).ordering);
-                        selectivity=min(selectivity,(*iter3).selectivity);
+                        // selectivity*=(*iter3).selectivity;
                      }
                      break;
                   }
@@ -742,7 +792,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-                        p->cardinality=min(leftPlan->cardinality*min(selectivity,rightPlan->cardinality),rightPlan->cardinality*min(selectivity,leftPlan->cardinality));
+                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
@@ -753,7 +803,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality;
                         p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
                         p->ordering=leftPlan->ordering;
                         addPlan(problem,p);
