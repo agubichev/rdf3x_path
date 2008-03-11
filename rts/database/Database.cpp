@@ -15,6 +15,8 @@ Database::Database()
       aggregatedFacts[index]=0;
       statistics[index]=0;
    }
+   for (unsigned index=0;index<3;index++)
+      fullyAggregatedFacts[index]=0;
 }
 //---------------------------------------------------------------------------
 Database::~Database()
@@ -66,6 +68,10 @@ bool Database::open(const char* fileName)
          for (unsigned index=0;index<6;index++)
             statisticsPages[index]=readUint32(page+260+4*index);
 
+// XXX fix construction!
+for (unsigned index=0;index<6;index++)
+   statisticsPages[index]=(bufferManager->getPageCount()-6+index);
+
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
             facts[index]=new FactsSegment(*bufferManager,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
@@ -96,6 +102,10 @@ void Database::close()
       aggregatedFacts[index]=0;
       delete statistics[index];
       statistics[index]=0;
+   }
+   for (unsigned index=0;index<3;index++) {
+      delete fullyAggregatedFacts[index];
+      fullyAggregatedFacts[index]=0;
    }
    delete dictionary;
    dictionary=0;

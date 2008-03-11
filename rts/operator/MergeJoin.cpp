@@ -14,6 +14,8 @@ MergeJoin::MergeJoin(Operator* left,Register* leftValue,const std::vector<Regist
 MergeJoin::~MergeJoin()
    // Destructor
 {
+   delete left;
+   delete right;
 }
 //---------------------------------------------------------------------------
 unsigned MergeJoin::first()

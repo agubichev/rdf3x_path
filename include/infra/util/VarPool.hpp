@@ -139,7 +139,7 @@ template <class T> void VarPool<T>::freeAll()
    // Delete all chunks
    while (chunks) {
       ChunkHeader* next=chunks->next;
-      delete[] reinterpret_cast<char*>(chunks->getData());
+      delete[] reinterpret_cast<char*>(chunks);
       chunks=next;
    }
 

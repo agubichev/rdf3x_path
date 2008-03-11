@@ -11,6 +11,8 @@ Union::Union(const std::vector<Operator*>& parts,const std::vector<std::vector<R
 Union::~Union()
    // Destructor
 {
+   for (std::vector<Operator*>::iterator iter=parts.begin(),limit=parts.end();iter!=limit;++iter)
+      delete *iter;
 }
 //---------------------------------------------------------------------------
 unsigned Union::firstFromPart()

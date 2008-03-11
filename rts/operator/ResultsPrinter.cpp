@@ -16,6 +16,7 @@ ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Registe
 ResultsPrinter::~ResultsPrinter()
    // Destructor
 {
+   delete input;
 }
 //---------------------------------------------------------------------------
 namespace {

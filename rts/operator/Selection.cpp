@@ -47,6 +47,7 @@ Selection* Selection::create(Operator* input,const std::vector<Register*>& predi
 Selection::~Selection()
    // Destructor
 {
+   delete input;
 }
 //---------------------------------------------------------------------------
 unsigned Selection::Equal::first()

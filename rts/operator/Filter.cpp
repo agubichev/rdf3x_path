@@ -26,6 +26,7 @@ Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& val
 Filter::~Filter()
    // Destructor
 {
+   delete input;
 }
 //---------------------------------------------------------------------------
 unsigned Filter::first()
