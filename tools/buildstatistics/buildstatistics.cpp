@@ -3,7 +3,6 @@
 #include "rts/segment/FactsSegment.hpp"
 #include <iostream>
 #include <vector>
-#include <map>
 #include <algorithm>
 //---------------------------------------------------------------------------
 using namespace std;
@@ -28,6 +27,10 @@ struct ReorderedTriple {
    unsigned value1,value2,value3;
 };
 //---------------------------------------------------------------------------
+struct SortByValue1 { bool operator()(const ReorderedTriple& a,const ReorderedTriple& b) const { return a.value1<b.value1; } };
+struct SortByValue2 { bool operator()(const ReorderedTriple& a,const ReorderedTriple& b) const { return a.value2<b.value2; } };
+struct SortByValue3 { bool operator()(const ReorderedTriple& a,const ReorderedTriple& b) const { return a.value3<b.value3; } };
+//---------------------------------------------------------------------------
 /// Number of buckets per page
 static const unsigned bucketsPerPage = (BufferManager::pageSize-4) / sizeof(Bucket);
 //---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ ReorderedTriple buildTriple(const FactsSegment::Scan& scan)
    return result;
 }
 //---------------------------------------------------------------------------
-unsigned findJoins(Database& db,Database::DataOrder order,map<unsigned,unsigned>& counts)
+unsigned findJoins(Database& db,Database::DataOrder order,vector<pair<unsigned,unsigned> >& counts)
    // Find the number of join partners
 {
    unsigned result=0;
@@ -49,7 +52,7 @@ unsigned findJoins(Database& db,Database::DataOrder order,map<unsigned,unsigned>
 
    // Scan the index
    FullyAggregatedFactsSegment::Scan scan;
-   map<unsigned,unsigned>::const_iterator iter=counts.begin(),limit=counts.end();
+   vector<pair<unsigned,unsigned> >::const_iterator iter=counts.begin(),limit=counts.end();
    unsigned current=(*iter).first;
    if (scan.first(db.getFullyAggregatedFacts(order),start)) do {
       loopWithoutNext:
@@ -154,14 +157,10 @@ void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
       return;
    }
 
-   // Now project on individual values
-   map<unsigned,unsigned> counts1,counts2,counts3;
+   // Compute prefix counts
    bucket.prefix1Card=0; bucket.prefix2Card=0;
    unsigned last1=~0,last2=~0u;
    for (vector<ReorderedTriple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter) {
-      counts1[(*iter).value1]++;
-      counts2[(*iter).value2]++;
-      counts3[(*iter).value3]++;
       if (last1!=(*iter).value1) {
          bucket.prefix1Card++; bucket.prefix2Card++;
          last1=(*iter).value1; last2=(*iter).value2;
@@ -170,6 +169,24 @@ void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
          last2=(*iter).value2;
       }
    }
+
+   // Now project on individual values
+   vector<pair<unsigned,unsigned> > counts1,counts2,counts3;
+   sort(triples.begin(),triples.end(),SortByValue1());
+   for (vector<ReorderedTriple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter)
+      if ((counts1.empty())||((*iter).value1)!=counts1.back().first)
+         counts1.push_back(pair<unsigned,unsigned>((*iter).value1,1)); else
+         counts1.back().second++;
+   sort(triples.begin(),triples.end(),SortByValue2());
+   for (vector<ReorderedTriple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter)
+      if ((counts2.empty())||((*iter).value2)!=counts2.back().first)
+         counts2.push_back(pair<unsigned,unsigned>((*iter).value2,1)); else
+         counts2.back().second++;
+   sort(triples.begin(),triples.end(),SortByValue3());
+   for (vector<ReorderedTriple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter)
+      if ((counts3.empty())||((*iter).value3)!=counts3.back().first)
+         counts3.push_back(pair<unsigned,unsigned>((*iter).value3,1)); else
+         counts3.back().second++;
 
    // And lookup join selecitivites
    bucket.val1S=findJoins(db,Database::Order_Subject_Predicate_Object,counts1);
