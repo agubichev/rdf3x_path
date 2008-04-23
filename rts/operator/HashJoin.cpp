@@ -2,24 +2,6 @@
 #include "rts/runtime/Runtime.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
-/// Helper
-class HashJoin::Rehasher {
-   private:
-   /// The hash table
-   std::vector<Entry*>& hashTable;
-
-   public:
-   /// Constructor
-   Rehasher(std::vector<Entry*>& hashTable) : hashTable(hashTable) {}
-
-   /// Rehash
-   void operator()(Entry* g) {
-      Entry*& slot=hashTable[g->key&(hashTable.size()-1)];
-      g->next=slot;
-      slot=g;
-   }
-};
-//---------------------------------------------------------------------------
 HashJoin::HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail)
    : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned))
    // Constructor
@@ -29,59 +11,110 @@ HashJoin::HashJoin(Operator* left,Register* leftValue,const std::vector<Register
 HashJoin::~HashJoin()
    // Destructor
 {
+   delete left;
+   delete right;
+}
+//---------------------------------------------------------------------------
+static inline unsigned hash1(unsigned key,unsigned hashTableSize) { return key&(hashTableSize-1); }
+static inline unsigned hash2(unsigned key,unsigned hashTableSize) { return hashTableSize+((key^(key>>3))&(hashTableSize-1)); }
+//---------------------------------------------------------------------------
+void HashJoin::insert(Entry* e)
+   // Insert into the hash table
+{
+   unsigned hashTableSize=hashTable.size()/2;
+   // Try to insert
+   bool firstTable=true;
+   for (unsigned index=0;index<hashTableSize;index++) {
+      unsigned slot=firstTable?hash1(e->key,hashTableSize):hash2(e->key,hashTableSize);
+      std::swap(e,hashTable[slot]);
+      if (!e)
+         return;
+      firstTable=!firstTable;
+   }
+
+   // No place found, rehash
+   std::vector<Entry*> oldTable;
+   oldTable.resize(4*hashTableSize);
+   swap(hashTable,oldTable);
+   for (std::vector<Entry*>::const_iterator iter=oldTable.begin(),limit=oldTable.end();iter!=limit;++iter)
+      if (*iter)
+         insert(*iter);
+   insert(e);
+}
+//---------------------------------------------------------------------------
+HashJoin::Entry* HashJoin::lookup(unsigned key)
+   // Search an entry in the hash table
+{
+   unsigned hashTableSize=hashTable.size()/2;
+   Entry* e=hashTable[hash1(key,hashTableSize)];
+   if (e&&(e->key==key))
+      return e;
+   e=hashTable[hash2(key,hashTableSize)];
+   if (e&&(e->key==key))
+      return e;
+   return 0;
 }
 //---------------------------------------------------------------------------
 unsigned HashJoin::first()
    // Produce the first tuple
 {
    // Build the hash table from the left side
-   unsigned hashTableSize = 512,load=0,maxLoad=static_cast<unsigned>(0.8*hashTableSize);
+   unsigned hashTableSize = 1024;
    unsigned tailLength=leftTail.size();
    hashTable.clear();
-   hashTable.resize(hashTableSize);
+   hashTable.resize(2*hashTableSize);
    for (unsigned leftCount=left->first();leftCount;leftCount=left->next()) {
-      // Compute the slot
+      // Compute the slots
       unsigned leftKey=leftValue->value;
-      unsigned slot=leftKey&(hashTableSize-1);
+      unsigned slot1=hash1(leftKey,hashTableSize),slot2=hash2(leftKey,hashTableSize);
 
       // Scan if the entry already exists
-      bool match=false;
-      for (Entry* iter=hashTable[slot];iter;iter=iter->next)
-         if (leftKey==iter->key) {
-            // Tuple already in the table?
-            match=true;
-            for (unsigned index2=0;index2<tailLength;index2++)
-               if (leftTail[index2]->value!=iter->values[index2]) {
-                  match=false;
+      Entry* e=hashTable[slot1];
+      if ((!e)||(e->key!=leftKey))
+         e=hashTable[slot2];
+      if (e&&(e->key==leftKey)) {
+         unsigned ofs=(e==hashTable[slot1])?slot1:slot2;
+         bool match=false;
+         for (Entry* iter=e;iter;iter=iter->next)
+            if (leftKey==iter->key) {
+               // Tuple already in the table?
+               match=true;
+               for (unsigned index2=0;index2<tailLength;index2++)
+                  if (leftTail[index2]->value!=iter->values[index2]) {
+                     match=false;
+                     break;
+                  }
+               // Then aggregate
+               if (match) {
+                  iter->count+=leftCount;
                   break;
                }
-            // Then aggregate
-            if (match) {
-               iter->count+=leftCount;
-               break;
             }
-         }
-      if (match)
-         continue;
+         if (match)
+            continue;
 
-      // New tuple, append
-      Entry* e=entryPool.alloc();
-      e->next=hashTable[slot];
-      hashTable[slot]=e;
+         // Append to the current bucket
+         e=entryPool.alloc();
+         e->next=hashTable[ofs];
+         hashTable[ofs]=e;
+         e->key=leftKey;
+         e->count=leftCount;
+         for (unsigned index2=0;index2<tailLength;index2++)
+            e->values[index2]=leftTail[index2]->value;
+         continue;
+      }
+
+      // Create a new tuple
+      e=entryPool.alloc();
+      e->next=0;
       e->key=leftKey;
       e->count=leftCount;
       for (unsigned index2=0;index2<tailLength;index2++)
          e->values[index2]=leftTail[index2]->value;
 
-      // Rehash?
-      if ((++load)>=maxLoad) {
-         hashTable.clear();
-         hashTableSize*=2;
-         maxLoad=static_cast<unsigned>(0.8*hashTableSize);
-         hashTable.resize(hashTableSize);
-         Rehasher rehasher(hashTable);
-         entryPool.enumAll(rehasher);
-      }
+      // And insert it
+      insert(e);
+      hashTableSize=hashTable.size()/2;
    }
 
    // Read the first tuple from the right side
@@ -89,7 +122,7 @@ unsigned HashJoin::first()
       return false;
 
    // Setup the lookup
-   hashTableIter=hashTable[rightValue->value&(hashTableSize-1)];
+   hashTableIter=lookup(rightValue->value);
 
    return next();
 }
@@ -101,20 +134,18 @@ unsigned HashJoin::next()
    while (true) {
       // Still scanning the hash table?
       for (;hashTableIter;hashTableIter=hashTableIter->next) {
-         if (hashTableIter->key==rightValue->value) {
-            unsigned leftCount=hashTableIter->count;
-            leftValue->value=hashTableIter->key;
-            for (unsigned index=0,limit=leftTail.size();index<limit;++index)
-               leftTail[index]->value=hashTableIter->values[index];
-            hashTableIter=hashTableIter->next;
-            return leftCount*rightCount;
-         }
+         unsigned leftCount=hashTableIter->count;
+         leftValue->value=hashTableIter->key;
+         for (unsigned index=0,limit=leftTail.size();index<limit;++index)
+            leftTail[index]->value=hashTableIter->values[index];
+         hashTableIter=hashTableIter->next;
+         return leftCount*rightCount;
       }
 
       // Read the next tuple from the right
       if ((rightCount=right->next())==0)
          return false;
-      hashTableIter=hashTable[rightValue->value&(hashTable.size()-1)];
+      hashTableIter=lookup(rightValue->value);
    }
 }
 //---------------------------------------------------------------------------

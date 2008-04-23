@@ -40,6 +40,11 @@ class HashJoin : public Operator
    /// The tuple count from the right side
    unsigned rightCount;
 
+   /// Insert into the hash table
+   void insert(Entry* e);
+   /// Lookup an entry
+   inline Entry* lookup(unsigned key);
+
    public:
    /// Constructor
    HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail);
