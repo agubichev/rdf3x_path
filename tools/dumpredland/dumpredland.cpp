@@ -1,11 +1,12 @@
 #include "infra/util/Hash.hpp"
 #include <fstream>
 #include <iostream>
-#include <map>
+#include <tr1/unordered_map>
 #include <string>
 #include <vector>
 //---------------------------------------------------------------------------
 using namespace std;
+using std::tr1::unordered_map;
 //---------------------------------------------------------------------------
 static bool shouldSimplify(const string& subject,const string& predicate,const string& object)
    // Simplfy for a comparison with the VLDB paper?
@@ -76,7 +77,7 @@ static bool parseEntry(string::const_iterator& iter,string::const_iterator limit
    } else return false;
 }
 //---------------------------------------------------------------------------
-static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName,bool firstPass,bool simplify)
+static bool collectStrings(ofstream& out,unordered_map<string,unsigned>& stringMap,unordered_map<unsigned,unsigned>& hashMap,const string& fileName,bool firstPass,bool simplify)
    // Collect all strings
 {
    ifstream in(fileName.c_str());
@@ -171,7 +172,7 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
    // Remember the collisisons
    if (firstPass) {
       vector<unsigned> collisions;
-      for (map<unsigned,unsigned>::const_iterator iter=hashMap.begin(),limit=hashMap.end();iter!=limit;++iter)
+      for (unordered_map<unsigned,unsigned>::const_iterator iter=hashMap.begin(),limit=hashMap.end();iter!=limit;++iter)
          if (!(*iter).second)
             collisions.push_back((*iter).first);
       hashMap.clear();
@@ -182,7 +183,7 @@ static bool collectStrings(ofstream& out,map<string,unsigned>& stringMap,map<uns
    return true;
 }
 //---------------------------------------------------------------------------
-static unsigned mapString(map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& s)
+static unsigned mapString(unordered_map<string,unsigned>& stringMap,unordered_map<unsigned,unsigned>& hashMap,const string& s)
    // Map a string to an id
 {
    unsigned hash=Hash::hash(s);
@@ -192,7 +193,7 @@ static unsigned mapString(map<string,unsigned>& stringMap,map<unsigned,unsigned>
       return id;
 }
 //---------------------------------------------------------------------------
-static bool dumpFile(ofstream& out,map<string,unsigned>& stringMap,map<unsigned,unsigned>& hashMap,const string& fileName,bool simplify)
+static bool dumpFile(ofstream& out,unordered_map<string,unsigned>& stringMap,unordered_map<unsigned,unsigned>& hashMap,const string& fileName,bool simplify)
    // Dump the file into the facts table
 {
    ifstream in(fileName.c_str());
@@ -262,8 +263,8 @@ int main(int argc,char* argv[])
    bool simplify=((argc==3)&&(string(argv[2])=="--simplify"));
 
    // Collect the predicates and build the string map
-   map<string,unsigned> stringMap;
-   map<unsigned,unsigned> hashMap;
+   unordered_map<string,unsigned> stringMap;
+   unordered_map<unsigned,unsigned> hashMap;
    {
       ofstream out("strings");
       cout << "Collecting predicates..." << endl;
