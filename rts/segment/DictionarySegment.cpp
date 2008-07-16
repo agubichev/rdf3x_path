@@ -1,6 +1,9 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/buffer/BufferManager.hpp"
 #include "infra/util/Hash.hpp"
+#include <cstring>
+//---------------------------------------------------------------------------
+using namespace std;
 //---------------------------------------------------------------------------
 /// Helper functions
 static inline unsigned readInnerHash(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot); }
@@ -16,7 +19,7 @@ DictionarySegment::DictionarySegment(BufferManager& bufferManager,unsigned table
    bufferManager.prefetchPages(mappingStart,mappingStart+5);
 }
 //---------------------------------------------------------------------------
-bool DictionarySegment::lookupOnPage(unsigned pageNo,const std::string& text,unsigned hash,unsigned& id)
+bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,unsigned hash,unsigned& id)
    // Lookup an id for a given string on a certain page in the raw string table
 {
    BufferReference ref(readShared(pageNo));
@@ -39,7 +42,7 @@ bool DictionarySegment::lookupOnPage(unsigned pageNo,const std::string& text,uns
    return false;
 }
 //---------------------------------------------------------------------------
-bool DictionarySegment::lookup(const std::string& text,unsigned& id)
+bool DictionarySegment::lookup(const string& text,unsigned& id)
    // Lookup an id for a given string
 {
    // Determine the hash value

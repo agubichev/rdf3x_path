@@ -10,14 +10,17 @@
 #include "rts/operator/Operator.hpp"
 #include <iostream>
 #include <fstream>
+#include <cstdlib>
 //---------------------------------------------------------------------------
-static std::string readInput(std::istream& in)
+using namespace std;
+//---------------------------------------------------------------------------
+static string readInput(istream& in)
    // Read the input query
 {
-   std::string result;
+   string result;
    while (true) {
-      std::string s;
-      std::getline(in,s);
+      string s;
+      getline(in,s);
       if (!in.good())
          break;
       result+=s;
@@ -26,7 +29,7 @@ static std::string readInput(std::istream& in)
    return result;
 }
 //---------------------------------------------------------------------------
-static void evalQuery(Database& db,const std::string& query,bool silent)
+static void evalQuery(Database& db,const string& query,bool silent)
    // Evaluate a query
 {
    QueryGraph queryGraph;
@@ -37,7 +40,7 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
       try {
          parser.parse();
       } catch (const SPARQLParser::ParserException& e) {
-         std::cout << "parse error: " << e.message << std::endl;
+         cout << "parse error: " << e.message << endl;
          return;
       }
 
@@ -45,7 +48,7 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
       SemanticAnalysis semana(db);
       semana.transform(parser,queryGraph);
       if (queryGraph.knownEmpty()) {
-         std::cout << "<empty result>" << std::endl;
+         cout << "<empty result>" << endl;
          return;
       }
    }
@@ -54,7 +57,7 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
    PlanGen plangen;
    Plan* plan=plangen.translate(db,queryGraph);
    if (!plan) {
-      std::cout << "plan generation failed" << std::endl;
+      cout << "plan generation failed" << endl;
       return;
    }
 
@@ -68,10 +71,10 @@ static void evalQuery(Database& db,const std::string& query,bool silent)
    // And execute it
    Timestamp start;
    if (operatorTree->first()) {
-      while (operatorTree->next());
+      while (operatorTree->next()) ;
    }
    Timestamp stop;
-   std::cout << "Execution time: " << (stop-start) << " ms" << std::endl;
+   cout << "Execution time: " << (stop-start) << " ms" << endl;
 
    delete operatorTree;
 }
@@ -80,31 +83,31 @@ int main(int argc,char* argv[])
 {
    // Check the arguments
    if (argc<2) {
-      std::cout << "usage: " << argv[0] << " <database> [sparqlfile] [--silent]" << std::endl;
+      cout << "usage: " << argv[0] << " <database> [sparqlfile] [--silent]" << endl;
       return 1;
    }
    bool silent=false;
-   if ((argc>3)&&(std::string(argv[3])=="--silent"))
+   if ((argc>3)&&(string(argv[3])=="--silent"))
       silent=true;
 
    // Open the database
    Database db;
    if (!db.open(argv[1])) {
-      std::cout << "unable to open database " << argv[1] << std::endl;
+      cout << "unable to open database " << argv[1] << endl;
       return 1;
    }
 
    // Retrieve the query
-   std::string query;
+   string query;
    if (argc>2) {
-      std::ifstream in(argv[2]);
+      ifstream in(argv[2]);
       if (!in.is_open()) {
-         std::cout << "unable to open " << argv[2] << std::endl;
+         cout << "unable to open " << argv[2] << endl;
          return 1;
       }
       query=readInput(in);
    } else {
-      query=readInput(std::cin);
+      query=readInput(cin);
    }
 
    // And evaluate it
