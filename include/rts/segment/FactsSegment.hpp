@@ -45,6 +45,19 @@ class FactsSegment : public Segment
 
    /// A scan over the facts segment
    class Scan {
+      public:
+      /// Hints for skipping through the scan
+      class Hint {
+         public:
+         /// Constructor
+         Hint();
+         /// Destructor
+         virtual ~Hint();
+
+         /// The hint
+         virtual void next(unsigned& value1,unsigned& value2,unsigned& value3) = 0;
+      };
+
       private:
       /// The maximum number of entries per page
       static const unsigned maxCount = BufferManager::pageSize;
@@ -61,6 +74,8 @@ class FactsSegment : public Segment
       const Triple* pos,*posLimit;
       /// The decompressed triples
       Triple triples[maxCount];
+      /// The scan hint
+      Hint* hint;
 
       /// Read the next page
       bool readNextPage();
@@ -70,7 +85,7 @@ class FactsSegment : public Segment
 
       public:
       /// Constructor
-      Scan();
+      explicit Scan(Hint* hint=0);
       /// Destructor
       ~Scan();
 

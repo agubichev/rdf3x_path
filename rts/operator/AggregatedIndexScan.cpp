@@ -72,8 +72,40 @@ class AggregatedIndexScan::ScanPrefix12 : public AggregatedIndexScan {
    unsigned next();
 };
 //---------------------------------------------------------------------------
+AggregatedIndexScan::Hint::Hint(AggregatedIndexScan& scan)
+   : scan(scan)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+AggregatedIndexScan::Hint::~Hint()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
+   // Scanning hint
+{
+   if (scan.bound1)
+      value1=scan.value1->value; else
+      value1=0;
+   for (std::vector<Register*>::const_iterator iter=scan.merge1.begin(),limit=scan.merge1.end();iter!=limit;++iter) {
+      unsigned v=(*iter)->value;
+      if ((~v)&&(v>value1))
+         value1=v;
+   }
+   if (scan.bound2)
+      value2=scan.value2->value; else
+      value2=0;
+   for (std::vector<Register*>::const_iterator iter=scan.merge2.begin(),limit=scan.merge2.end();iter!=limit;++iter) {
+      unsigned v=(*iter)->value;
+      if ((~v)&&(v>value2))
+         value2=v;
+   }
+}
+//---------------------------------------------------------------------------
 AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2)
-   : value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order)
+   : value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
    // Constructor
 {
 }
@@ -102,6 +134,28 @@ void AggregatedIndexScan::print(DictionarySegment& dict,unsigned level)
    printRegister(dict,value2); if (bound2) std::cout << "*";
    std::cout << std::endl;
    indent(level); std::cout << ">" << std::endl;
+}
+//---------------------------------------------------------------------------
+static void handleHints(Register* reg1,Register* reg2,Register* result,std::vector<Register*>& merges)
+   // Add hints
+{
+   bool has1=false,has2=false;
+   for (std::vector<Register*>::const_iterator iter=merges.begin(),limit=merges.end();iter!=limit;++iter) {
+      if ((*iter)==reg1) has1=true;
+      if ((*iter)==reg2) has2=true;
+   }
+   if (reg1==result) has1=true;
+   if (reg2==result) has2=true;
+
+   if (has1&&(!has2)) merges.push_back(reg2);
+   if (has2&&(!has1)) merges.push_back(reg1);
+}
+//---------------------------------------------------------------------------
+void AggregatedIndexScan::addMergeHint(Register* reg1,Register* reg2)
+   // Add a merge join hint
+{
+   handleHints(reg1,reg2,value1,merge1);
+   handleHints(reg1,reg2,value2,merge2);
 }
 //---------------------------------------------------------------------------
 AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)

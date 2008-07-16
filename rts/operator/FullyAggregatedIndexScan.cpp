@@ -70,6 +70,11 @@ void FullyAggregatedIndexScan::print(DictionarySegment& dict,unsigned level)
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
+void FullyAggregatedIndexScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
+   // Add a merge join hint
+{
+}
+//---------------------------------------------------------------------------
 FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
    // Constructor
 {

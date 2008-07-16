@@ -169,3 +169,9 @@ void Selection::print(DictionarySegment& dict,unsigned level)
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
+void Selection::addMergeHint(Register* reg1,Register* reg2)
+   // Add a merge join hint
+{
+   input->addMergeHint(reg1,reg2);
+}
+//---------------------------------------------------------------------------

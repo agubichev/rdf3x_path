@@ -13,6 +13,7 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/FactsSegment.hpp"
+#include <vector>
 //---------------------------------------------------------------------------
 class Register;
 //---------------------------------------------------------------------------
@@ -20,6 +21,22 @@ class Register;
 class IndexScan : public Operator
 {
    private:
+   /// Hints during scanning
+   class Hint : public FactsSegment::Scan::Hint {
+      private:
+      /// The scan
+      IndexScan& scan;
+
+      public:
+      /// Constructor
+      Hint(IndexScan& scan);
+      /// Destructor
+      ~Hint();
+      /// The next hint
+      void next(unsigned& value1,unsigned& value2,unsigned& value3);
+   };
+   friend class Hint;
+
    /// The registers for the different parts of the triple
    Register* value1,*value2,*value3;
    /// The different boundings
@@ -30,6 +47,10 @@ class IndexScan : public Operator
    Database::DataOrder order;
    /// The scan
    FactsSegment::Scan scan;
+   /// The hinting mechanism
+   Hint hint;
+   /// Merge hints
+   std::vector<Register*> merge1,merge2,merge3;
 
    /// Constructor
    IndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3);
@@ -55,6 +76,8 @@ class IndexScan : public Operator
 
    /// Print the operator tree. Debugging only.
    void print(DictionarySegment& dict,unsigned indent);
+   /// Add a merge join hint
+   void addMergeHint(Register* reg1,Register* reg2);
 
    /// Create a suitable operator
    static IndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);

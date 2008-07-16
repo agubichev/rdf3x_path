@@ -38,3 +38,8 @@ void EmptyScan::print(DictionarySegment& /*dict*/,unsigned level)
    indent(level); std::cout << "<EmptyScan>" << std::endl;
 }
 //---------------------------------------------------------------------------
+void EmptyScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
+   // Add a merge join hint
+{
+}
+//---------------------------------------------------------------------------

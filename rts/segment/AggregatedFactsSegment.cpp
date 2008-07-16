@@ -98,8 +98,18 @@ void AggregatedFactsSegment::prefetchRange(unsigned start1,unsigned start2,unsig
    prefetchPages(startPage,stopPage);
 }
 //---------------------------------------------------------------------------
-AggregatedFactsSegment::Scan::Scan()
-   : seg(0)
+AggregatedFactsSegment::Scan::Hint::Hint()
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+AggregatedFactsSegment::Scan::Hint::~Hint()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+AggregatedFactsSegment::Scan::Scan(Hint* hint)
+   : seg(0),hint(hint)
    // Constructor
 {
 }
@@ -318,6 +328,19 @@ bool AggregatedFactsSegment::Scan::readNextPage()
       (*writer).value2=value2;
       (*writer).count=count;
       ++writer;
+   }
+
+   // Check if we should make a skip
+   if (hint) {
+      unsigned next1,next2;
+      hint->next(next1,next2);
+      if ((writer[-1].value1<next1)||((writer[-1].value1==next1)&&(writer[-1].value2<next2))) {
+         if (!seg->lookup(next1,next2,current))
+            return false;
+         pos=posLimit=0;
+         ++pos;
+         return readNextPage();
+      }
    }
 
    // Update the entries

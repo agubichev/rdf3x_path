@@ -18,6 +18,9 @@ MergeJoin::MergeJoin(Operator* left,Register* leftValue,const std::vector<Regist
 {
    leftShadow.resize(leftTail.size()+2);
    rightShadow.resize(rightTail.size()+2);
+
+   left->addMergeHint(leftValue,rightValue);
+   right->addMergeHint(leftValue,rightValue);
 }
 //---------------------------------------------------------------------------
 MergeJoin::~MergeJoin()
@@ -328,5 +331,12 @@ void MergeJoin::print(DictionarySegment& dict,unsigned level)
    left->print(dict,level+1);
    right->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
+}
+//---------------------------------------------------------------------------
+void MergeJoin::addMergeHint(Register* reg1,Register* reg2)
+   // Add a merge join hint
+{
+   left->addMergeHint(reg1,reg2);
+   right->addMergeHint(reg1,reg2);
 }
 //---------------------------------------------------------------------------

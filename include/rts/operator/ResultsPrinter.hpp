@@ -17,7 +17,7 @@ class Database;
 class DictionarySegment;
 class Register;
 //---------------------------------------------------------------------------
-/// Consumes its input and prints it. Pruduces a single empty tuple.
+/// Consumes its input and prints it. Produces a single empty tuple.
 class ResultsPrinter : public Operator
 {
    public:
@@ -51,6 +51,8 @@ class ResultsPrinter : public Operator
 
    /// Print the operator tree. Debugging only.
    void print(DictionarySegment& dict,unsigned indent);
+   /// Add a merge join hint
+   void addMergeHint(Register* reg1,Register* reg2);
 };
 //---------------------------------------------------------------------------
 #endif

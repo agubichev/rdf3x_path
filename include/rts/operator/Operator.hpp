@@ -35,6 +35,8 @@ class Operator
 
    /// Print the operator tree. Debugging only.
    virtual void print(DictionarySegment& dict,unsigned indent=0) = 0;
+   /// Add a merge join hint
+   virtual void addMergeHint(Register* reg1,Register* reg2) = 0;
 };
 //---------------------------------------------------------------------------
 #endif

@@ -132,3 +132,10 @@ void MergeUnion::print(DictionarySegment& dict,unsigned level)
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
+void MergeUnion::addMergeHint(Register* reg1,Register* reg2)
+   // Add a merge join hint
+{
+   left->addMergeHint(reg1,reg2);
+   right->addMergeHint(reg1,reg2);
+}
+//---------------------------------------------------------------------------

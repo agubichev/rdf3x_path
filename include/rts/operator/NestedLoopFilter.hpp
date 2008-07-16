@@ -42,6 +42,8 @@ class NestedLoopFilter : public Operator
 
    /// Print the operator tree. Debugging only.
    void print(DictionarySegment& dict,unsigned indent);
+   /// Add a merge join hint
+   void addMergeHint(Register* reg1,Register* reg2);
 };
 //---------------------------------------------------------------------------
 #endif

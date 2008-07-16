@@ -68,8 +68,18 @@ bool FactsSegment::lookup(unsigned start1,unsigned start2,unsigned start3,Buffer
    }
 }
 //---------------------------------------------------------------------------
-FactsSegment::Scan::Scan()
-   : seg(0)
+FactsSegment::Scan::Hint::Hint()
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+FactsSegment::Scan::Hint::~Hint()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+FactsSegment::Scan::Scan(Hint* hint)
+   : seg(0),hint(hint)
    // Constructor
 {
 }
@@ -252,6 +262,19 @@ bool FactsSegment::Scan::readNextPage()
       (*writer).value2=value2;
       (*writer).value3=value3;
       ++writer;
+   }
+
+   // Check if we should make a skip
+   if (hint) {
+      unsigned next1,next2,next3;
+      hint->next(next1,next2,next3);
+      if ((writer[-1].value1<next1)||((writer[-1].value1==next1)&&((writer[-1].value2<next2)||((writer[-1].value2==next2)&&(writer[-1].value3<next3))))) {
+         if (!seg->lookup(next1,next2,next3,current))
+            return false;
+         pos=posLimit=0;
+         ++pos;
+         return readNextPage();
+      }
    }
 
    // Update the entries

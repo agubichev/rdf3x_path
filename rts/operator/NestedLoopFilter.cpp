@@ -72,3 +72,9 @@ void NestedLoopFilter::print(DictionarySegment& dict,unsigned level)
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
+void NestedLoopFilter::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
+   // Add a merge join hint
+{
+   // Do not propagate as we break the pipeline
+}
+//---------------------------------------------------------------------------
