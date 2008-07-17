@@ -6,14 +6,9 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-static void dumpSubject(DictionarySegment& dic,unsigned id)
-   // Write a subject entry
+static void writeURI(const char* start,const char* stop)
+   // Write a URI
 {
-   const char* start,*stop;
-   if (!dic.lookupById(id,start,stop)) {
-      cerr << "consistency error: encountered unknown id " << id << endl;
-      throw;
-   }
    cout << "<";
    for (const char* iter=start;iter<stop;++iter) {
       char c=*iter;
@@ -29,37 +24,9 @@ static void dumpSubject(DictionarySegment& dic,unsigned id)
    cout << ">";
 }
 //---------------------------------------------------------------------------
-static void dumpPredicate(DictionarySegment& dic,unsigned id)
-   // Write a predicate entry
+static void writeLiteral(const char* start,const char* stop)
+   // Write a literal
 {
-   const char* start,*stop;
-   if (!dic.lookupById(id,start,stop)) {
-      cerr << "consistency error: encountered unknown id " << id << endl;
-      throw;
-   }
-   cout << "<";
-   for (const char* iter=start;iter<stop;++iter) {
-      char c=*iter;
-      switch (c) {
-         case '\t': cout << "\\t"; break;
-         case '\n': cout << "\\n"; break;
-         case '\r': cout << "\\r"; break;
-         case '>': cout << "\\>"; break;
-         case '\\': cout << "\\\\"; break;
-         default: cout << c; break;
-      }
-   }
-   cout << ">";
-}
-//---------------------------------------------------------------------------
-static void dumpObject(DictionarySegment& dic,unsigned id)
-   // Write an object entry
-{
-   const char* start,*stop;
-   if (!dic.lookupById(id,start,stop)) {
-      cerr << "consistency error: encountered unknown id " << id << endl;
-      throw;
-   }
    cout << "\"";
    for (const char* iter=start;iter<stop;++iter) {
       char c=*iter;
@@ -73,6 +40,65 @@ static void dumpObject(DictionarySegment& dic,unsigned id)
       }
    }
    cout << "\"";
+}
+//---------------------------------------------------------------------------
+static void dumpSubject(DictionarySegment& dic,unsigned id)
+   // Write a subject entry
+{
+   const char* start,*stop;
+   if (!dic.lookupById(id,start,stop)) {
+      cerr << "consistency error: encountered unknown id " << id << endl;
+      throw;
+   }
+   writeURI(start,stop);
+}
+//---------------------------------------------------------------------------
+static void dumpPredicate(DictionarySegment& dic,unsigned id)
+   // Write a predicate entry
+{
+   const char* start,*stop;
+   if (!dic.lookupById(id,start,stop)) {
+      cerr << "consistency error: encountered unknown id " << id << endl;
+      throw;
+   }
+   writeURI(start,stop);
+}
+//---------------------------------------------------------------------------
+static bool isBlankNode(const char* start,const char* stop)
+   // Looks like a blank node? XXX store in dictionary
+{
+   return (start+2>stop)&&(start[0]=='_')&&(start[1]==':');
+}
+//---------------------------------------------------------------------------
+static bool isURI(const char* start,const char* stop)
+   // Looks like a URI? XXX store in dictionary
+{
+   const char* limit=stop-5;
+   if (limit>start+10) limit=start+10;
+   for (;start<limit;++start) {
+      char c=*start;
+      if (c==' ') break;
+      if (c==':')
+         return (start[1]=='/')&&(start[2]=='/');
+   }
+   return false;
+}
+//---------------------------------------------------------------------------
+static void dumpObject(DictionarySegment& dic,unsigned id)
+   // Write an object entry
+{
+   const char* start,*stop;
+   if (!dic.lookupById(id,start,stop)) {
+      cerr << "consistency error: encountered unknown id " << id << endl;
+      throw;
+   }
+   // Blank node or URI?
+   if (isBlankNode(start,stop)||isURI(start,stop)) {
+      writeURI(start,stop);
+      return;
+   }
+   // No, a literal value
+   writeLiteral(start,stop);
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
