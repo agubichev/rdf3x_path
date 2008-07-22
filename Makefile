@@ -9,7 +9,7 @@ PREFIX:=bin/
 
 #############################################################################
 # Default target
-all: $(PREFIX)buildrdfstore$(EXEEXT) $(PREFIX)evalsparql$(EXEEXT) $(PREFIX)rdf3xdump$(EXEEXT)
+all: $(PREFIX)buildrdfstore$(EXEEXT) $(PREFIX)evalsparql$(EXEEXT) $(PREFIX)rdf3xdump$(EXEEXT) $(PREFIX)rdf3xload$(EXEEXT)
 
 #############################################################################
 # Collect all sources
