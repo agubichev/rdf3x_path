@@ -165,7 +165,10 @@ static bool collect(const string& name,set<string>& headers,set<string>& missing
 
       // Check for the file
       if (checkLocal) {
-         string name=normalize(index);
+         string prefix;
+         if (name.rfind('/')!=string::npos)
+            prefix=name.substr(0,name.rfind('/')+1);
+         string name=normalize(prefix+index);
          if (exists(name)) {
             if (headers.count(name))
                continue;
