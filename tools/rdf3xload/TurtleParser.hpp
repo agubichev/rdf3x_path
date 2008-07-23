@@ -75,6 +75,8 @@ class TurtleParser
    std::map<std::string,std::string> prefixes;
    /// The currently available triples
    std::vector<Triple> triples;
+   /// Reader in the triples
+   unsigned triplesReader;
    /// The next blank node id
    unsigned nextBlank;
 

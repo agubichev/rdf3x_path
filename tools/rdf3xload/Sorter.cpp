@@ -86,7 +86,7 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
 
       // Did everything fit?
       if ((reader==limit)&&(runs.empty())) {
-         spool(0,out,runs,eliminateDuplicates);
+         spool(0,out,items,eliminateDuplicates);
          break;
       }
 
@@ -99,7 +99,7 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
    mappedIn.close();
 
    // Do we habe to merge runs?
-   if (runs.size()) {
+   if (!runs.empty()) {
       // Map the ranges
       MemoryMappedFile tempIn;
       assert(tempIn.open(intermediate.getFile().c_str()));

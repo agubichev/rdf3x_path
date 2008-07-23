@@ -14,7 +14,7 @@ TurtleParser::Lexer::~Lexer()
 {
 }
 //---------------------------------------------------------------------------
-static bool issep(char c) { return (c==' ')||(c=='\t')||(c=='\n')||(c=='\r')||(c=='[')||(c==']')||(c=='(')||(c==')')||(c==',')||(c==';')||(c==':'); }
+static bool issep(char c) { return (c==' ')||(c=='\t')||(c=='\n')||(c=='\r')||(c=='[')||(c==']')||(c=='(')||(c==')')||(c==',')||(c==';')||(c==':')||(c=='.'); }
 //---------------------------------------------------------------------------
 TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(char c)
    // Lex a number
@@ -267,7 +267,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next()
          case '+': case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
             return lexNumber(c);
          case '^':
-            if (in.get(c)||(c!='^')) {
+            if ((!in.get(c))||(c!='^')) {
                cerr << "lexer error in line " << line << ": '^' expected" << endl;
                throw Exception();
             }
@@ -296,7 +296,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next()
 }
 //---------------------------------------------------------------------------
 TurtleParser::TurtleParser(istream& in)
-   : lexer(in),nextBlank(0)
+   : lexer(in),triplesReader(0),nextBlank(0)
    // Constructor
 {
 }
@@ -581,11 +581,14 @@ bool TurtleParser::parse(std::string& subject,std::string& predicate,std::string
 {
    while (true) {
       // Some triples left?
-      if (!triples.empty()) {
-         subject=triples.back().subject;
-         predicate=triples.back().predicate;
-         object=triples.back().object;
-         triples.pop_back();
+      if (triplesReader<triples.size()) {
+         subject=triples[triplesReader].subject;
+         predicate=triples[triplesReader].predicate;
+         object=triples[triplesReader].object;
+         if ((++triplesReader)>=triples.size()) {
+            triples.clear();
+            triplesReader=0;
+         }
          return true;
       }
 

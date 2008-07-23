@@ -72,7 +72,7 @@ static int cmpIds(uint64_t leftId,uint64_t rightId)
    // Compare two ids
 {
    if (leftId&1) {
-      if ((!rightId&1))
+      if (!(rightId&1))
          return 1;
    } else {
       if (rightId&1)
@@ -139,7 +139,7 @@ static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile&
          iter=TempFile::readId(iter,id);
 
          // A new one?
-         if ((!lastStr)||((stringLen==lastLen)&&(memcmp(lastStr,stringStart,stringLen)==0))) {
+         if ((!lastStr)||(stringLen!=lastLen)||(memcmp(lastStr,stringStart,stringLen)!=0)) {
             stringList.writeId(id);
             stringList.writeString(stringLen,stringStart);
             rawIdMap.writeId(id);
@@ -267,7 +267,7 @@ static int compare321(const char* left,const char* right)
 static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    // Resolve the triple ids
 {
-   cout << "Resolving sting ids..." << endl;
+   cout << "Resolving string ids..." << endl;
 
    MemoryMappedFile map;
    assert(map.open(stringIds.getFile().c_str()));
@@ -343,7 +343,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
             reader=TempFile::readId(TempFile::readId(reader,from),to);
          objectResolved.writeId(subject);
          objectResolved.writeId(predicate);
-         objectResolved.writeId(object);
+         objectResolved.writeId(to);
       }
    }
 
