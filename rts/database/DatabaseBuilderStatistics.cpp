@@ -1,9 +1,9 @@
+#include "rts/database/DatabaseBuilder.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <iostream>
 #include <vector>
-#include <algorithm>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -270,8 +270,6 @@ void writeUint32(unsigned char* target,unsigned value)
    target[3]=value&0xFF;
 }
 //---------------------------------------------------------------------------
-}
-//---------------------------------------------------------------------------
 void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* page)
    // Prepare a page with statistics
 {
@@ -312,24 +310,32 @@ void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* p
       *writer=0;
 }
 //---------------------------------------------------------------------------
-void buildAndShowStatistics(Database& db,Database::DataOrder order)
-   // Build some statistics and dump the results
+}
+//---------------------------------------------------------------------------
+void DatabaseBuilder::computeStatistics(unsigned order)
+   // Compare specific statistics (after loading)
 {
-   // Build the buckets
-   vector<Bucket> buckets;
-   buildBuckets(db,order,buckets);
-
-   // Show statistics
-#define R(x) (static_cast<double>(x)/static_cast<double>(b.card))
-   for (unsigned index=0;index<buckets.size();index++) {
-      const Bucket& b=buckets[index];
-      cout << b.start1 << "/" << b.start2 << "/" << b.start3 << "-" << b.stop1 << "/" << b.stop2 << "/" << b.stop3
-           << " " << b.card << " " << b.prefix2Card << " " << b.prefix1Card
-           << " (" << R(b.val1S) <<"," << R(b.val1P) << "," << R(b.val1O) << ")"
-           << " (" << R(b.val2S) <<"," << R(b.val2P) << "," << R(b.val2O) << ")"
-           << " (" << R(b.val3S) <<"," << R(b.val3P) << "," << R(b.val3O) << ")"
-           << endl;
+   // Open the database again
+   Database db;
+   if (!db.open(dbFile)) {
+      cout << "Unable to open " << dbFile << endl;
+      throw;
    }
-#undef R
+
+   // Build the statistics page
+   unsigned char statisticPage[pageSize];
+   buildStatisticsPage(db,static_cast<Database::DataOrder>(order),statisticPage);
+
+   // Close the database
+   db.close();
+
+   // And patch the statistics
+   ofstream out(dbFile,ios::in|ios::out|ios::ate|ios::binary);
+   if (!out.is_open()) {
+      cout << "Unable to write " << dbFile << endl;
+      throw;
+   }
+   out.seekp(directory.statistics[order]*pageSize,ios::beg);
+   out.write(reinterpret_cast<char*>(statisticPage),pageSize);
 }
 //---------------------------------------------------------------------------
