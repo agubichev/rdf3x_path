@@ -14,7 +14,7 @@ TurtleParser::Lexer::~Lexer()
 {
 }
 //---------------------------------------------------------------------------
-static bool issep(char c) { return (c==' ')||(c=='\t')||(c=='\n')||(c=='\r')||(c=='[')||(c==']')||(c=='(')||(c==')')||(c==',')||(c==';'); }
+static bool issep(char c) { return (c==' ')||(c=='\t')||(c=='\n')||(c=='\r')||(c=='[')||(c==']')||(c=='(')||(c==')')||(c==',')||(c==';')||(c==':'); }
 //---------------------------------------------------------------------------
 TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(char c)
    // Lex a number
@@ -224,7 +224,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexURI(char c)
 
    // Process normally
    while (true) {
-      if (c=='>') return String;
+      if (c=='>') return URI;
       if (c=='\\') {
          lexEscape();
       } else {
@@ -254,7 +254,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next()
       switch (c) {
          case ' ': case '\t': case '\r': continue;
          case '\n': line++; continue;
-         case '#': while (in.get(c)) if ((c=='\n')||(c=='\r')) break; continue;
+         case '#': while (in.get(c)) if ((c=='\n')||(c=='\r')) break; if (c=='\n') ++line; continue;
          case '.': if (!in.get(c)) return Dot; in.unget(); if ((c>='0')&&(c<='9')) return lexNumber('.'); return Dot;
          case ':': return Colon;
          case ';': return Semicolon;
@@ -360,6 +360,12 @@ void TurtleParser::parseDirective()
       parseError("'.' expected after directive");
 }
 //---------------------------------------------------------------------------
+inline bool TurtleParser::isName(Lexer::Token token)
+   // Is a (generalized) name token?
+{
+   return (token==Lexer::Name)||(token==Lexer::A)||(token==Lexer::True)||(token==Lexer::False);
+}
+//---------------------------------------------------------------------------
 string TurtleParser::parseQualifiedName(string prefix)
    // Parse a qualified name
 {
@@ -368,7 +374,7 @@ string TurtleParser::parseQualifiedName(string prefix)
    if (!prefixes.count(prefix))
       parseError("unknown prefix '"+prefix+"'");
    Lexer::Token token=lexer.next();
-   if (token==Lexer::Name) {
+   if (isName(token)) {
       return prefixes[prefix]+lexer.getTokenValue();
    } else {
       lexer.unget(token);
@@ -382,7 +388,7 @@ string TurtleParser::parseBlank()
    Lexer::Token token=lexer.next();
    switch (token) {
       case Lexer::Name:
-         if ((lexer.getTokenValue()!="_")||(lexer.next()!=Lexer::Colon)||(lexer.next()!=Lexer::Name))
+         if ((lexer.getTokenValue()!="_")||(lexer.next()!=Lexer::Colon)||(!isName(lexer.next())))
             parseError("blank nodes must start with '_:'");
          return "_:"+lexer.getTokenValue();
       case Lexer::LBracket:

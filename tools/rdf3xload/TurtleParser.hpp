@@ -78,6 +78,9 @@ class TurtleParser
    /// The next blank node id
    unsigned nextBlank;
 
+   /// Is a (generalized) name token?
+   static inline bool isName(Lexer::Token token);
+
    /// Construct a new blank node
    std::string newBlankNode();
    /// Report an error
