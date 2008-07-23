@@ -12,9 +12,9 @@ class StringLookup {
    static const unsigned lookupSize = 1009433;
 
    /// Strings seen so far
-   std::string strings[lookupSize];
+   std::string* strings;
    /// Ids for the strings
-   uint64_t ids[lookupSize];
+   uint64_t* ids;
    /// The next IDs
    uint64_t nextPredicate,nextNonPredicate;
 

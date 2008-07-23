@@ -5,7 +5,7 @@
 using namespace std;
 //---------------------------------------------------------------------------
 StringLookup::StringLookup()
-   : nextPredicate(0),nextNonPredicate(0)
+   : strings(new string[lookupSize]),ids(new uint64_t[lookupSize]),nextPredicate(0),nextNonPredicate(0)
    // Constructor
 {
    for (unsigned index=0;index<lookupSize;index++)
@@ -15,13 +15,15 @@ StringLookup::StringLookup()
 StringLookup::~StringLookup()
    // Destructor
 {
+   delete[] ids;
+   delete[] strings;
 }
 //---------------------------------------------------------------------------
 unsigned StringLookup::lookupPredicate(TempFile& stringFile,const string& predicate)
    // Lookup a predicate
 {
    // Already known?
-   unsigned slot=Hash::hash(predicate,lookupSize);
+   unsigned slot=Hash::hash(predicate)%lookupSize;
    if ((strings[slot]==predicate)&&(!(ids[slot]&1)))
       return ids[slot];
 
@@ -40,7 +42,7 @@ unsigned StringLookup::lookupValue(TempFile& stringFile,const string& value)
    // Lookup a value
 {
    // Already known?
-   unsigned slot=Hash::hash(value,lookupSize);
+   unsigned slot=Hash::hash(value)%lookupSize;
    if ((strings[slot]==value)&&(~ids[slot]))
       return ids[slot];
 
