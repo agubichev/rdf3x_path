@@ -17,6 +17,8 @@ bool smallAddressSpace()
 static bool parse(istream& in,TempFile& facts,TempFile& strings)
    // Parse the input and store it into temporary files
 {
+   cerr << "Parsing input..." << endl;
+
    TurtleParser parser(in);
    StringLookup lookup;
 
@@ -214,6 +216,8 @@ static int compare123(const char* left,const char* right)
 static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    // Resolve the triple ids
 {
+   cout << "Resolving sting ids..." << endl;
+
    MemoryMappedFile map;
    assert(map.open(stringIds.getFile().c_str()));
 
