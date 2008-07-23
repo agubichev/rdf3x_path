@@ -3,6 +3,7 @@
 #include "TempFile.hpp"
 #include "TurtleParser.hpp"
 #include "infra/osdep/MemoryMappedFile.hpp"
+#include "rts/database/DatabaseBuilder.hpp"
 #include <iostream>
 #include <cassert>
 //---------------------------------------------------------------------------
@@ -213,6 +214,56 @@ static int compare123(const char* left,const char* right)
    return cmpTriples(l1,l2,l3,r1,r2,r3);
 }
 //---------------------------------------------------------------------------
+static int compare132(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l1,l3,l2,r1,r3,r2);
+}
+//---------------------------------------------------------------------------
+static int compare213(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l2,l1,l3,r2,r1,r3);
+}
+//---------------------------------------------------------------------------
+static int compare231(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l2,l3,l1,r2,r3,r1);
+}
+//---------------------------------------------------------------------------
+static int compare312(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l3,l1,l2,r3,r1,r2);
+}
+//---------------------------------------------------------------------------
+static int compare321(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l3,l2,l1,r3,r2,r1);
+}
+//---------------------------------------------------------------------------
 static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    // Resolve the triple ids
 {
@@ -300,6 +351,233 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    Sorter::sort(objectResolved,facts,skipIdIdId,compare123,true);
 }
 //---------------------------------------------------------------------------
+namespace {
+class FactsLoader : public DatabaseBuilder::FactsReader {
+   protected:
+   /// Map to the input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
+
+   /// Read an id
+   static const char* readId(const char* d,unsigned& v) { uint64_t x; d=TempFile::readId(d,x); v=x; return d; }
+
+   public:
+   /// Constructor
+   FactsLoader(TempFile& file) { assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Reset
+   void reset() { iter=in.getBegin(); }
+};
+class Load123 : public FactsLoader { public: Load123(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v1),v2),v3); return true; } else return false; } };
+class Load132 : public FactsLoader { public: Load132(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v1),v3),v2); return true; } else return false; } };
+class Load213 : public FactsLoader { public: Load213(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v2),v1),v3); return true; } else return false; } };
+class Load231 : public FactsLoader { public: Load231(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v2),v3),v1); return true; } else return false; } };
+class Load312 : public FactsLoader { public: Load312(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v3),v1),v2); return true; } else return false; } };
+class Load321 : public FactsLoader { public: Load321(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v3),v2),v1); return true; } else return false; } };
+}
+//---------------------------------------------------------------------------
+static void loadFacts(DatabaseBuilder& builder,TempFile& facts)
+   // Load the facts
+{
+   cout << "Loading triples..." << endl;
+   // Order 0
+   {
+      Load123 loader(facts);
+      builder.loadFacts(0,loader);
+   }
+   // Order 1
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare132);
+      Load132 loader(facts);
+      builder.loadFacts(1,loader);
+   }
+   // Order 2
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare321);
+      Load321 loader(facts);
+      builder.loadFacts(2,loader);
+   }
+   // Order 3
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare312);
+      Load312 loader(facts);
+      builder.loadFacts(3,loader);
+   }
+   // Order 4
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare213);
+      Load213 loader(facts);
+      builder.loadFacts(4,loader);
+   }
+   // Order 5
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare231);
+      Load231 loader(facts);
+      builder.loadFacts(5,loader);
+   }
+}
+//---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Load the strings from the table
+class StringReader : public DatabaseBuilder::StringsReader {
+   private:
+   /// The input file
+   MemoryMappedFile in;
+   /// The output file
+   TempFile out;
+   /// Pointers to the data
+   const char* iter,*limit;
+
+   public:
+   /// Constructor
+   StringReader(TempFile& file) : out(file.getBaseFile()) { assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Close the input
+   void closeIn() { in.close(); }
+   /// Get the output
+   TempFile& getOut() { out.flush(); return out; }
+
+   /// Read the next entry
+   bool next(unsigned& len,const char*& data);
+   /// Remember string info
+   void rememberInfo(unsigned page,unsigned ofs,unsigned hash);
+};
+//---------------------------------------------------------------------------
+bool StringReader::next(unsigned& len,const char*& data)
+   // Read the next entry
+{
+   if (iter==limit)
+      return false;
+   iter=TempFile::readString(TempFile::skipId(iter),len,data);
+   return true;
+}
+//---------------------------------------------------------------------------
+void StringReader::rememberInfo(unsigned page,unsigned ofs,unsigned hash)
+   // Remember string info
+{
+   out.writeId(hash);
+   out.writeId(page);
+   out.writeId(ofs);
+}
+//---------------------------------------------------------------------------
+/// Read the string mapping
+class StringMappingReader : public DatabaseBuilder::StringInfoReader
+{
+   private:
+   /// The input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
+
+   public:
+   /// Constructor
+   StringMappingReader(TempFile& file) { assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Read the next entry
+   bool next(unsigned& v1,unsigned& v2);
+};
+//---------------------------------------------------------------------------
+bool StringMappingReader::next(unsigned& v1,unsigned& v2)
+   // Read the next entry
+{
+   if (iter==limit)
+      return false;
+   uint64_t i1,i2,i3;
+   iter=TempFile::readId(TempFile::readId(TempFile::readId(iter,i1),i2),i3);
+   v1=i2; v2=i3;
+   return true;
+}
+//---------------------------------------------------------------------------
+/// Read the string hashes
+class StringHashesReader : public DatabaseBuilder::StringInfoReader
+{
+   private:
+   /// The input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
+
+   public:
+   /// Constructor
+   StringHashesReader(TempFile& file) { assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Read the next entry
+   bool next(unsigned& v1,unsigned& v2);
+};
+//---------------------------------------------------------------------------
+bool StringHashesReader::next(unsigned& v1,unsigned& v2)
+   // Read the next entry
+{
+   if (iter==limit)
+      return false;
+   uint64_t i1,i2,i3;
+   iter=TempFile::readId(TempFile::readId(TempFile::readId(iter,i1),i2),i3);
+   v1=i1; v2=i2;
+   return true;
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+static void loadStrings(DatabaseBuilder& builder,TempFile& stringTable)
+   // Load the strings
+{
+   cout << "Loading strings..." << endl;
+
+   // Load the raw strings
+   StringReader reader(stringTable);
+   builder.loadStrings(reader);
+   reader.closeIn();
+
+   // Load the strings mappings
+   {
+      StringMappingReader infoReader(reader.getOut());
+      builder.loadStringMappings(infoReader);
+   }
+
+   // Load the hash->page mappings
+   {
+      TempFile sortedByHash(stringTable.getBaseFile());
+      Sorter::sort(reader.getOut(),sortedByHash,skipIdIdId,compareId);
+      StringHashesReader infoReader(sortedByHash);
+      builder.loadStringHashes(infoReader);
+   }
+}
+//---------------------------------------------------------------------------
+static void loadStatistics(DatabaseBuilder& builder)
+   // Compute the statistics
+{
+   cout << "Computing statistics..." << endl;
+
+   for (unsigned index=0;index<6;index++)
+      builder.computeStatistics(index);
+}
+//---------------------------------------------------------------------------
+static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)
+   // Load the database
+{
+   cout << "Loading database into " << name << "..." << endl;
+   DatabaseBuilder builder(name);
+
+   // Load the facts
+   loadFacts(builder,facts);
+
+   // Load the strings
+   loadStrings(builder,stringTable);
+
+   // Finish the load phase
+   builder.finishLoading();
+
+   // Compute the statistics
+   loadStatistics(builder);
+}
+//---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    // Warn first
@@ -336,5 +614,11 @@ int main(int argc,char* argv[])
    // Resolve the ids
    TempFile facts(argv[1]);
    resolveIds(rawFacts,stringIds,facts);
+   stringIds.discard();
+
+   // And start the load
+   loadDatabase(argv[1],facts,stringTable);
+
+   cout << "Done." << endl;
 }
 //---------------------------------------------------------------------------
