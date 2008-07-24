@@ -23,25 +23,27 @@ class TurtleParser
       private:
       /// The input
       std::istream& in;
-      /// The token buffer
-      std::string token;
       /// The putback
       Token putBack;
+      /// The putback string
+      std::string putBackValue;
+      /// Buffer for parsing when ignoring the value
+      std::string ignored;
       /// The current line
       unsigned line;
 
       /// Lex a hex code
       unsigned lexHexCode(unsigned len);
       /// Lex an escape sequence
-      void lexEscape();
+      void lexEscape(std::string& token);
       /// Lex a long string
-      Token lexLongString();
+      Token lexLongString(std::string& token);
       /// Lex a string
-      Token lexString(char c);
+      Token lexString(std::string& token,char c);
       /// Lex a URI
-      Token lexURI(char c);
+      Token lexURI(std::string& token,char c);
       /// Lex a number
-      Token lexNumber(char c);
+      Token lexNumber(std::string& token,char c);
 
       public:
       /// Constructor
@@ -49,12 +51,14 @@ class TurtleParser
       /// Destructor
       ~Lexer();
 
-      /// The next token
-      Token next();
-      /// Put a token pack
-      void unget(Token t) { putBack=t; }
-      /// Get the token value
-      const std::string& getTokenValue() const { return token; }
+      /// The next token (including value)
+      Token next(std::string& value);
+      /// The next token (ignoring the value)
+      Token next() { return next(ignored); }
+      /// Put a token and a string back
+      void unget(Token t,const std::string& s) { putBack=t; if (t>=Integer) putBackValue=s; }
+      /// Put a token back
+      void ungetIgnored(Token t) { putBack=t; if (t>=Integer) putBackValue=ignored; }
       /// Get the line
       unsigned getLine() const { return line; }
    };
@@ -84,23 +88,23 @@ class TurtleParser
    static inline bool isName(Lexer::Token token);
 
    /// Construct a new blank node
-   std::string newBlankNode();
+   void newBlankNode(std::string& node);
    /// Report an error
    void parseError(const std::string& message);
    /// Parse a qualified name
-   std::string parseQualifiedName(std::string prefix);
+   void parseQualifiedName(const std::string& prefix,std::string& name);
    /// Parse a blank entry
-   std::string parseBlank();
+   void parseBlank(std::string& entry);
    /// Parse a subject
-   std::string parseSubject();
+   void parseSubject(Lexer::Token token,std::string& subject);
    /// Parse an object
-   std::string parseObject();
+   void parseObject(std::string& object);
    /// Parse a predicate object list
-   void parsePredicateObjectList(const std::string& subject);
+   void parsePredicateObjectList(const std::string& subject,std::string& predicate,std::string& object);
    /// Parse a directive
    void parseDirective();
    /// Parse a new triple
-   void parseTriple();
+   void parseTriple(Lexer::Token token,std::string& subject,std::string& predicate,std::string& object);
 
    public:
    /// Constructor
