@@ -593,7 +593,7 @@ void TurtleParser::parsePredicateObjectList(const string& subject,string& predic
 
       // Parse the object
       string additionalObject;
-      parseObject(object);
+      parseObject(additionalObject);
       triples.push_back(Triple(subject,additionalPredicate,additionalObject));
 
       // Additional objects?
