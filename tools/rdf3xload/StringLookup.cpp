@@ -1,8 +1,11 @@
 #include "StringLookup.hpp"
 #include "TempFile.hpp"
 #include "infra/util/Hash.hpp"
+#include <iostream>
 //---------------------------------------------------------------------------
 using namespace std;
+//---------------------------------------------------------------------------
+static const unsigned maxStringLen = 16364;
 //---------------------------------------------------------------------------
 StringLookup::StringLookup()
    : strings(new string[lookupSize]),ids(new uint64_t[lookupSize]),nextPredicate(0),nextNonPredicate(0)
@@ -31,6 +34,12 @@ unsigned StringLookup::lookupPredicate(TempFile& stringFile,const string& predic
    strings[slot]=predicate;
    uint64_t id=ids[slot]=((nextPredicate++)<<1);
 
+   // Check the len
+   if (predicate.size()>maxStringLen) {
+      cerr << "error while processing '" << predicate << "'" << endl << "strings larger than " << maxStringLen << " currently not supported!" << endl;
+      throw; // XXX could be supported relatively easily
+   }
+
    // And write to file
    stringFile.writeString(predicate.size(),predicate.c_str());
    stringFile.writeId(id);
@@ -49,6 +58,12 @@ unsigned StringLookup::lookupValue(TempFile& stringFile,const string& value)
    // No, construct a new id
    strings[slot]=value;
    uint64_t id=ids[slot]=((nextNonPredicate++)<<1)|1;
+
+   // Check the len
+   if (value.size()>maxStringLen) {
+      cerr << "error while processing '" << value << "'" << endl << "strings larger than " << maxStringLen << " currently not supported!" << endl;
+      throw; // XXX could be supported relatively easily
+   }
 
    // And write to file
    stringFile.writeString(value.size(),value.c_str());
