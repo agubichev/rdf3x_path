@@ -296,6 +296,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
          subjectResolved.writeId(to);
       }
    }
+   sortedBySubject.discard();
 
    // Sort by predicate
    TempFile sortedByPredicate(rawFacts.getBaseFile());
@@ -321,6 +322,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
          predicateResolved.writeId(to);
       }
    }
+   sortedByPredicate.discard();
 
    // Sort by object
    TempFile sortedByObject(rawFacts.getBaseFile());
@@ -346,6 +348,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
          objectResolved.writeId(to);
       }
    }
+   sortedByObject.discard();
 
    // Final sort by subject, predicate, object, eliminaing duplicates
    Sorter::sort(objectResolved,facts,skipIdIdId,compare123,true);
