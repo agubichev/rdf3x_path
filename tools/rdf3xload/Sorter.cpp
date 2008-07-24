@@ -105,7 +105,7 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
       assert(tempIn.open(intermediate.getFile().c_str()));
       for (vector<Range>::iterator iter=runs.begin(),limit=runs.end();iter!=limit;++iter) {
          (*iter).from=tempIn.getBegin()+((*iter).from-static_cast<char*>(0));
-         (*iter).to=tempIn.getBegin()+((*iter).from-static_cast<char*>(0));
+         (*iter).to=tempIn.getBegin()+((*iter).to-static_cast<char*>(0));
       }
 
       // Sort the run heads
@@ -131,7 +131,7 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
          while (pos<size) {
             unsigned left=2*pos+1,right=left+1;
             if (left>=size) break;
-            if (right>=size) {
+            if (right<size) {
                if (compare(runs[pos].from,runs[left].from)>0) {
                   if (compare(runs[pos].from,runs[right].from)>0) {
                      if (compare(runs[left].from,runs[right].from)<0) {
