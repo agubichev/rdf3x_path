@@ -1,4 +1,5 @@
 #include "TempFile.hpp"
+#include <cassert>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -14,7 +15,7 @@ string TempFile::newSuffix()
 }
 //---------------------------------------------------------------------------
 TempFile::TempFile(const string& baseName)
-   : baseName(baseName),fileName(baseName+newSuffix()),out(fileName.c_str())
+   : baseName(baseName),fileName(baseName+newSuffix()),out(fileName.c_str()),writePointer(0)
    // Constructor
 {
 }
@@ -28,6 +29,10 @@ TempFile::~TempFile()
 void TempFile::flush()
    // Flush the file
 {
+   if (writePointer) {
+      out.write(writeBuffer,writePointer);
+      writePointer=0;
+   }
    out.flush();
 }
 //---------------------------------------------------------------------------
@@ -49,7 +54,7 @@ void TempFile::writeString(unsigned len,const char* str)
    // Write a string
 {
    writeId(len);
-   out.write(str,len);
+   write(len,str);
 }
 //---------------------------------------------------------------------------
 void TempFile::writeId(uint64_t id)
@@ -57,16 +62,43 @@ void TempFile::writeId(uint64_t id)
 {
    while (id>=128) {
       unsigned char c=static_cast<unsigned char>(id|128);
-      out.put(c);
+      if (writePointer==bufferSize) {
+         out.write(writeBuffer,writePointer);
+         writePointer=0;
+      }
+      writeBuffer[writePointer++]=c;
       id>>=7;
    }
-   out.put(static_cast<unsigned char>(id));
+   if (writePointer==bufferSize) {
+      out.write(writeBuffer,writePointer);
+      writePointer=0;
+   }
+   writeBuffer[writePointer++]=static_cast<unsigned char>(id);
 }
 //---------------------------------------------------------------------------
 void TempFile::write(unsigned len,const char* data)
    // Raw write
 {
-   out.write(data,len);
+   // Fill the buffer
+   if (writePointer+len>bufferSize) {
+      unsigned remaining=bufferSize-writePointer;
+      memcpy(writeBuffer+writePointer,data,remaining);
+      out.write(writeBuffer,bufferSize);
+      writePointer=0;
+      len-=remaining;
+      data+=remaining;
+   }
+   // Write big chunks if any
+   if (writePointer+len>bufferSize) {
+      assert(writePointer==0);
+      unsigned chunks=len/bufferSize;
+      out.write(data,chunks*bufferSize);
+      len-=chunks*bufferSize;
+      data+=chunks*bufferSize;
+   }
+   // And fill the rest
+   memcpy(writeBuffer+writePointer,data,len);
+   writePointer+=len;
 }
 //---------------------------------------------------------------------------
 const char* TempFile::skipId(const char* reader)

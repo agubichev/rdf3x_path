@@ -18,6 +18,13 @@ class TempFile
    /// The output
    std::ofstream out;
 
+   /// The buffer size
+   static const unsigned bufferSize = 16384;
+   /// The write buffer
+   char writeBuffer[bufferSize];
+   /// The write pointer
+   unsigned writePointer;
+
    /// Construct a new suffix
    static std::string newSuffix();
 
