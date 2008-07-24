@@ -32,6 +32,20 @@ class TurtleParser
       /// The current line
       unsigned line;
 
+      /// Size of the read buffer
+      static const unsigned readBufferSize = 1024;
+      /// Read buffer
+      char readBuffer[readBufferSize];
+      /// Read buffer pointers
+      char* readBufferStart,*readBufferEnd;
+
+      /// Read new characters
+      bool doRead(char& c);
+      /// Read a character
+      bool read(char& c) { if (readBufferStart<readBufferEnd) { c=*(readBufferStart++); return true; } else return doRead(c); }
+      /// Unread the last character
+      void unread() { readBufferStart--; }
+
       /// Lex a hex code
       unsigned lexHexCode(unsigned len);
       /// Lex an escape sequence

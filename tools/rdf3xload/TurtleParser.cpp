@@ -4,7 +4,7 @@
 using namespace std;
 //---------------------------------------------------------------------------
 TurtleParser::Lexer::Lexer(istream& in)
-   : in(in),putBack(Eof),line(1)
+   : in(in),putBack(Eof),line(1),readBufferStart(0),readBufferEnd(0)
    // Constructor
 {
 }
@@ -12,6 +12,18 @@ TurtleParser::Lexer::Lexer(istream& in)
 TurtleParser::Lexer::~Lexer()
    // Destructor
 {
+}
+//---------------------------------------------------------------------------
+bool TurtleParser::Lexer::doRead(char& c)
+   // Read new characters
+{
+   readBufferStart=readBuffer;
+   readBufferEnd=readBufferStart+in.readsome(readBuffer,readBufferSize);
+
+   if (readBufferStart<readBufferEnd) {
+      c=*(readBufferStart++);
+      return true;
+   } else return false;
 }
 //---------------------------------------------------------------------------
 static bool issep(char c) { return (c==' ')||(c=='\t')||(c=='\n')||(c=='\r')||(c=='[')||(c==']')||(c=='(')||(c==')')||(c==',')||(c==';')||(c==':')||(c=='.'); }
@@ -25,7 +37,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(std::string& token,cha
       // Sign?
       if ((c=='+')||(c=='-')) {
          token+=c;
-         if (!in.get(c)) break;
+         if (!read(c)) break;
       }
 
       // First number block
@@ -33,10 +45,10 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(std::string& token,cha
          if ((c<'0')||(c>'9')) break;
          while ((c>='0')&&(c<='9')) {
             token+=c;
-            if (!in.get(c)) return Integer;
+            if (!read(c)) return Integer;
          }
          if (issep(c)) {
-            in.unget();
+            unread();
             return Integer;
          }
       }
@@ -44,14 +56,14 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(std::string& token,cha
       // Dot?
       if (c=='.') {
          token+=c;
-         if (!in.get(c)) break;
+         if (!read(c)) break;
          // Second number block
          while ((c>='0')&&(c<='9')) {
             token+=c;
-            if (!in.get(c)) return Decimal;
+            if (!read(c)) return Decimal;
          }
          if (issep(c)) {
-            in.unget();
+            unread();
             return Decimal;
          }
       }
@@ -59,18 +71,18 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(std::string& token,cha
       // Exponent
       if ((c!='e')&&(c!='E')) break;
       token+=c;
-      if (!in.get(c)) break;
+      if (!read(c)) break;
       if ((c=='-')||(c=='+')) {
          token+=c;
-         if (!in.get(c)) break;
+         if (!read(c)) break;
       }
       if ((c<'0')||(c>'9')) break;
       while ((c>='0')&&(c<='9')) {
          token+=c;
-         if (!in.get(c)) return Double;
+         if (!read(c)) return Double;
       }
       if (issep(c)) {
-         in.unget();
+         unread();
          return Double;
       }
       break;
@@ -89,7 +101,7 @@ unsigned TurtleParser::Lexer::lexHexCode(unsigned len)
 
       // Read the next char
       char c;
-      if (!in.get(c)) break;
+      if (!read(c)) break;
 
       // Interpret it
       if ((c>='0')&&(c<='9')) result=(result<<4)|(c-'0'); else
@@ -123,7 +135,7 @@ void TurtleParser::Lexer::lexEscape(std::string& token)
 {
    while (true) {
       char c;
-      if (!in.get(c)) break;
+      if (!read(c)) break;
       // Standard escapes?
       if (c=='t') { token+='\t'; return; }
       if (c=='n') { token+='\n'; return; }
@@ -155,11 +167,11 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexLongString(std::string& token
    // Lex a long string, first """ already consumed
 {
    char c;
-   while (in.get(c)) {
+   while (read(c)) {
       if (c=='\"') {
-         if (!in.get(c)) break;
+         if (!read(c)) break;
          if (c!='\"') { token+='\"'; continue; }
-         if (!in.get(c)) break;
+         if (!read(c)) break;
          if (c!='\"') { token+="\"\""; continue; }
          return String;
       }
@@ -180,18 +192,18 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexString(std::string& token,cha
    token.resize(0);
 
    // Check the next character
-   if (!in.get(c)) {
+   if (!read(c)) {
       cerr << "lexer error in line " << line << ": invalid string" << endl;
       throw Exception();
    }
 
    // Another quote?
    if (c=='\"') {
-      if (!in.get(c))
+      if (!read(c))
          return String;
       if (c=='\"')
          return lexLongString(token);
-      in.unget();
+      unread();
       return String;
    }
 
@@ -204,7 +216,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexString(std::string& token,cha
          token+=c;
          if (c=='\n') line++;
       }
-      if (!in.get(c)) {
+      if (!read(c)) {
          cerr << "lexer error in line " << line << ": invalid string" << endl;
          throw Exception();
       }
@@ -217,7 +229,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexURI(std::string& token,char c
    token.resize(0);
 
    // Check the next character
-   if (!in.get(c)) {
+   if (!read(c)) {
       cerr << "lexer error in line " << line << ": invalid URI" << endl;
       throw Exception();
    }
@@ -231,7 +243,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexURI(std::string& token,char c
          token+=c;
          if (c=='\n') line++;
       }
-      if (!in.get(c)) {
+      if (!read(c)) {
          cerr << "lexer error in line " << line << ": invalid URI" << endl;
          throw Exception();
       }
@@ -251,12 +263,12 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next(std::string& token)
 
    // Read more
    char c;
-   while (in.get(c)) {
+   while (read(c)) {
       switch (c) {
          case ' ': case '\t': case '\r': continue;
          case '\n': line++; continue;
-         case '#': while (in.get(c)) if ((c=='\n')||(c=='\r')) break; if (c=='\n') ++line; continue;
-         case '.': if (!in.get(c)) return Dot; in.unget(); if ((c>='0')&&(c<='9')) return lexNumber(token,'.'); return Dot;
+         case '#': while (read(c)) if ((c=='\n')||(c=='\r')) break; if (c=='\n') ++line; continue;
+         case '.': if (!read(c)) return Dot; unread(); if ((c>='0')&&(c<='9')) return lexNumber(token,'.'); return Dot;
          case ':': return Colon;
          case ';': return Semicolon;
          case ',': return Comma;
@@ -268,7 +280,7 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next(std::string& token)
          case '+': case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
             return lexNumber(token,c);
          case '^':
-            if ((!in.get(c))||(c!='^')) {
+            if ((!read(c))||(c!='^')) {
                cerr << "lexer error in line " << line << ": '^' expected" << endl;
                throw Exception();
             }
@@ -278,8 +290,8 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next(std::string& token)
          default:
             if (((c>='A')&&(c<='Z'))||((c>='a')&&(c<='z'))||(c=='_')) { // XXX unicode!
                token=c;
-               while (in.get(c)) {
-                  if (issep(c)) { in.unget(); break; }
+               while (read(c)) {
+                  if (issep(c)) { unread(); break; }
                   token+=c;
                }
                if (token=="a") return A;
