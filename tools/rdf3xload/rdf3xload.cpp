@@ -115,6 +115,19 @@ static int compareId(const char* left,const char* right)
    return cmpIds(leftId,rightId);
 }
 //---------------------------------------------------------------------------
+static int compareValue(const char* left,const char* right)
+   // Sort by integer value
+{
+   uint64_t leftId,rightId;
+   TempFile::readId(left,leftId);
+   TempFile::readId(right,rightId);
+   if (leftId<rightId)
+      return -1;
+   if (leftId>rightId)
+      return 1;
+   return 0;
+}
+//---------------------------------------------------------------------------
 static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile& stringIds)
    // Build the dictionary
 {
@@ -182,7 +195,7 @@ static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile&
    }
 
    // And a final sort
-   Sorter::sort(newIds,stringIds,skipIdId,compareId);
+   Sorter::sort(newIds,stringIds,skipIdId,compareValue);
    newIds.discard();
 }
 //---------------------------------------------------------------------------
@@ -274,7 +287,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
 
    // Sort by subject
    TempFile sortedBySubject(rawFacts.getBaseFile());
-   Sorter::sort(rawFacts,sortedBySubject,skipIdIdId,compareId);
+   Sorter::sort(rawFacts,sortedBySubject,skipIdIdId,compareValue);
    rawFacts.discard();
 
    // Resolve the subject
@@ -300,7 +313,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
 
    // Sort by predicate
    TempFile sortedByPredicate(rawFacts.getBaseFile());
-   Sorter::sort(subjectResolved,sortedByPredicate,skipIdIdId,compareId);
+   Sorter::sort(subjectResolved,sortedByPredicate,skipIdIdId,compareValue);
    subjectResolved.discard();
 
    // Resolve the predicate
@@ -326,7 +339,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
 
    // Sort by object
    TempFile sortedByObject(rawFacts.getBaseFile());
-   Sorter::sort(predicateResolved,sortedByObject,skipIdIdId,compareId);
+   Sorter::sort(predicateResolved,sortedByObject,skipIdIdId,compareValue);
    predicateResolved.discard();
 
    // Resolve the object
@@ -547,7 +560,7 @@ static void loadStrings(DatabaseBuilder& builder,TempFile& stringTable)
    // Load the hash->page mappings
    {
       TempFile sortedByHash(stringTable.getBaseFile());
-      Sorter::sort(reader.getOut(),sortedByHash,skipIdIdId,compareId);
+      Sorter::sort(reader.getOut(),sortedByHash,skipIdIdId,compareValue);
       StringHashesReader infoReader(sortedByHash);
       builder.loadStringHashes(infoReader);
    }
