@@ -10,7 +10,8 @@ include tools/dumpyago/LocalMakefile
 include tools/factstest/LocalMakefile
 include tools/rdf3xdump/LocalMakefile
 include tools/rdf3xload/LocalMakefile
+include tools/rdf3xquery/LocalMakefile
 include tools/runbenchmark/LocalMakefile
 
-src_tools:=$(src_tools_buildmonetdb) $(src_tools_buildn3) $(src_tools_buildpostgresql) $(src_tools_buildrdfstore) $(src_tools_evalsparql) $(src_tools_dictionarytest) $(src_tools_dumpredland) $(src_tools_dumpyago) $(src_tools_factstest) $(src_tools_rdf3xdump) $(src_tools_rdf3xload)
+src_tools:=$(src_tools_buildmonetdb) $(src_tools_buildn3) $(src_tools_buildpostgresql) $(src_tools_buildrdfstore) $(src_tools_evalsparql) $(src_tools_dictionarytest) $(src_tools_dumpredland) $(src_tools_dumpyago) $(src_tools_factstest) $(src_tools_rdf3xdump) $(src_tools_rdf3xload) $(src_tools_rdf3xquery)
 
