@@ -19,7 +19,7 @@ struct Range {
    Range(const char* from,const char* to) : from(from),to(to) {}
 
    /// Some content?
-   bool equals(const Range& o) { return ((from-to)==(o.from-o.to))&&(memcmp(from,o.from,from-to)==0); }
+   bool equals(const Range& o) { return ((to-from)==(o.to-o.from))&&(memcmp(from,o.from,to-from)==0); }
 };
 //---------------------------------------------------------------------------
 /// Sort wrapper that colls the comparison function
