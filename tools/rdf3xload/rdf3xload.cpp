@@ -406,35 +406,35 @@ static void loadFacts(DatabaseBuilder& builder,TempFile& facts)
    {
       TempFile sorted(facts.getBaseFile());
       Sorter::sort(facts,sorted,skipIdIdId,compare132);
-      Load132 loader(facts);
+      Load132 loader(sorted);
       builder.loadFacts(1,loader);
    }
    // Order 2
    {
       TempFile sorted(facts.getBaseFile());
       Sorter::sort(facts,sorted,skipIdIdId,compare321);
-      Load321 loader(facts);
+      Load321 loader(sorted);
       builder.loadFacts(2,loader);
    }
    // Order 3
    {
       TempFile sorted(facts.getBaseFile());
       Sorter::sort(facts,sorted,skipIdIdId,compare312);
-      Load312 loader(facts);
+      Load312 loader(sorted);
       builder.loadFacts(3,loader);
    }
    // Order 4
    {
       TempFile sorted(facts.getBaseFile());
       Sorter::sort(facts,sorted,skipIdIdId,compare213);
-      Load213 loader(facts);
+      Load213 loader(sorted);
       builder.loadFacts(4,loader);
    }
    // Order 5
    {
       TempFile sorted(facts.getBaseFile());
       Sorter::sort(facts,sorted,skipIdIdId,compare231);
-      Load231 loader(facts);
+      Load231 loader(sorted);
       builder.loadFacts(5,loader);
    }
 }
