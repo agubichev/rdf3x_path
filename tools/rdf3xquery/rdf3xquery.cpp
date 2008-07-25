@@ -107,6 +107,7 @@ int main(int argc,char* argv[])
    cout << "Enter 'help' for instructions" << endl;
    while (true) {
       string query;
+      cout << ">"; cout.flush();
       getline(cin,query);
 
       if ((query=="quit")||(query=="exit")) {
