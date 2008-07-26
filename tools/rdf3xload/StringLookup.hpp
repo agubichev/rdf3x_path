@@ -2,8 +2,7 @@
 #define H_tools_rdf3xload_StringLookup
 //---------------------------------------------------------------------------
 #include <string>
-//---------------------------------------------------------------------------
-class TempFile;
+#include "TempFile.hpp"
 //---------------------------------------------------------------------------
 /// Lookup cache for early string aggregation
 class StringLookup {

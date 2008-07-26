@@ -1,5 +1,6 @@
 #include "TurtleParser.hpp"
 #include <iostream>
+#include <sstream>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -329,9 +330,9 @@ void TurtleParser::parseError(const string& message)
 void TurtleParser::newBlankNode(std::string& node)
    // Construct a new blank node
 {
-   char buffer[50];
-   snprintf(buffer,sizeof(buffer),"_:_%u",nextBlank++);
-   node=buffer;
+   stringstream buffer;
+   buffer << "_:_" << (nextBlank++);
+   node=buffer.str();
 }
 //---------------------------------------------------------------------------
 void TurtleParser::parseDirective()

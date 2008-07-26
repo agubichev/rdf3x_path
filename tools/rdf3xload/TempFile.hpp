@@ -4,6 +4,10 @@
 #include <fstream>
 #include <string>
 //---------------------------------------------------------------------------
+#if defined(_MSC_VER)
+typedef unsigned __int64 uint64_t;
+#endif
+//---------------------------------------------------------------------------
 /// A temporary file
 class TempFile
 {

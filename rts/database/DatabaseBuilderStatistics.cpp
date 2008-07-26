@@ -4,6 +4,7 @@
 #include "rts/segment/FactsSegment.hpp"
 #include <iostream>
 #include <vector>
+#include <algorithm>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------

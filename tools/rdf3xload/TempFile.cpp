@@ -1,4 +1,5 @@
 #include "TempFile.hpp"
+#include <sstream>
 #include <cassert>
 //---------------------------------------------------------------------------
 using namespace std;
@@ -9,9 +10,9 @@ unsigned TempFile::id = 0;
 string TempFile::newSuffix()
    // Construct a new suffix
 {
-   char buffer[50];
-   snprintf(buffer,sizeof(buffer),".%u",id++);
-   return string(buffer);
+   stringstream buffer;
+   buffer << '.' << (id++);
+   return buffer.str();
 }
 //---------------------------------------------------------------------------
 TempFile::TempFile(const string& baseName)

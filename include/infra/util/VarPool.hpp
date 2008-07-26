@@ -11,9 +11,17 @@
   */
 template <class T> class VarPool
 {
+   private:
+   /// Dummy container for size compuations
+   struct AlignmentTest1 { char c; T a; };
+   /// Dummy container for size compuations
+   struct AlignmentTest2 { T a; };
+   /// The alignment
+   static const unsigned alignment = sizeof(AlignmentTest1)-sizeof(AlignmentTest2);
+
    public:
    /// Base size of an entry. Takes alignment into account.
-   static const unsigned basicSize = (sizeof(T[3])-sizeof(T[2]));
+   static const unsigned basicSize = static_cast<unsigned>((sizeof(AlignmentTest2)+alignment-1)/alignment)*alignment;
 
    private:
    /// Header of a memory chunk
