@@ -20,6 +20,21 @@ bool smallAddressSpace()
    return sizeof(void*)<8;
 }
 //---------------------------------------------------------------------------
+static string readInput(istream& in)
+   // Read a stream into a string
+{
+   string result;
+   while (true) {
+      string s;
+      getline(in,s);
+      if (!in.good())
+         break;
+      result+=s;
+      result+='\n';
+   }
+   return result;
+}
+//---------------------------------------------------------------------------
 static void showHelp()
    // Show internal commands
 {
@@ -91,8 +106,8 @@ int main(int argc,char* argv[])
       cerr << "Warning: Running RDF-3X on a 32 bit system is not supported and will fail for large data sets. Please use a 64 bit system instead!" << endl;
 
    // Check the arguments
-   if (argc!=2) {
-      cout << "usage: " << argv[0] << " <database>" << endl;
+   if ((argc!=2)&&(argc!=3)) {
+      cout << "usage: " << argv[0] << " <database> [queryfile]" << endl;
       return 1;
    }
 
@@ -103,21 +118,32 @@ int main(int argc,char* argv[])
       return 1;
    }
 
-   // And accept user input
-   cout << "Enter 'help' for instructions" << endl;
-   while (true) {
-      string query;
-      cout << ">"; cout.flush();
-      getline(cin,query);
+   // Execute a single query?
+   if (argc==3) {
+      ifstream in(argv[2]);
+      if (!in.is_open()) {
+         cout << "unable to open " << argv[2] << endl;
+         return 1;
+      }
+      string query=readInput(in);
+      runQuery(db,query,false);
+   } else {
+      // No, accept user input
+      cout << "Enter 'help' for instructions" << endl;
+      while (true) {
+         string query;
+         cout << ">"; cout.flush();
+         getline(cin,query);
 
-      if ((query=="quit")||(query=="exit")) {
-         break;
-      } else if (query=="help") {
-         showHelp();
-      } else if (query.substr(0,8)=="explain ") {
-         runQuery(db,query.substr(8),true);
-      } else {
-         runQuery(db,query,false);
+         if ((query=="quit")||(query=="exit")) {
+            break;
+         } else if (query=="help") {
+            showHelp();
+         } else if (query.substr(0,8)=="explain ") {
+            runQuery(db,query.substr(8),true);
+         } else {
+            runQuery(db,query,false);
+         }
       }
    }
 }
