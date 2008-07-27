@@ -11,6 +11,8 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
+// XXX integrate DPhyper-based optimization, query path statistics
+//---------------------------------------------------------------------------
 /// Description for a join
 struct PlanGen::JoinDescription
 {
