@@ -345,6 +345,8 @@ bool buildDatabaseStatistics(DatabaseBuilder& builder)
       cout << "Building statistic " << (index+1) << "..." << endl;
       builder.computeStatistics(index);
    }
+   cout << "Building path statistic" << endl;
+   builder.compatePathStatistics();
 
    return true;
 }

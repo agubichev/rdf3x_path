@@ -2,8 +2,16 @@
 #include "rts/database/Database.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
+#include "rts/operator/AggregatedIndexScan.hpp"
+#include "rts/operator/Filter.hpp"
+#include "rts/operator/FullyAggregatedIndexScan.hpp"
+#include "rts/operator/HashGroupify.hpp"
+#include "rts/operator/MergeJoin.hpp"
+#include "rts/runtime/Runtime.hpp"
 #include <iostream>
 #include <vector>
+#include <map>
+#include <set>
 #include <algorithm>
 //---------------------------------------------------------------------------
 using namespace std;
@@ -314,7 +322,7 @@ void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* p
 }
 //---------------------------------------------------------------------------
 void DatabaseBuilder::computeStatistics(unsigned order)
-   // Compare specific statistics (after loading)
+   // Compute specific statistics (after loading)
 {
    // Open the database again
    Database db;
@@ -338,5 +346,438 @@ void DatabaseBuilder::computeStatistics(unsigned order)
    }
    out.seekp(directory.statistics[order]*pageSize,ios::beg);
    out.write(reinterpret_cast<char*>(statisticPage),pageSize);
+}
+//---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Maximum number of paths fitting on a page (upper bound)
+static const unsigned maxPathPerPage = DatabaseBuilder::pageSize / (3*4);
+//---------------------------------------------------------------------------
+// Information about a single path
+struct PathInfo {
+   /// The steps
+   vector<unsigned> steps;
+   /// The count
+   unsigned count;
+
+   /// Order by decreasing size
+   bool operator<(const PathInfo& p) const { return count>p.count; }
+};
+//---------------------------------------------------------------------------
+void collectTopPaths(unsigned k,vector<PathInfo>& result,Operator* plan,unsigned outputCount,Register* output)
+   // Collect the top k paths
+{
+   result.clear();
+
+   // Collect the plans
+   unsigned count,cutoff=0;
+   if ((count=plan->first())!=0) do {
+      // Safe to discard?
+      if (count<cutoff)
+         continue;
+
+      // No, construct a new path
+      PathInfo path;
+      for (unsigned index=0;index<outputCount;index++)
+         path.steps.push_back(output[index].value);
+      path.count=count;
+      result.push_back(path);
+
+      // Sort and prune if needed
+      if (result.size()>10*k) {
+         sort(result.begin(),result.end());
+         result.resize(k);
+         cutoff=result.back().count;
+      }
+   } while ((count=plan->next())!=0);
+
+   // Final sort and cutoff
+   sort(result.begin(),result.end());
+   if (result.size()>k)
+      result.resize(k);
+}
+//---------------------------------------------------------------------------
+bool couldMerge(const map<vector<unsigned>,unsigned>& mergeInfo,const vector<unsigned>& steps)
+   // Are all subsequences of size-1 available?
+{
+   if (steps.empty())
+      return true;
+
+   // Sequence 1
+   vector<unsigned> seq=steps;
+   seq.erase(seq.begin());
+   if (!mergeInfo.count(seq))
+      return false;
+
+   // Sequence 2
+   seq=steps;
+   seq.pop_back();
+   if (!mergeInfo.count(seq))
+      return false;
+
+   return true;
+}
+//---------------------------------------------------------------------------
+void doMerge(vector<PathInfo>& result,map<vector<unsigned>,unsigned>& mergeInfo,const vector<unsigned>& steps,unsigned count)
+   // Perform a merge, adding all required subsequences first
+{
+   if (steps.empty())
+      return;
+
+   // Check subsequence 1
+   vector<unsigned> seq=steps;
+   seq.erase(seq.begin());
+   if (mergeInfo[seq]) {
+      doMerge(result,mergeInfo,seq,mergeInfo[seq]);
+      mergeInfo[seq]=0;
+   }
+
+   // Check subsequence 2
+   seq=steps;
+   seq.pop_back();
+   if (mergeInfo[seq]) {
+      doMerge(result,mergeInfo,seq,mergeInfo[seq]);
+      mergeInfo[seq]=0;
+   }
+
+   // And the result itself
+   PathInfo p;
+   p.steps=steps;
+   p.count=count;
+   result.push_back(p);
+}
+//---------------------------------------------------------------------------
+void mergeLevels(unsigned k,vector<PathInfo>& result,const vector<PathInfo>& level1,const vector<PathInfo> level2)
+   // Merge two levels
+{
+   // Prepare the merge info for level1
+   map<vector<unsigned>,unsigned> mergeInfo;
+   for (vector<PathInfo>::const_iterator iter=level1.begin(),limit=level1.end();iter!=limit;++iter)
+      mergeInfo[(*iter).steps]=(*iter).count;
+
+   // Perform the merge
+   result.clear();
+   unsigned index1=0,index2=0;
+   while (result.size()<k) {
+      // Did we reach the end of one list?
+      if (index1>=level1.size()) {
+         if (index2>=level2.size()) break;
+         if (couldMerge(mergeInfo,level2[index2].steps))
+            result.push_back(level2[index2]);
+         index2++;
+         continue;
+      }
+      if (index2>=level2.size()) {
+         result.push_back(level1[index1]);
+         index1++;
+         continue;
+      }
+      // No, perform a real merge
+      if (level1[index1].count>=level2[index2].count) {
+         result.push_back(level1[index1]);
+         mergeInfo[level1[index1].steps]=0;
+         continue;
+      }
+      if (couldMerge(mergeInfo,level2[index2].steps)) {
+         doMerge(result,mergeInfo,level2[index2].steps,level2[index2].count);
+      }
+      index2++;
+   }
+   // Final check
+   if (result.size()>k)
+      result.resize(k);
+}
+//---------------------------------------------------------------------------
+void buildChainStatisticsPage(Database& db,unsigned char* statisticPage)
+   // Compute frequent chain path
+{
+   // Compute the initial seeds
+   vector<PathInfo> pathLevel1;
+   {
+      Register regs[1];
+      FullyAggregatedIndexScan* scan=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,regs,false,0,false);
+      collectTopPaths(maxPathPerPage,pathLevel1,scan,1,regs);
+      delete scan;
+   }
+
+   // Compute the next level
+   vector<PathInfo> pathLevel2;
+   {
+      // Compute predicate filters
+      vector<unsigned> values;
+      for (vector<PathInfo>::const_iterator iter=pathLevel1.begin(),limit=pathLevel1.end();iter!=limit;++iter)
+         values.push_back((*iter).steps.front());
+      sort(values.begin(),values.end());
+
+      // And build an execution Plan
+      Register regs[4];
+      AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,regs+0,false,regs+2,false);
+      Filter* filter1=new Filter(scan1,regs+1,values,false);
+      AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+3,false,regs+1,false,0,false);
+      Filter* filter2=new Filter(scan2,regs+3,values,false);
+      vector<Register*> leftTail,rightTail,group;
+      leftTail.push_back(regs+0); rightTail.push_back(regs+1);
+      MergeJoin* join=new MergeJoin(filter1,regs+2,leftTail,filter2,regs+3,rightTail);
+      group.push_back(regs+0); group.push_back(regs+1);
+      HashGroupify* groupify=new HashGroupify(join,group);
+
+      // Run it
+      collectTopPaths(maxPathPerPage,pathLevel2,groupify,2,regs);
+      delete groupify;
+   }
+
+   // XXX integrate the full recursion algorithm
+
+   // Merge the levels
+   vector<PathInfo> result;
+   mergeLevels(maxPathPerPage,result,pathLevel1,pathLevel2);
+
+   // And fill the page
+   memset(statisticPage,0,DatabaseBuilder::pageSize);
+   unsigned count=0,ofs=4;
+   for (vector<PathInfo>::const_iterator iter=result.begin(),limit=result.end();iter!=limit;++iter) {
+      unsigned len=4+4+(4*(*iter).steps.size());
+      if (ofs+len>DatabaseBuilder::pageSize)
+         break;
+      writeUint32(statisticPage+ofs,(*iter).steps.size()); ofs+=4;
+      for (vector<unsigned>::const_iterator iter2=(*iter).steps.begin(),limit2=(*iter).steps.end();iter2!=limit2;++iter2) {
+         writeUint32(statisticPage+ofs,(*iter2)); ofs+=4;
+      }
+      writeUint32(statisticPage+ofs,(*iter).count); ofs+=4;
+      count++;
+   }
+   writeUint32(statisticPage,count);
+}
+//---------------------------------------------------------------------------
+// Information about a star path
+struct StarInfo {
+   /// The steps
+   set<unsigned> steps;
+   /// The count
+   unsigned count;
+
+   /// Order by decreasing size
+   bool operator<(const StarInfo& p) const { return count>p.count; }
+};
+//---------------------------------------------------------------------------
+void collectTopStars(unsigned k,vector<StarInfo>& result,Operator* plan,unsigned outputCount,Register* output)
+   // Collect the top k stars
+{
+   result.clear();
+
+   // Collect the plans
+   unsigned count,cutoff=0;
+   if ((count=plan->first())!=0) do {
+      // Safe to discard?
+      if (count<cutoff)
+         continue;
+
+      // Can discard due to value order?
+      bool invalid=false;
+      for (unsigned index=1;index<outputCount;index++)
+         if (output[index].value<=output[index-1].value)
+            invalid=true;
+      if (invalid) continue;
+
+      // No, construct a new star
+      StarInfo star;
+      for (unsigned index=0;index<outputCount;index++)
+         star.steps.insert(output[index].value);
+      star.count=count;
+      result.push_back(star);
+
+      // Sort and prune if needed
+      if (result.size()>10*k) {
+         sort(result.begin(),result.end());
+         result.resize(k);
+         cutoff=result.back().count;
+      }
+   } while ((count=plan->next())!=0);
+
+   // Final sort and cutoff
+   sort(result.begin(),result.end());
+   if (result.size()>k)
+      result.resize(k);
+}
+//---------------------------------------------------------------------------
+bool couldMerge(const map<set<unsigned>,unsigned>& mergeInfo,const set<unsigned>& steps)
+   // Are all subsets of size-1 available?
+{
+   if (steps.empty())
+      return true;
+
+   // All subsets
+   for (unsigned index=0;index<steps.size();index++) {
+      set<unsigned> sub;
+      unsigned index2=0;
+      for (set<unsigned>::const_iterator iter=steps.begin(),limit=steps.end();iter!=limit;++iter,++index2)
+         if (index!=index2)
+            sub.insert(*iter);
+      if (!mergeInfo.count(sub))
+         return false;
+   }
+
+   return true;
+}
+//---------------------------------------------------------------------------
+void doMerge(vector<StarInfo>& result,map<set<unsigned>,unsigned>& mergeInfo,const set<unsigned>& steps,unsigned count)
+   // Perform a merge, adding all required subsets first
+{
+   if (steps.empty())
+      return;
+
+   // Check all subsets
+   for (unsigned index=0;index<steps.size();index++) {
+      set<unsigned> sub;
+      unsigned index2=0;
+      for (set<unsigned>::const_iterator iter=steps.begin(),limit=steps.end();iter!=limit;++iter,++index2)
+         if (index!=index2)
+            sub.insert(*iter);
+      if (mergeInfo[sub]) {
+         doMerge(result,mergeInfo,sub,mergeInfo[sub]);
+         mergeInfo[sub]=0;
+      }
+   }
+
+   // And the result itself
+   StarInfo s;
+   s.steps=steps;
+   s.count=count;
+   result.push_back(s);
+}
+//---------------------------------------------------------------------------
+void mergeLevels(unsigned k,vector<StarInfo>& result,const vector<StarInfo>& level1,const vector<StarInfo> level2)
+   // Merge two levels
+{
+   // Prepare the merge info for level1
+   map<set<unsigned>,unsigned> mergeInfo;
+   for (vector<StarInfo>::const_iterator iter=level1.begin(),limit=level1.end();iter!=limit;++iter)
+      mergeInfo[(*iter).steps]=(*iter).count;
+
+   // Perform the merge
+   result.clear();
+   unsigned index1=0,index2=0;
+   while (result.size()<k) {
+      // Did we reach the end of one list?
+      if (index1>=level1.size()) {
+         if (index2>=level2.size()) break;
+         if (couldMerge(mergeInfo,level2[index2].steps))
+            result.push_back(level2[index2]);
+         index2++;
+         continue;
+      }
+      if (index2>=level2.size()) {
+         result.push_back(level1[index1]);
+         index1++;
+         continue;
+      }
+      // No, perform a real merge
+      if (level1[index1].count>=level2[index2].count) {
+         result.push_back(level1[index1]);
+         mergeInfo[level1[index1].steps]=0;
+         continue;
+      }
+      if (couldMerge(mergeInfo,level2[index2].steps)) {
+         doMerge(result,mergeInfo,level2[index2].steps,level2[index2].count);
+      }
+      index2++;
+   }
+   // Final check
+   if (result.size()>k)
+      result.resize(k);
+}
+//---------------------------------------------------------------------------
+void buildStarStatisticsPage(Database& db,unsigned char* statisticPage)
+   // Compute statistics about star patterns
+{
+   // Compute the initial seeds
+   vector<StarInfo> pathLevel1;
+   {
+      Register regs[1];
+      FullyAggregatedIndexScan* scan=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,regs,false,0,false);
+      collectTopStars(maxPathPerPage,pathLevel1,scan,1,regs);
+      delete scan;
+   }
+
+   // Compute the next level
+   vector<StarInfo> pathLevel2;
+   {
+      // Compute predicate filters
+      vector<unsigned> values;
+      for (vector<StarInfo>::const_iterator iter=pathLevel1.begin(),limit=pathLevel1.end();iter!=limit;++iter)
+         values.push_back(*((*iter).steps.begin()));
+      sort(values.begin(),values.end());
+
+      // And build an execution Plan
+      Register regs[4];
+      AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+2,false,regs+0,false,0,false);
+      Filter* filter1=new Filter(scan1,regs+1,values,false);
+      AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+3,false,regs+1,false,0,false);
+      Filter* filter2=new Filter(scan2,regs+3,values,false);
+      vector<Register*> leftTail,rightTail,group;
+      leftTail.push_back(regs+0); rightTail.push_back(regs+1);
+      MergeJoin* join=new MergeJoin(filter1,regs+2,leftTail,filter2,regs+3,rightTail);
+      group.push_back(regs+0); group.push_back(regs+1);
+      HashGroupify* groupify=new HashGroupify(join,group);
+
+      // Run it
+      collectTopStars(maxPathPerPage,pathLevel2,groupify,2,regs);
+      delete groupify;
+   }
+
+   // XXX integrate the full recursion algorithm
+
+   // Merge the levels
+   vector<StarInfo> result;
+   mergeLevels(maxPathPerPage,result,pathLevel1,pathLevel2);
+
+   // And fill the page
+   memset(statisticPage,0,DatabaseBuilder::pageSize);
+   unsigned count=0,ofs=4;
+   for (vector<StarInfo>::const_iterator iter=result.begin(),limit=result.end();iter!=limit;++iter) {
+      unsigned len=4+4+(4*(*iter).steps.size());
+      if (ofs+len>DatabaseBuilder::pageSize)
+         break;
+      writeUint32(statisticPage+ofs,(*iter).steps.size()); ofs+=4;
+      for (set<unsigned>::const_iterator iter2=(*iter).steps.begin(),limit2=(*iter).steps.end();iter2!=limit2;++iter2) {
+         writeUint32(statisticPage+ofs,(*iter2)); ofs+=4;
+      }
+      writeUint32(statisticPage+ofs,(*iter).count); ofs+=4;
+      count++;
+   }
+   writeUint32(statisticPage,count);
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+void DatabaseBuilder::computePathStatistics()
+   // Compute statistics about frequent paths (after loading)
+{
+   // Open the database again
+   Database db;
+   if (!db.open(dbFile)) {
+      cout << "Unable to open " << dbFile << endl;
+      throw;
+   }
+
+   // Build the statistics pages
+   unsigned char statisticPageChain[pageSize];
+   buildChainStatisticsPage(db,statisticPageChain);
+   unsigned char statisticPageStar[pageSize];
+   buildStarStatisticsPage(db,statisticPageStar);
+
+   // Close the database
+   db.close();
+
+   // And patch the statistics
+   ofstream out(dbFile,ios::in|ios::out|ios::ate|ios::binary);
+   if (!out.is_open()) {
+      cout << "Unable to write " << dbFile << endl;
+      throw;
+   }
+   out.seekp(directory.pathStatistics[0]*pageSize,ios::beg);
+   out.write(reinterpret_cast<char*>(statisticPageChain),pageSize);
+   out.seekp(directory.pathStatistics[1]*pageSize,ios::beg);
+   out.write(reinterpret_cast<char*>(statisticPageStar),pageSize);
 }
 //---------------------------------------------------------------------------

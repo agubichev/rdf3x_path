@@ -90,6 +90,8 @@ class DatabaseBuilder
       unsigned stringIndex;
       /// Pages with statistics
       unsigned statistics[6];
+      /// Pages with path statistics
+      unsigned pathStatistics[2];
    };
 
    /// The database
@@ -128,8 +130,10 @@ class DatabaseBuilder
    /// Finish the load phase, write the directory
    void finishLoading();
 
-   /// Compare specific statistics (after loading)
+   /// Compute specific statistics (after loading)
    void computeStatistics(unsigned order);
+   /// Compute statistics about frequent paths (after loading)
+   void computePathStatistics();
 };
 //---------------------------------------------------------------------------
 #endif

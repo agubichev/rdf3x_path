@@ -7,6 +7,7 @@ class AggregatedFactsSegment;
 class FullyAggregatedFactsSegment;
 class DictionarySegment;
 class StatisticsSegment;
+class PathStatisticsSegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
 class Database
@@ -31,6 +32,8 @@ class Database
    DictionarySegment* dictionary;
    /// The statistics
    StatisticsSegment* statistics[6];
+   /// The path statistics
+   PathStatisticsSegment* pathStatistics[2];
 
    Database(const Database&);
    void operator=(const Database&);
@@ -54,6 +57,8 @@ class Database
    FullyAggregatedFactsSegment& getFullyAggregatedFacts(DataOrder order);
    /// Get fact statistics
    StatisticsSegment& getStatistics(DataOrder order);
+   /// Get path statistics
+   PathStatisticsSegment& getPathStatistics(bool stars);
    /// Get the dictionary
    DictionarySegment& getDictionary();
 };

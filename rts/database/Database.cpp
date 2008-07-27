@@ -5,6 +5,7 @@
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
+#include "rts/segment/PathStatisticsSegment.hpp"
 //---------------------------------------------------------------------------
 Database::Database()
    : bufferManager(0),dictionary(0)
@@ -17,6 +18,8 @@ Database::Database()
    }
    for (unsigned index=0;index<3;index++)
       fullyAggregatedFacts[index]=0;
+   for (unsigned index=0;index<2;index++)
+      pathStatistics[index]=0;
 }
 //---------------------------------------------------------------------------
 Database::~Database()
@@ -67,10 +70,9 @@ bool Database::open(const char* fileName)
          unsigned statisticsPages[6];
          for (unsigned index=0;index<6;index++)
             statisticsPages[index]=readUint32(page+260+4*index);
-
-// XXX fix construction!
-for (unsigned index=0;index<6;index++)
-   statisticsPages[index]=(bufferManager->getPageCount()-6+index);
+         unsigned pathStatisticsPages[2];
+         for (unsigned index=0;index<2;index++)
+            pathStatisticsPages[index]=readUint32(page+284+4*index);
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
@@ -80,6 +82,8 @@ for (unsigned index=0;index<6;index++)
          }
          for (unsigned index=0;index<3;index++)
             fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*bufferManager,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
+         for (unsigned index=0;index<2;index++)
+            pathStatistics[index]=new PathStatisticsSegment(*bufferManager,pathStatisticsPages[index]);
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
@@ -106,6 +110,10 @@ void Database::close()
    for (unsigned index=0;index<3;index++) {
       delete fullyAggregatedFacts[index];
       fullyAggregatedFacts[index]=0;
+   }
+   for (unsigned index=0;index<2;index++) {
+      delete pathStatistics[index];
+      pathStatistics[index]=0;
    }
    delete dictionary;
    dictionary=0;
@@ -135,6 +143,12 @@ StatisticsSegment& Database::getStatistics(DataOrder order)
    // Get fact statistics
 {
    return *(statistics[order]);
+}
+//---------------------------------------------------------------------------
+PathStatisticsSegment& Database::getPathStatistics(bool stars)
+   // Get path statistics
+{
+   return *(pathStatistics[stars]);
 }
 //---------------------------------------------------------------------------
 DictionarySegment& Database::getDictionary()

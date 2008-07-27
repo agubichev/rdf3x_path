@@ -573,6 +573,8 @@ static void loadStatistics(DatabaseBuilder& builder)
 
    for (unsigned index=0;index<6;index++)
       builder.computeStatistics(index);
+
+   builder.computePathStatistics();
 }
 //---------------------------------------------------------------------------
 static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)

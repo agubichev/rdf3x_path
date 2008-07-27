@@ -905,6 +905,11 @@ void DatabaseBuilder::finishLoading()
       directory.statistics[index]=page;
       ++page;
    }
+   for (unsigned index=0;index<2;index++) {
+      writePage(out,page,buffer);
+      directory.pathStatistics[index]=page;
+      ++page;
+   }
 
    // Write the directory
    unsigned bufferPos = 0;
@@ -939,6 +944,9 @@ void DatabaseBuilder::finishLoading()
    // Write the statistics
    for (unsigned index=0;index<6;index++) {
       writeUint32(buffer+bufferPos,directory.statistics[index]); bufferPos+=4;
+   }
+   for (unsigned index=0;index<2;index++) {
+      writeUint32(buffer+bufferPos,directory.pathStatistics[index]); bufferPos+=4;
    }
 
    // Pad the page and write it to the beginning of the file

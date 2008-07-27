@@ -2,7 +2,8 @@
 #define H_rts_segment_StatisticsSegment
 //---------------------------------------------------------------------------
 #include "rts/segment/Segment.hpp"
-#include "rts/buffer/BufferManager.hpp"
+//---------------------------------------------------------------------------
+class BufferManager;
 //---------------------------------------------------------------------------
 /// Statistics about a certain ordering
 class StatisticsSegment : public Segment
