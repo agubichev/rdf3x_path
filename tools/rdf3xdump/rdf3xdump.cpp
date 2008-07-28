@@ -103,6 +103,10 @@ static void dumpObject(DictionarySegment& dic,unsigned id)
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
+   // Greeting
+   cerr << "RDF-3X turtle exporter" << endl
+        << "(c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x" << endl;
+
    // Check the arguments
    if (argc<2) {
       cerr << "usage: " << argv[0] << " <database>" << endl;

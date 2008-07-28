@@ -56,7 +56,7 @@ static void runQuery(Database& db,const string& query,bool explain)
       try {
          parser.parse();
       } catch (const SPARQLParser::ParserException& e) {
-         cout << "parse error: " << e.message << endl;
+         cerr << "parse error: " << e.message << endl;
          return;
       }
 
@@ -65,7 +65,7 @@ static void runQuery(Database& db,const string& query,bool explain)
       semana.transform(parser,queryGraph);
       if (queryGraph.knownEmpty()) {
          if (explain)
-            cout << "static analysis determined that the query result will be empty" << endl; else
+            cerr << "static analysis determined that the query result will be empty" << endl; else
             cout << "<empty result>" << endl;
          return;
       }
@@ -75,7 +75,7 @@ static void runQuery(Database& db,const string& query,bool explain)
    PlanGen plangen;
    Plan* plan=plangen.translate(db,queryGraph);
    if (!plan) {
-      cout << "internal error plan generation failed" << endl;
+      cerr << "internal error plan generation failed" << endl;
       return;
    }
 
@@ -98,23 +98,24 @@ static void runQuery(Database& db,const string& query,bool explain)
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
-   // Greeting
-   cout << "RDF-3X query interface" << endl;
-
    // Warn first
    if (smallAddressSpace())
       cerr << "Warning: Running RDF-3X on a 32 bit system is not supported and will fail for large data sets. Please use a 64 bit system instead!" << endl;
 
+   // Greeting
+   cerr << "RDF-3X query interface" << endl
+        << "(c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x" << endl;
+
    // Check the arguments
    if ((argc!=2)&&(argc!=3)) {
-      cout << "usage: " << argv[0] << " <database> [queryfile]" << endl;
+      cerr << "usage: " << argv[0] << " <database> [queryfile]" << endl;
       return 1;
    }
 
    // Open the database
    Database db;
    if (!db.open(argv[1])) {
-      cout << "unable to open database " << argv[1] << endl;
+      cerr << "unable to open database " << argv[1] << endl;
       return 1;
    }
 
@@ -122,17 +123,17 @@ int main(int argc,char* argv[])
    if (argc==3) {
       ifstream in(argv[2]);
       if (!in.is_open()) {
-         cout << "unable to open " << argv[2] << endl;
+         cerr << "unable to open " << argv[2] << endl;
          return 1;
       }
       string query=readInput(in);
       runQuery(db,query,false);
    } else {
       // No, accept user input
-      cout << "Enter 'help' for instructions" << endl;
+      cerr << "Enter 'help' for instructions" << endl;
       while (true) {
          string query;
-         cout << ">"; cout.flush();
+         cerr << ">"; cerr.flush();
          getline(cin,query);
 
          if ((query=="quit")||(query=="exit")) {
@@ -144,6 +145,7 @@ int main(int argc,char* argv[])
          } else {
             runQuery(db,query,false);
          }
+         cout.flush();
       }
    }
 }

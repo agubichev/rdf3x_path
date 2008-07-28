@@ -602,10 +602,13 @@ int main(int argc,char* argv[])
    if (smallAddressSpace())
       cerr << "Warning: Running RDF-3X on a 32 bit system is not supported and will fail for large data sets. Please use a 64 bit system instead!" << endl;
 
+   // Greeting
+   cerr << "RDF-3X turtle importer" << endl
+        << "(c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x" << endl;
+
    // Check the arguments
    if (argc<2) {
-      cerr << "RDF-3X turtle importer" << endl
-           << "usage: " << argv[0] << " <database> [input]" << endl
+      cerr <<  "usage: " << argv[0] << " <database> [input]" << endl
            << "without input file data is read from stdin" << endl;
       return 1;
    }
