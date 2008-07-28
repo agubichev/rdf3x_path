@@ -127,7 +127,11 @@ int main(int argc,char* argv[])
          return 1;
       }
       string query=readInput(in);
-      runQuery(db,query,false);
+      if (query.substr(0,8)=="explain ") {
+         runQuery(db,query.substr(8),true);
+      } else {
+         runQuery(db,query,false);
+      }
    } else {
       // No, accept user input
       cerr << "Enter 'help' for instructions" << endl;
