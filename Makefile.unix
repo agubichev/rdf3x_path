@@ -24,6 +24,11 @@ ifneq ($(SYS),Darwin)
 LIBS:=$(LIBS) -lrt
 endif
 
+ifeq ($(LINEEDITOR),1)
+CXXFLAGS:=$(CXXFLAGS) -DCONFIG_LINEEDITOR
+LIBFILE-termcap:=-ltermcap
+endif
+
 define buildexe
 $(CXX) $(EXETARGET)$@ $(CXXFLAGS) $(CXXFLAGS-$(subst $(PREFIX),,$(basename $@))) $(IFLAGS) $(filter %$(OBJEXT),$^) $(foreach file,$(LIBS-$(patsubst $(PREFIX)%$(EXEEXT),%,$@)),$(LIBFILE-$(file))) $(LIBS)
 endef

@@ -8,6 +8,9 @@
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
+#ifdef CONFIG_LINEEDITOR
+#include "lineeditor/LineInput.hpp"
+#endif
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -33,6 +36,20 @@ static string readInput(istream& in)
       result+='\n';
    }
    return result;
+}
+//---------------------------------------------------------------------------
+static bool readLine(string& query)
+   // Read a single line
+{
+#ifdef CONFIG_LINEEDITOR
+   // Use the lineeditor interface
+   static lineeditor::LineInput editHistory(L">");
+   return editHistory.readUtf8(query);
+#else
+   // Default fallback
+   cerr << ">"; cerr.flush();
+   return getline(cin,query);
+#endif
 }
 //---------------------------------------------------------------------------
 static void showHelp()
@@ -137,8 +154,9 @@ int main(int argc,char* argv[])
       cerr << "Enter 'help' for instructions" << endl;
       while (true) {
          string query;
-         cerr << ">"; cerr.flush();
-         getline(cin,query);
+         if (!readLine(query))
+            break;
+         if (query=="") continue;
 
          if ((query=="quit")||(query=="exit")) {
             break;
