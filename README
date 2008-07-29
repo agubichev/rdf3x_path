@@ -1,0 +1,55 @@
+RDF-3X
+(c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
+
+This work is licensed under the Creative Commons
+Attribution-Noncommercial-Share Alike 3.0 Unported License. To view a copy
+of this license, visit http://creativecommons.org/licenses/by-nc-sa/3.0/
+or send a letter to Creative Commons, 171 Second Street, Suite 300,
+San Francisco, California, 94105, USA.
+
+
+Building:
+---------
+
+RDF-3X must be build using GNU make (a Windows version is available from the
+MinGW project) and a reasonable C++ compiler. Ideally a simple
+
+   make
+
+is enough, it will build the tree high-level executables (see below) in bin/.
+To use a different C++ compiler, e.g. the Visual Studio compiler, use
+
+   make CXX=cl
+
+The program is reasonably portable, but a 64 bit operating system (and
+compiler!) is highly recommended. RDF-3X will fail silently if data plus
+intermediate results are larger than the virtual address space.
+
+Using:
+------
+
+RDF-3X currently includes three high-level executables. The first (rdf3xload)
+is used to build a new database from an turtle/ntriples input:
+
+   rdf3xload db mydata.n3
+
+The input file can be arbitrarily large, the rdf3xload spools to disk if
+main memory is exhausted.
+Note: The loader is currently hard-coded to use 1GB of memory. This can be
+reduced by tweaking tools/rdf3xload/Sorter.cpp.
+
+After loading the database can be queried with rdf3xquery:
+
+   rdf3xquery db
+
+The program shows a command prompt and accept SPARQL queries, one query per
+line. Note: RDF-3X currently only supports "select" queries and relatively
+simple FILTER predicates.
+rdf3xquery accepts a file name as second parameter that can be used to
+interpret a file with a single query.
+
+The final program, rdf3xdump is mainly interesting for debugging purposes,
+it dumps the database as turtle file:
+
+   rdf3xdump db > mydump.n3
+
