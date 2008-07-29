@@ -132,15 +132,15 @@ unsigned ResultsPrinter::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void ResultsPrinter::print(unsigned level)
+void ResultsPrinter::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); cout << "<ResultsPrinter";
    for (vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
-      cout << " "; printRegister(*iter);
+      cout << " "; printRegister(dict,*iter);
    }
    cout << endl;
-   input->print(level+1);
+   input->print(dict,level+1);
    indent(level); cout << ">" << endl;
 }
 //---------------------------------------------------------------------------

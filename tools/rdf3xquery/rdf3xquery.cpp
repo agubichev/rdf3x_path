@@ -111,7 +111,7 @@ static void runQuery(Database& db,const string& query,bool explain)
 
    // Explain if requested
    if (explain) {
-      operatorTree->print();
+      operatorTree->print(db.getDictionary());
    } else {
       // Else execute it
       if (operatorTree->first()) {

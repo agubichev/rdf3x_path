@@ -32,7 +32,7 @@ unsigned EmptyScan::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void EmptyScan::print(unsigned level)
+void EmptyScan::print(DictionarySegment& /*dict*/,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<EmptyScan>" << std::endl;

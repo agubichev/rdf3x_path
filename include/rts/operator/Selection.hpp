@@ -46,7 +46,7 @@ class Selection : public Operator
    /// Create a selection
    static Selection* create(Operator* input,const std::vector<Register*>& predicates,bool equal);
    /// Print the operator tree. Debugging only.
-   void print(unsigned indent);
+   void print(DictionarySegment& dict,unsigned indent);
 };
 //---------------------------------------------------------------------------
 #endif

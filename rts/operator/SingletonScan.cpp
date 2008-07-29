@@ -32,7 +32,7 @@ unsigned SingletonScan::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void SingletonScan::print(unsigned level)
+void SingletonScan::print(DictionarySegment& /*dict*/,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<SingletonScan>" << std::endl;

@@ -117,18 +117,18 @@ unsigned MergeUnion::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void MergeUnion::print(unsigned level)
+void MergeUnion::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<MergeUnion ";
-   printRegister(result);
+   printRegister(dict,result);
    std::cout << " [";
-   printRegister(leftReg);
+   printRegister(dict,leftReg);
    std::cout << " ";
-   printRegister(rightReg);
+   printRegister(dict,rightReg);
    std::cout << "]" << std::endl;
-   left->print(level+1);
-   right->print(level+1);
+   left->print(dict,level+1);
+   right->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------

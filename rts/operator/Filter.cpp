@@ -90,11 +90,11 @@ unsigned Filter::next()
    }
 }
 //---------------------------------------------------------------------------
-void Filter::print(unsigned level)
+void Filter::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<Filter ";
-   printRegister(filter);
+   printRegister(dict,filter);
    if (exclude) std::cout << " !";
    std::cout << " [";
    unsigned id=min;
@@ -103,7 +103,7 @@ void Filter::print(unsigned level)
          std::cout << " " << id;
    }
    std::cout << "]" << std::endl;
-   input->print(level+1);
+   input->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------

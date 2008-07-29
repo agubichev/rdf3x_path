@@ -75,7 +75,7 @@ static void evalQuery(Database& db,const string& query,bool silent)
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,silent);
 
    if (getenv("SHOWPLAN"))
-      operatorTree->print();
+      operatorTree->print(db.getDictionary());
 
    // And execute it
    Timestamp start;

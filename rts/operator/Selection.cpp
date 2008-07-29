@@ -151,21 +151,21 @@ unsigned Selection::NotEqual::next()
    }
 }
 //---------------------------------------------------------------------------
-void Selection::print(unsigned level)
+void Selection::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<Selection";
    for (std::vector<Register*>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
       std::cout << " ";
-      printRegister(*iter);
+      printRegister(dict,*iter);
       if (equal)
          std::cout << "="; else
          std::cout << "!=";
       ++iter;
-      printRegister(*iter);
+      printRegister(dict,*iter);
    }
    std::cout << std::endl;
-   input->print(level+1);
+   input->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------

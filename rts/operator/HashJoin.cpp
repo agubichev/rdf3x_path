@@ -158,22 +158,22 @@ unsigned HashJoin::next()
    }
 }
 //---------------------------------------------------------------------------
-void HashJoin::print(unsigned level)
+void HashJoin::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<HashJoin ";
-   printRegister(leftValue); std::cout << "="; printRegister(rightValue);
+   printRegister(dict,leftValue); std::cout << "="; printRegister(dict,rightValue);
    std::cout << " [";
    for (std::vector<Register*>::const_iterator iter=leftTail.begin(),limit=leftTail.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(*iter);
+      std::cout << " "; printRegister(dict,*iter);
    }
    std::cout << "] [";
    for (std::vector<Register*>::const_iterator iter=rightTail.begin(),limit=rightTail.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(*iter);
+      std::cout << " "; printRegister(dict,*iter);
    }
    std::cout << "]" << std::endl;
-   left->print(level+1);
-   right->print(level+1);
+   left->print(dict,level+1);
+   right->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------

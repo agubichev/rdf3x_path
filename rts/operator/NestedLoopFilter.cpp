@@ -58,17 +58,17 @@ unsigned NestedLoopFilter::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void NestedLoopFilter::print(unsigned level)
+void NestedLoopFilter::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<NestedLoopFilter ";
-   printRegister(filter);
+   printRegister(dict,filter);
    std::cout << " [";
    for (std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter) {
       std::cout << " " << (*iter);
    }
    std::cout << "]" << std::endl;
-   input->print(level+1);
+   input->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------

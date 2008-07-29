@@ -78,7 +78,7 @@ unsigned Union::next()
    return count;
 }
 //---------------------------------------------------------------------------
-void Union::print(unsigned level)
+void Union::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<Union" << std::endl;
@@ -87,17 +87,17 @@ void Union::print(unsigned level)
       std::cout << "[";
       for (unsigned index2=0;index2<mappings[index].size();index2+=2) {
          if (index2) std::cout << " ";
-         printRegister(mappings[index][index2]);
+         printRegister(dict,mappings[index][index2]);
          std::cout << "->";
-         printRegister(mappings[index][index2+1]);
+         printRegister(dict,mappings[index][index2+1]);
       }
       std::cout << "] [";
       for (unsigned index2=0;index2<initializations[index].size();index2++) {
          if (index2) std::cout << " ";
-         printRegister(initializations[index][index2]);
+         printRegister(dict,initializations[index][index2]);
       }
       std::cout << "]" << std::endl;
-      parts[index]->print(level+1);
+      parts[index]->print(dict,level+1);
    }
    indent(level); std::cout << ">" << std::endl;
 }

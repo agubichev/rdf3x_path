@@ -48,7 +48,7 @@ class ResultsPrinter : public Operator
    unsigned next();
 
    /// Print the operator tree. Debugging only.
-   void print(unsigned indent);
+   void print(DictionarySegment& dict,unsigned indent);
 };
 //---------------------------------------------------------------------------
 #endif

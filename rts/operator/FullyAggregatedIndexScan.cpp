@@ -51,7 +51,7 @@ FullyAggregatedIndexScan::~FullyAggregatedIndexScan()
 {
 }
 //---------------------------------------------------------------------------
-void FullyAggregatedIndexScan::print(unsigned level)
+void FullyAggregatedIndexScan::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<FullyAggregatedIndexScan ";
@@ -65,7 +65,7 @@ void FullyAggregatedIndexScan::print(unsigned level)
    }
    std::cout << std::endl;
    indent(level+1);
-   printRegister(value1); if (bound1) std::cout << "*";
+   printRegister(dict,value1); if (bound1) std::cout << "*";
    std::cout << std::endl;
    indent(level); std::cout << ">" << std::endl;
 }

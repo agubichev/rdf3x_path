@@ -50,7 +50,7 @@ class AggregatedIndexScan : public Operator
    virtual unsigned next() = 0;
 
    /// Print the operator tree. Debugging only.
-   void print(unsigned indent);
+   void print(DictionarySegment& dict,unsigned indent);
 
    /// Create a suitable operator
    static AggregatedIndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);

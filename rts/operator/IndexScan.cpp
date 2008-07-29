@@ -148,7 +148,7 @@ IndexScan::~IndexScan()
 {
 }
 //---------------------------------------------------------------------------
-void IndexScan::print(unsigned level)
+void IndexScan::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<IndexScan ";
@@ -162,11 +162,11 @@ void IndexScan::print(unsigned level)
    }
    std::cout << std::endl;
    indent(level+1);
-   printRegister(value1); if (bound1) std::cout << "*";
+   printRegister(dict,value1); if (bound1) std::cout << "*";
    std::cout << " ";
-   printRegister(value2); if (bound2) std::cout << "*";
+   printRegister(dict,value2); if (bound2) std::cout << "*";
    std::cout << " ";
-   printRegister(value3); if (bound3) std::cout << "*";
+   printRegister(dict,value3); if (bound3) std::cout << "*";
    std::cout << std::endl;
    indent(level); std::cout << ">" << std::endl;
 }

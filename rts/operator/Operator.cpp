@@ -1,5 +1,6 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/segment/DictionarySegment.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -28,12 +29,20 @@ void Operator::indent(unsigned level)
       std::cout << ' ';
 }
 //---------------------------------------------------------------------------
-void Operator::printRegister(const Register* reg)
+void Operator::printRegister(DictionarySegment& dict,const Register* reg)
    // Helper for debug output
 {
    // A constant?
-   if (~(reg->value))
-      std::cout << reg->value; else
+   if (~(reg->value)) {
+      const char* start,*stop;
+      if (dict.lookupById(reg->value,start,stop)) {
+         std::cout << '\"';
+         for (const char* iter=start;iter!=stop;++iter)
+           std::cout << *iter;
+         std::cout << '\"';
+      } else std::cout << reg->value;
+   } else {
       std::cout << "@" << static_cast<const void*>(reg);
+   }
 }
 //---------------------------------------------------------------------------

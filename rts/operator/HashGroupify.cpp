@@ -140,15 +140,15 @@ unsigned HashGroupify::next()
    return count;
 }
 //---------------------------------------------------------------------------
-void HashGroupify::print(unsigned level)
+void HashGroupify::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<HashGroupify" << std::endl;
    for (std::vector<Register*>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(*iter);
+      std::cout << " "; printRegister(dict,*iter);
    }
    std::cout << std::endl;
-   input->print(level+1);
+   input->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------

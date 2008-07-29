@@ -62,12 +62,12 @@ unsigned NestedLoopJoin::next()
    return leftCount*rightCount;
 }
 //---------------------------------------------------------------------------
-void NestedLoopJoin::print(unsigned level)
+void NestedLoopJoin::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
    indent(level); std::cout << "<NestedLoopJoin" << std::endl;
-   left->print(level+1);
-   right->print(level+1);
+   left->print(dict,level+1);
+   right->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
