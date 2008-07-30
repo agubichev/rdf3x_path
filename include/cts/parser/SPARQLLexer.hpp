@@ -30,6 +30,8 @@ class SPARQLLexer
    std::string::const_iterator tokenEnd;
    /// The token put back with unget
    Token putBack;
+   /// Was the doken end set?
+   bool hasTokenEnd;
 
    public:
    /// Constructor

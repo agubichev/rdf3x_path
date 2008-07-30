@@ -16,8 +16,8 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-/// Maximu amount of usable memory. XXX detect at runtime!
-static const unsigned memoryLimit = 1<<30;
+/// Maximum amount of usable memory. XXX detect at runtime!
+static const unsigned memoryLimit = sizeof(void*)*(1<<27);
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
    // Sort a temporary file
 {
    // Open the input
-   in.flush();
+   in.close();
    MemoryMappedFile mappedIn;
    assert(mappedIn.open(in.getFile().c_str()));
    const char* reader=mappedIn.getBegin(),*limit=mappedIn.getEnd();
@@ -105,7 +105,7 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
       runs.push_back(Range(ofs,newOfs));
       ofs=newOfs;
    }
-   intermediate.flush();
+   intermediate.close();
    mappedIn.close();
 
    // Do we habe to merge runs?
@@ -169,6 +169,6 @@ void Sorter::sort(TempFile& in,TempFile& out,const char* (*skip)(const char*),in
       }
    }
 
-   out.flush();
+   out.close();
 }
 //---------------------------------------------------------------------------

@@ -389,7 +389,7 @@ class FactsLoader : public DatabaseBuilder::FactsReader {
 
    public:
    /// Constructor
-   FactsLoader(TempFile& file) { file.flush(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   FactsLoader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Reset
    void reset() { iter=in.getBegin(); }
@@ -462,12 +462,12 @@ class StringReader : public DatabaseBuilder::StringsReader {
 
    public:
    /// Constructor
-   StringReader(TempFile& file) : out(file.getBaseFile()) { file.flush(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   StringReader(TempFile& file) : out(file.getBaseFile()) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Close the input
    void closeIn() { in.close(); }
    /// Get the output
-   TempFile& getOut() { out.flush(); return out; }
+   TempFile& getOut() { out.close(); return out; }
 
    /// Read the next entry
    bool next(unsigned& len,const char*& data);
@@ -503,7 +503,7 @@ class StringMappingReader : public DatabaseBuilder::StringInfoReader
 
    public:
    /// Constructor
-   StringMappingReader(TempFile& file) { file.flush(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   StringMappingReader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Read the next entry
    bool next(unsigned& v1,unsigned& v2);
@@ -531,7 +531,7 @@ class StringHashesReader : public DatabaseBuilder::StringInfoReader
 
    public:
    /// Constructor
-   StringHashesReader(TempFile& file) { file.flush(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   StringHashesReader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Read the next entry
    bool next(unsigned& v1,unsigned& v2);

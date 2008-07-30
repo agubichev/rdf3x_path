@@ -27,13 +27,18 @@ TurtleParser::Lexer::~Lexer()
 bool TurtleParser::Lexer::doRead(char& c)
    // Read new characters
 {
-   readBufferStart=readBuffer;
-   readBufferEnd=readBufferStart+in.readsome(readBuffer,readBufferSize);
+   while (in) {
+      readBufferStart=readBuffer;
+      in.read(readBuffer,readBufferSize);
+      if (!in.gcount()) return false;
+      readBufferEnd=readBufferStart+in.gcount();
 
-   if (readBufferStart<readBufferEnd) {
-      c=*(readBufferStart++);
-      return true;
-   } else return false;
+      if (readBufferStart<readBufferEnd) {
+         c=*(readBufferStart++);
+         return true;
+      }
+   }
+   return false;
 }
 //---------------------------------------------------------------------------
 static bool issep(char c) { return (c==' ')||(c=='\t')||(c=='\n')||(c=='\r')||(c=='[')||(c==']')||(c=='(')||(c==')')||(c==',')||(c==';')||(c==':')||(c=='.'); }

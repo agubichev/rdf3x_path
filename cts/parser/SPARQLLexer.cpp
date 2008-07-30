@@ -10,7 +10,8 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 SPARQLLexer::SPARQLLexer(const std::string& input)
-   : input(input),pos(this->input.begin()),tokenStart(pos),tokenEnd(pos),putBack(None)
+   : input(input),pos(this->input.begin()),tokenStart(pos),tokenEnd(pos),
+     putBack(None),hasTokenEnd(false)
    // Constructor
 {
 }
@@ -31,7 +32,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
    }
 
    // Reset the token end
-   tokenEnd=tokenStart-1;
+   hasTokenEnd=false;
 
    // Read the string
    while (pos!=input.end()) {
@@ -91,7 +92,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
                   break;
                ++pos;
             }
-            tokenEnd=pos;
+            tokenEnd=pos; hasTokenEnd=true;
             if (pos!=input.end()) ++pos;
             return IRI;
          // String
@@ -107,7 +108,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
                   break;
                ++pos;
             }
-            tokenEnd=pos;
+            tokenEnd=pos; hasTokenEnd=true;
             if (pos!=input.end()) ++pos;
             return String;
          // String
@@ -123,7 +124,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
                   break;
                ++pos;
             }
-            tokenEnd=pos;
+            tokenEnd=pos; hasTokenEnd=true;
             if (pos!=input.end()) ++pos;
             return String;
          // Variables
@@ -135,7 +136,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
                   ++pos;
                } else break;
             }
-            tokenEnd=pos;
+            tokenEnd=pos; hasTokenEnd=true;
             return Variable;
          // Identifier
          default:
@@ -157,7 +158,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
 std::string SPARQLLexer::getTokenValue() const
    // Get the value of the current token
 {
-   if (tokenEnd>=tokenStart)
+   if (hasTokenEnd)
       return std::string(tokenStart,tokenEnd); else
       return std::string(tokenStart,pos);
 }
@@ -165,7 +166,7 @@ std::string SPARQLLexer::getTokenValue() const
 bool SPARQLLexer::isKeyword(const char* keyword) const
    // Check if the current token matches a keyword
 {
-   std::string::const_iterator iter=tokenStart,limit=(tokenEnd>=tokenStart)?tokenEnd:pos;
+   std::string::const_iterator iter=tokenStart,limit=hasTokenEnd?tokenEnd:pos;
 
    while (iter!=limit) {
       char c=*iter;

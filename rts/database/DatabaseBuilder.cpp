@@ -965,5 +965,6 @@ void DatabaseBuilder::finishLoading()
    writePage(out,0,buffer);
 
    out.flush();
+   out.close();
 }
 //---------------------------------------------------------------------------

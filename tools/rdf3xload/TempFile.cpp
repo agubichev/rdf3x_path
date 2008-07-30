@@ -25,7 +25,7 @@ string TempFile::newSuffix()
 }
 //---------------------------------------------------------------------------
 TempFile::TempFile(const string& baseName)
-   : baseName(baseName),fileName(baseName+newSuffix()),out(fileName.c_str()),writePointer(0)
+   : baseName(baseName),fileName(baseName+newSuffix()),out(fileName.c_str(),ios::out|ios::binary|ios::trunc),writePointer(0)
    // Constructor
 {
 }
