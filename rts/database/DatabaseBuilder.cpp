@@ -552,7 +552,7 @@ static unsigned packFullyAggregatedLeaves(ofstream& out,DatabaseBuilder::FactsRe
          writeUint32(buffer+bufferPos,count); bufferPos+=4;
       } else {
          // No, pack them
-         if ((subject==lastSubject)&&((subject-lastSubject)<16)&&(count<=8)) {
+         if (((subject-lastSubject)<16)&&(count<=8)) {
             buffer[bufferPos++]=((count-1)<<4)|(subject-lastSubject);
          } else {
             buffer[bufferPos++]=0x80|((bytes0(subject-lastSubject-1)*5)+bytes0(count-1));
