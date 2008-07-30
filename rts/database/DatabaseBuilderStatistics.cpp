@@ -521,9 +521,9 @@ void buildChainStatisticsPage(Database& db,unsigned char* statisticPage)
       // And build an execution Plan
       Register regs[4];
       AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,regs+0,false,regs+2,false);
-      Filter* filter1=new Filter(scan1,regs+1,values,false);
+      Filter* filter1=new Filter(scan1,regs+0,values,false);
       AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+3,false,regs+1,false,0,false);
-      Filter* filter2=new Filter(scan2,regs+3,values,false);
+      Filter* filter2=new Filter(scan2,regs+1,values,false);
       vector<Register*> leftTail,rightTail,group;
       leftTail.push_back(regs+0); rightTail.push_back(regs+1);
       MergeJoin* join=new MergeJoin(filter1,regs+2,leftTail,filter2,regs+3,rightTail);
@@ -720,9 +720,9 @@ void buildStarStatisticsPage(Database& db,unsigned char* statisticPage)
       // And build an execution Plan
       Register regs[4];
       AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+2,false,regs+0,false,0,false);
-      Filter* filter1=new Filter(scan1,regs+1,values,false);
+      Filter* filter1=new Filter(scan1,regs+0,values,false);
       AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+3,false,regs+1,false,0,false);
-      Filter* filter2=new Filter(scan2,regs+3,values,false);
+      Filter* filter2=new Filter(scan2,regs+1,values,false);
       vector<Register*> leftTail,rightTail,group;
       leftTail.push_back(regs+0); rightTail.push_back(regs+1);
       MergeJoin* join=new MergeJoin(filter1,regs+2,leftTail,filter2,regs+3,rightTail);
