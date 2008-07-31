@@ -314,7 +314,7 @@ static Operator* translateNestedLoopFilter(Runtime& runtime,const std::map<unsig
    const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->left->right);
 
    // Lookup the filter register
-   Register* filterRegister;
+   Register* filterRegister=0;
    if ((!node.constSubject)&&(filter.id==node.subject)) filterRegister=runtime.getRegister(3*id+0); else
    if ((!node.constPredicate)&&(filter.id==node.predicate)) filterRegister=runtime.getRegister(3*id+1); else
    if ((!node.constObject)&&(filter.id==node.object)) filterRegister=runtime.getRegister(3*id+2); else {
