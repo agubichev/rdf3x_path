@@ -258,19 +258,31 @@ void buildBuckets(Database& db,Database::DataOrder order,vector<Bucket>& buckets
    // Merge more buckets
    while (buckets.size()>bucketsPerPage) {
       // Compute the min sum
-      unsigned minSum=buckets[0].card+buckets[1].card;
-      for (unsigned index=0,limit=buckets.size()-1;index<limit;index++) {
-         unsigned sum=buckets[index].card+buckets[index+1].card;
-         if (sum<minSum)
-            minSum=sum;
-      }
+      vector<unsigned> sums;
+      for (unsigned index=0,limit=buckets.size()-1;index<limit;index++)
+         sums.push_back(buckets[index].card+buckets[index+1].card);
+      std::sort(sums.begin(),sums.end());
+      unsigned minSum=sums[sums.size()-bucketsPerPage];
+
       // Merge all buckets with this size
-      for (unsigned index=0;((index+1)<buckets.size())&&(buckets.size()>bucketsPerPage);index++) {
-         if ((buckets[index].card+buckets[index+1].card)==minSum) {
-            mergeBuckets(buckets[index],buckets[index+1]);
-            buckets.erase(buckets.begin()+index+1);
+      unsigned writer=0;
+      for (unsigned index=1;index<buckets.size();index++) {
+         // Does the rest fit?
+         if ((writer+(buckets.size()-index))<bucketsPerPage) {
+            for (;index<buckets.size();index++)
+               buckets[++writer]=buckets[index];
+            break;
+         }
+         // Should we merge?
+         if ((buckets[writer].card+buckets[index].card)<=minSum) {
+            mergeBuckets(buckets[writer],buckets[index]);
+         } else {
+            // No, keep it
+            buckets[++writer]=buckets[index];
          }
       }
+      // Adjust the size
+      buckets.resize(writer+1);
    }
 
    // Solve the missing join selecitivites
