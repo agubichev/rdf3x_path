@@ -1,6 +1,7 @@
 #include "TempFile.hpp"
 #include <sstream>
 #include <cassert>
+#include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
