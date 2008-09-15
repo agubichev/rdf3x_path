@@ -132,6 +132,12 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    // Now search the entry on the page itself
    ref=readShared(pageNo);
    const char* page=static_cast<const char*>(ref.getPage());
+
+   // Load the real len for long strings
+   if (len==0xFFFF)
+      len=readUint32(reinterpret_cast<const unsigned char*>(page+ofs-4));
+
+   // And return the string bounds
    start=page+ofs; stop=start+len;
 
    return true;

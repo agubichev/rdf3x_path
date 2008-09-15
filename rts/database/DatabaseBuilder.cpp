@@ -2,6 +2,7 @@
 #include "infra/util/Hash.hpp"
 #include <vector>
 #include <iostream>
+#include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -712,11 +713,46 @@ void DatabaseBuilder::loadStrings(StringsReader& reader)
          ++page;
          bufferPos=headerSize; bufferCount=0;
       }
-      // Check the len
+      // Check the len, handle an overlong string
       if (bufferPos+12+len>pageSize) {
-         // XXX could be supported easily
-         cerr << "error: string larger then " << (pageSize-12-bufferPos) << " currently not supported!" << endl;
-         throw;
+         // Compute the required number of pages
+         unsigned lenInPages=(len+bufferPos+12+pageSize-1)/pageSize;
+
+         // Write the first page
+         unsigned hash=Hash::hash(data,len);
+         writeUint32(buffer,page+lenInPages);
+         writeUint32(buffer+4,1);
+         writeUint32(buffer+bufferPos,id);
+         writeUint32(buffer+bufferPos+4,hash);
+         writeUint32(buffer+bufferPos+8,len);
+         memcpy(buffer+bufferPos+12,data,pageSize-(bufferPos+12));
+         writePage(out,page,buffer);
+         reader.rememberInfo(page,(bufferPos<<16)|(0xFFFF),hash);
+         ++id;
+         ++page;
+
+         // Write all intermediate pages
+         const char* dataIter=data;
+         unsigned iterLen=len;
+         dataIter+=pageSize-(bufferPos+12);
+         iterLen-=pageSize-(bufferPos+12);
+         while (iterLen>pageSize) {
+            writePage(out,page,dataIter);
+            ++page;
+            dataIter+=pageSize;
+            iterLen-=pageSize;
+         }
+
+         // Write the last page
+         if (iterLen) {
+            memcpy(buffer,dataIter,iterLen);
+            for (unsigned index=iterLen;index<pageSize;index++)
+               buffer[index]=0;
+            writePage(out,page,buffer);
+            ++page;
+         }
+
+         continue;
       }
 
       // Hash the current string...
