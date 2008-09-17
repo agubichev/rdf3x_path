@@ -52,7 +52,7 @@ struct SortByValue3 { bool operator()(const ReorderedTriple& a,const ReorderedTr
 /// Number of buckets per page
 static const unsigned bucketsPerPage = (BufferManager::pageSize-4) / sizeof(Bucket);
 //---------------------------------------------------------------------------
-ReorderedTriple buildTriple(const FactsSegment::Scan& scan)
+static ReorderedTriple buildTriple(const FactsSegment::Scan& scan)
    // Extract the current triple
 {
    ReorderedTriple result;
@@ -62,7 +62,7 @@ ReorderedTriple buildTriple(const FactsSegment::Scan& scan)
    return result;
 }
 //---------------------------------------------------------------------------
-unsigned findJoins(Database& db,Database::DataOrder order,vector<pair<unsigned,unsigned> >& counts)
+static unsigned findJoins(Database& db,Database::DataOrder order,vector<pair<unsigned,unsigned> >& counts)
    // Find the number of join partners
 {
    unsigned result=0;
@@ -90,7 +90,7 @@ unsigned findJoins(Database& db,Database::DataOrder order,vector<pair<unsigned,u
    return result;
 }
 //---------------------------------------------------------------------------
-unsigned mergeBuckets(Bucket& target,const Bucket& next)
+static unsigned mergeBuckets(Bucket& target,const Bucket& next)
    // Merge the statistics of two buckets
 {
    target.stop1=next.stop1;
@@ -112,50 +112,7 @@ unsigned mergeBuckets(Bucket& target,const Bucket& next)
    return target.card;
 }
 //---------------------------------------------------------------------------
-Bucket resolveBucket(const vector<ReorderedTriple>& triples)
-   // Build the statitistics for one initial bucket
-{
-   // Construct the bounds
-   Bucket result;
-   result.start1=triples.front().value1;
-   result.start2=triples.front().value2;
-   result.start3=triples.front().value3;
-   result.stop1=triples.back().value1;
-   result.stop2=triples.back().value2;
-   result.stop3=triples.back().value3;
-
-   // Compute cardinalities
-   result.prefix1Card=0;
-   result.prefix2Card=0;
-   { unsigned last1=~0u,last2=~0u;
-   for (vector<ReorderedTriple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter)
-      if ((*iter).value1!=last1) {
-         result.prefix1Card++;
-         result.prefix2Card++;
-         last1=(*iter).value1;
-         last2=(*iter).value2;
-      } else if ((*iter).value2!=last2) {
-         result.prefix2Card++;
-         last2=(*iter).value2;
-      }
-   }
-   result.card=triples.size();
-
-   // Extract the ids
-   result.val1S=0;
-   result.val1P=0;
-   result.val1O=0;
-   result.val2S=0;
-   result.val2P=0;
-   result.val2O=0;
-   result.val3S=0;
-   result.val3P=0;
-   result.val3O=0;
-
-   return result;
-}
-//---------------------------------------------------------------------------
-void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
+static void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
    // Resolve the join selectivites for a bucket
 {
    // First, rebuild the triples
@@ -170,10 +127,12 @@ void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
          triples.push_back(t);
       }
    }
+#if 0
    if (triples.size()!=bucket.card) {
       cout << "bug! got " << triples.size() << " triples, should have gotten " << bucket.card << endl;
       return;
    }
+#endif
 
    // Compute prefix counts
    bucket.prefix1Card=0; bucket.prefix2Card=0;
@@ -218,7 +177,7 @@ void resolveBucketJoins(Database& db,Database::DataOrder order,Bucket& bucket)
    bucket.val3O=findJoins(db,Database::Order_Object_Predicate_Subject,counts3);
 }
 //---------------------------------------------------------------------------
-void buildBuckets(Database& db,Database::DataOrder order,vector<Bucket>& buckets)
+static void buildBuckets(Database& db,Database::DataOrder order,vector<Bucket>& buckets)
    // Build the buckets for a specific order
 {
    buckets.clear();
@@ -228,32 +187,42 @@ void buildBuckets(Database& db,Database::DataOrder order,vector<Bucket>& buckets
    scan.first(db.getFacts(order));
 
    // Compute desired aggregation thresholds
-   unsigned firstSize=db.getFacts(order).getCardinality()/(bucketsPerPage*100),tinySize=(firstSize+99)/100;
+   unsigned firstSize=db.getFacts(order).getCardinality()/bucketsPerPage,tinySize=(firstSize+99)/100;
 
    // Initial pass, aggregate only by value1/value2
-   vector<ReorderedTriple> triples;
-   bool couldMerge=false;
-   triples.push_back(buildTriple(scan));
-   while (scan.next()) {
-      ReorderedTriple t=buildTriple(scan);
-      if ((t.value1!=triples.back().value1)||(t.value2!=triples.back().value2)) {
-         // Build the next bucket
-         Bucket b=resolveBucket(triples);
-         triples.clear();
+   Bucket currentBucket;
+   currentBucket.start1=currentBucket.stop1=scan.getValue1();
+   currentBucket.start2=currentBucket.stop2=scan.getValue1();
+   currentBucket.start3=currentBucket.stop3=scan.getValue3();
+   currentBucket.prefix1Card=1; currentBucket.prefix2Card=1; currentBucket.card=1;
 
+   while (scan.next()) {
+      unsigned v1=scan.getValue1(),v2=scan.getValue2();
+      if ((v1!=currentBucket.stop1)||(v2!=currentBucket.stop2)) {
          // Merge tiny buckets up to 1/100 of the desired size
-         if (couldMerge&&(b.card<=tinySize)) {
-            if (mergeBuckets(buckets.back(),b)>=firstSize)
-               couldMerge=false;
-         } else {
-            buckets.push_back(b);
-            couldMerge=(b.card<=tinySize);
+         if (currentBucket.card<tinySize) {
+            if (v1!=currentBucket.stop1)
+               currentBucket.prefix1Card++;
+            if (v2!=currentBucket.stop2)
+               currentBucket.prefix2Card++;
+            currentBucket.stop1=v1;
+            currentBucket.stop2=v2;
+            currentBucket.stop3=scan.getValue3();
+            currentBucket.card++;
+            continue;
          }
+         // Start a new bucket
+         buckets.push_back(currentBucket);
+         currentBucket.start1=currentBucket.stop1=v1;
+         currentBucket.start2=currentBucket.stop2=v2;
+         currentBucket.start3=currentBucket.stop3=scan.getValue3();
+         currentBucket.prefix1Card=1; currentBucket.prefix2Card=1; currentBucket.card=1;
+      } else {
+         currentBucket.stop3=scan.getValue3();
+         currentBucket.card++;
       }
-      triples.push_back(t);
    }
-   buckets.push_back(resolveBucket(triples));
-   triples.clear();
+   buckets.push_back(currentBucket);
 
    // Merge more buckets
    while (buckets.size()>bucketsPerPage) {
@@ -291,7 +260,7 @@ void buildBuckets(Database& db,Database::DataOrder order,vector<Bucket>& buckets
    }
 }
 //---------------------------------------------------------------------------
-void writeUint32(unsigned char* target,unsigned value)
+static void writeUint32(unsigned char* target,unsigned value)
    // Write a 32bit value
 {
    target[0]=value>>24;
@@ -300,7 +269,7 @@ void writeUint32(unsigned char* target,unsigned value)
    target[3]=value&0xFF;
 }
 //---------------------------------------------------------------------------
-void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* page)
+static void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned char* page)
    // Prepare a page with statistics
 {
    // Build the buckets
