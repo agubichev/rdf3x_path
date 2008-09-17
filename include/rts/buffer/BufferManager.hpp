@@ -65,6 +65,8 @@ class BufferManager
    public:
    /// The size of a page
    static const unsigned pageSize = 16384;
+   /// A page buffer
+   struct PageBuffer { char data[pageSize]; };
 
    private:
    /// The file
@@ -87,14 +89,14 @@ class BufferManager
    /// The number of pages
    unsigned getPageCount() const { return (file.getEnd()-file.getBegin())/pageSize; }
    /// Access a page
-   void readShared(BufferReference& ref,unsigned page) { ref.page=file.getBegin()+(page*pageSize); }
+   void readShared(BufferReference& ref,unsigned page) { ref.page=reinterpret_cast<const PageBuffer*>(file.getBegin())+page; }
    /// Access a page
-   void readExclusive(BufferReference& ref,unsigned page) { ref.page=file.getBegin()+(page*pageSize); }
+   void readExclusive(BufferReference& ref,unsigned page) { ref.page=reinterpret_cast<const PageBuffer*>(file.getBegin())+page; }
    /// Prefetch a number of pages
    void prefetchPages(unsigned start,unsigned stop);
 
    /// Get the ID of a reference
-   unsigned getPageId(const BufferReference& ref) const { return (static_cast<const char*>(ref.page)-file.getBegin())/pageSize; }
+   unsigned getPageId(const BufferReference& ref) const { return static_cast<const PageBuffer*>(ref.page)-reinterpret_cast<const PageBuffer*>(file.getBegin()); }
 };
 //---------------------------------------------------------------------------
 BufferReference::BufferReference(const BufferRequest& request)

@@ -334,7 +334,7 @@ void DatabaseBuilder::computeStatistics(unsigned order)
       cout << "Unable to write " << dbFile << endl;
       throw;
    }
-   out.seekp(directory.statistics[order]*pageSize,ios::beg);
+   out.seekp(static_cast<unsigned long long>(directory.statistics[order])*pageSize,ios::beg);
    out.write(reinterpret_cast<char*>(statisticPage),pageSize);
 }
 //---------------------------------------------------------------------------
@@ -765,9 +765,9 @@ void DatabaseBuilder::computePathStatistics()
       cout << "Unable to write " << dbFile << endl;
       throw;
    }
-   out.seekp(directory.pathStatistics[0]*pageSize,ios::beg);
+   out.seekp(static_cast<unsigned long long>(directory.pathStatistics[0])*pageSize,ios::beg);
    out.write(reinterpret_cast<char*>(statisticPageChain),pageSize);
-   out.seekp(directory.pathStatistics[1]*pageSize,ios::beg);
+   out.seekp(static_cast<unsigned long long>(directory.pathStatistics[1])*pageSize,ios::beg);
    out.write(reinterpret_cast<char*>(statisticPageStar),pageSize);
 }
 //---------------------------------------------------------------------------
