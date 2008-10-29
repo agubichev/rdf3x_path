@@ -132,6 +132,7 @@ int main(int argc,char* argv[])
    // Dump the database
    DictionarySegment& dic=db.getDictionary();
    Register subject,predicate,object;
+   subject.reset(); predicate.reset(); object.reset();
    IndexScan* scan=IndexScan::create(db,Database::Order_Subject_Predicate_Object,&subject,false,&predicate,false,&object,false);
    if (scan->first()) {
       // Write the first triple

@@ -189,6 +189,7 @@ static vector<unsigned> buildChain(unsigned from,const vector<unsigned>& fromIds
    vector<unsigned> result;
    {
       Register ls,lo,rs,ro;
+      ls.reset(); lo.reset(); rs.reset(); ro.reset();
       AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,&ls,false,0,false,&lo,false);
       LookupFilter* filter1=new LookupFilter(scan1,&ls,fromIds);
       AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Object_Predicate,&rs,false,0,false,&ro,false);
@@ -311,6 +312,7 @@ int main(int argc,char* argv[])
    vector<pair<unsigned,unsigned> > hops;
    {
       Register ls,lo,rs,ro;
+      ls.reset(); lo.reset(); rs.reset(); ro.reset();
       AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,&ls,false,0,false,&lo,false);
       LookupFilter* filter1=new LookupFilter(scan1,&ls,candidates);
       AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Object_Predicate,&rs,false,0,false,&ro,false);

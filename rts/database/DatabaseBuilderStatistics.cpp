@@ -485,6 +485,7 @@ void buildChainStatisticsPage(Database& db,unsigned char* statisticPage)
    vector<PathInfo> pathLevel1;
    {
       Register regs[1];
+      regs[0].reset();
       FullyAggregatedIndexScan* scan=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,regs,false,0,false);
       collectTopPaths(maxPathPerPage,pathLevel1,scan,1,regs);
       delete scan;
@@ -501,6 +502,8 @@ void buildChainStatisticsPage(Database& db,unsigned char* statisticPage)
 
       // And build an execution Plan
       Register regs[4];
+      for (unsigned index=0;index<4;index++)
+         regs[index].reset();
       AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,regs+0,false,regs+2,false);
       Filter* filter1=new Filter(scan1,regs+0,values,false);
       AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+3,false,regs+1,false,0,false);
@@ -684,6 +687,7 @@ void buildStarStatisticsPage(Database& db,unsigned char* statisticPage)
    vector<StarInfo> pathLevel1;
    {
       Register regs[1];
+      regs[0].reset();
       FullyAggregatedIndexScan* scan=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,regs,false,0,false);
       collectTopStars(maxPathPerPage,pathLevel1,scan,1,regs);
       delete scan;
@@ -700,6 +704,8 @@ void buildStarStatisticsPage(Database& db,unsigned char* statisticPage)
 
       // And build an execution Plan
       Register regs[4];
+      for (unsigned index=0;index<4;index++)
+         regs[index].reset();
       AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+2,false,regs+0,false,0,false);
       Filter* filter1=new Filter(scan1,regs+0,values,false);
       AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,regs+3,false,regs+1,false,0,false);
