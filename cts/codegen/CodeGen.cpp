@@ -29,9 +29,11 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-static Operator* translatePlan(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan);
+using namespace std;
 //---------------------------------------------------------------------------
-static void resolveScanVariable(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,unsigned slot,const QueryGraph::Node& node,Register*& reg,bool& bound,bool unused=false)
+static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan);
+//---------------------------------------------------------------------------
+static void resolveScanVariable(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,unsigned slot,const QueryGraph::Node& node,Register*& reg,bool& bound,bool unused=false)
    // Resolve a variable used in a scan
 {
    bool constant=(slot==0)?node.constSubject:((slot==1)?node.constPredicate:node.constObject);
@@ -55,7 +57,7 @@ static void resolveScanVariable(Runtime& runtime,const std::map<unsigned,Registe
    }
 }
 //---------------------------------------------------------------------------
-static Operator* translateIndexScan(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate an index scan into an operator tree
 {
    const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
@@ -74,7 +76,7 @@ static Operator* translateIndexScan(Runtime& runtime,const std::map<unsigned,Reg
                             object,constObject);
 }
 //---------------------------------------------------------------------------
-static Operator* translateAggregatedIndexScan(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate an aggregated index scan into an operator tree
 {
    const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
@@ -94,7 +96,7 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const std::map<un
                                       object,constObject);
 }
 //---------------------------------------------------------------------------
-static void collectVariables(const std::map<unsigned,Register*>& context,std::set<unsigned>& variables,Plan* plan)
+static void collectVariables(const map<unsigned,Register*>& context,set<unsigned>& variables,Plan* plan)
    // Collect all variables contained in a plan
 {
    switch (plan->op) {
@@ -127,43 +129,43 @@ static void collectVariables(const std::map<unsigned,Register*>& context,std::se
    }
 }
 //---------------------------------------------------------------------------
-static void getJoinVariables(const std::map<unsigned,Register*>& context,std::set<unsigned>& variables,Plan* left,Plan* right)
+static void getJoinVariables(const map<unsigned,Register*>& context,set<unsigned>& variables,Plan* left,Plan* right)
    // Get the join variables
 {
    // Collect all variables
-   std::set<unsigned> leftVariables,rightVariables;
+   set<unsigned> leftVariables,rightVariables;
    collectVariables(context,leftVariables,left);
    collectVariables(context,rightVariables,right);
 
    // Find common ones
    if (leftVariables.size()<rightVariables.size()) {
-      for (std::set<unsigned>::const_iterator iter=leftVariables.begin(),limit=leftVariables.end();iter!=limit;++iter)
+      for (set<unsigned>::const_iterator iter=leftVariables.begin(),limit=leftVariables.end();iter!=limit;++iter)
          if (rightVariables.count(*iter))
             variables.insert(*iter);
    } else {
-      for (std::set<unsigned>::const_iterator iter=rightVariables.begin(),limit=rightVariables.end();iter!=limit;++iter)
+      for (set<unsigned>::const_iterator iter=rightVariables.begin(),limit=rightVariables.end();iter!=limit;++iter)
          if (leftVariables.count(*iter))
             variables.insert(*iter);
    }
 }
 //---------------------------------------------------------------------------
-static void mergeBindings(const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<unsigned,Register*>& leftBindings,const std::map<unsigned,Register*>& rightBindings)
+static void mergeBindings(const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<unsigned,Register*>& leftBindings,const map<unsigned,Register*>& rightBindings)
    // Merge bindings after a join
 {
-   for (std::map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
       if (projection.count((*iter).first))
          bindings[(*iter).first]=(*iter).second;
-   for (std::map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
       if (projection.count((*iter).first)&&(!bindings.count((*iter).first)))
          bindings[(*iter).first]=(*iter).second;
 }
 //---------------------------------------------------------------------------
-static Operator* addAdditionalSelections(Operator* input,const std::set<unsigned>& joinVariables,std::map<unsigned,Register*>& leftBindings,std::map<unsigned,Register*>& rightBindings,unsigned joinedOn)
+static Operator* addAdditionalSelections(Operator* input,const set<unsigned>& joinVariables,map<unsigned,Register*>& leftBindings,map<unsigned,Register*>& rightBindings,unsigned joinedOn)
    // Convert additional join predicates into a selection
 {
    // Examine join conditions
-   std::vector<Register*> conditions;
-   for (std::set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+   vector<Register*> conditions;
+   for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
       if ((*iter)!=joinedOn) {
          conditions.push_back(leftBindings[*iter]);
          conditions.push_back(rightBindings[*iter]);
@@ -176,16 +178,16 @@ static Operator* addAdditionalSelections(Operator* input,const std::set<unsigned
       return input;
 }
 //---------------------------------------------------------------------------
-static Operator* translateNestedLoopJoin(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a nested loop join into an operator tree
 {
    // Get the join variables (if any)
-   std::set<unsigned> joinVariables,newProjection=projection;
+   set<unsigned> joinVariables,newProjection=projection;
    getJoinVariables(context,joinVariables,plan->left,plan->right);
    newProjection.insert(joinVariables.begin(),joinVariables.end());
 
    // Build the input trees
-   std::map<unsigned,Register*> leftBindings,rightBindings;
+   map<unsigned,Register*> leftBindings,rightBindings;
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
@@ -199,11 +201,11 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const std::map<unsigne
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateMergeJoin(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a merge join into an operator tree
 {
    // Get the join variables (if any)
-   std::set<unsigned> joinVariables,newProjection=projection;
+   set<unsigned> joinVariables,newProjection=projection;
    getJoinVariables(context,joinVariables,plan->left,plan->right);
    newProjection.insert(joinVariables.begin(),joinVariables.end());
    assert(!joinVariables.empty());
@@ -211,17 +213,17 @@ static Operator* translateMergeJoin(Runtime& runtime,const std::map<unsigned,Reg
    assert(joinVariables.count(joinOn));
 
    // Build the input trees
-   std::map<unsigned,Register*> leftBindings,rightBindings;
+   map<unsigned,Register*> leftBindings,rightBindings;
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    // Prepare the tails
-   std::vector<Register*> leftTail,rightTail;
-   for (std::map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   vector<Register*> leftTail,rightTail;
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          leftTail.push_back((*iter).second);
-   for (std::map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          rightTail.push_back((*iter).second);
 
@@ -234,28 +236,28 @@ static Operator* translateMergeJoin(Runtime& runtime,const std::map<unsigned,Reg
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateHashJoin(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a hash join into an operator tree
 {
    // Get the join variables (if any)
-   std::set<unsigned> joinVariables,newProjection=projection;
+   set<unsigned> joinVariables,newProjection=projection;
    getJoinVariables(context,joinVariables,plan->left,plan->right);
    newProjection.insert(joinVariables.begin(),joinVariables.end());
    assert(!joinVariables.empty());
    unsigned joinOn=*(joinVariables.begin());
 
    // Build the input trees
-   std::map<unsigned,Register*> leftBindings,rightBindings;
+   map<unsigned,Register*> leftBindings,rightBindings;
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    // Prepare the tails
-   std::vector<Register*> leftTail,rightTail;
-   for (std::map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   vector<Register*> leftTail,rightTail;
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          leftTail.push_back((*iter).second);
-   for (std::map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          rightTail.push_back((*iter).second);
 
@@ -268,28 +270,28 @@ static Operator* translateHashJoin(Runtime& runtime,const std::map<unsigned,Regi
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateHashGroupify(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a hash groupify into an operator tree
 {
    // Build the input trees
    Operator* tree=translatePlan(runtime,context,projection,bindings,registers,plan->left);
 
    // Collect output registers
-   std::vector<Register*> output;
-   for (std::map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
+   vector<Register*> output;
+   for (map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
       output.push_back((*iter).second);
 
    // Build the operator
    return new HashGroupify(tree,output);
 }
 //---------------------------------------------------------------------------
-static Operator* translateFilter(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a filter into an operator tree
 {
    const QueryGraph::Filter& filter=*reinterpret_cast<QueryGraph::Filter*>(plan->right);
 
    // Build the input trees
-   std::set<unsigned> newProjection=projection;
+   set<unsigned> newProjection=projection;
    newProjection.insert(filter.id);
    Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
 
@@ -303,7 +305,7 @@ static Operator* translateFilter(Runtime& runtime,const std::map<unsigned,Regist
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateNestedLoopFilter(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateNestedLoopFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a nested loop filter into an operator tree
 {
    const QueryGraph::Filter& filter=*reinterpret_cast<QueryGraph::Filter*>(plan->right);
@@ -322,8 +324,8 @@ static Operator* translateNestedLoopFilter(Runtime& runtime,const std::map<unsig
    }
 
    // Build the input trees
-   std::set<unsigned> newProjection=projection;
-   std::map<unsigned,Register*> newContext=context;
+   set<unsigned> newProjection=projection;
+   map<unsigned,Register*> newContext=context;
    newProjection.insert(filter.id);
    newContext[filter.id]=filterRegister;
    Operator* tree=translatePlan(runtime,newContext,newProjection,bindings,registers,plan->left);
@@ -338,19 +340,19 @@ static Operator* translateNestedLoopFilter(Runtime& runtime,const std::map<unsig
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateComplexFilter(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateComplexFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a complex filter into an operator tree
 {
    const QueryGraph::ComplexFilter& filter=*reinterpret_cast<QueryGraph::ComplexFilter*>(plan->right);
 
    // Build the input trees
-   std::set<unsigned> newProjection=projection;
+   set<unsigned> newProjection=projection;
    newProjection.insert(filter.id1);
    newProjection.insert(filter.id2);
    Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
 
    // Build the operator
-   std::vector<Register*> condition;
+   vector<Register*> condition;
    condition.push_back(bindings[filter.id1]);
    condition.push_back(bindings[filter.id2]);
    Operator* result=Selection::create(tree,condition,filter.equal);
@@ -364,11 +366,11 @@ static Operator* translateComplexFilter(Runtime& runtime,const std::map<unsigned
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateUnion(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateUnion(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a union into an operator tree
 {
    // Collect the parts
-   std::vector<Plan*> parts;
+   vector<Plan*> parts;
    while (true) {
       parts.push_back(plan->left);
       if (plan->right->op!=Plan::Union) {
@@ -378,30 +380,30 @@ static Operator* translateUnion(Runtime& runtime,const std::map<unsigned,Registe
    }
 
    // Translate the parts of the union
-   std::vector<std::map<unsigned,Register*> > subBindings;
-   std::vector<Operator*> trees;
+   vector<map<unsigned,Register*> > subBindings;
+   vector<Operator*> trees;
    subBindings.resize(parts.size());
    trees.resize(parts.size());
    for (unsigned index=0;index<parts.size();index++)
       trees[index]=translatePlan(runtime,context,projection,subBindings[index],registers,parts[index]);
 
    // Collect all bindings
-   for (std::vector<std::map<unsigned,Register*> >::const_iterator iter=subBindings.begin(),limit=subBindings.end();iter!=limit;++iter)
-      for (std::map<unsigned,Register*>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+   for (vector<map<unsigned,Register*> >::const_iterator iter=subBindings.begin(),limit=subBindings.end();iter!=limit;++iter)
+      for (map<unsigned,Register*>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          if (!bindings.count((*iter2).first))
             bindings[(*iter2).first]=(*iter2).second;
 
    // Construct the mappings and initializations
-   std::vector<std::vector<Register*> > mappings,initializations;
+   vector<vector<Register*> > mappings,initializations;
    mappings.resize(parts.size());
    initializations.resize(parts.size());
    for (unsigned index=0;index<subBindings.size();index++) {
-      for (std::map<unsigned,Register*>::const_iterator iter=subBindings[index].begin(),limit=subBindings[index].end();iter!=limit;++iter)
+      for (map<unsigned,Register*>::const_iterator iter=subBindings[index].begin(),limit=subBindings[index].end();iter!=limit;++iter)
          if (bindings[(*iter).first]!=(*iter).second) {
             mappings[index].push_back((*iter).second);
             mappings[index].push_back(bindings[(*iter).first]);
          }
-      for (std::map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
+      for (map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
          if (!subBindings[index].count((*iter).first))
             initializations[index].push_back((*iter).second);
    }
@@ -412,11 +414,11 @@ static Operator* translateUnion(Runtime& runtime,const std::map<unsigned,Registe
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateMergeUnion(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateMergeUnion(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a merge union into an operator tree
 {
    // Translate the input
-   std::map<unsigned,Register*> leftBinding,rightBinding;
+   map<unsigned,Register*> leftBinding,rightBinding;
    Operator* left=translatePlan(runtime,context,projection,leftBinding,registers,plan->left);
    Operator* right=translatePlan(runtime,context,projection,rightBinding,registers,plan->right);
 
@@ -433,7 +435,7 @@ static Operator* translateMergeUnion(Runtime& runtime,const std::map<unsigned,Re
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translatePlan(Runtime& runtime,const std::map<unsigned,Register*>& context,const std::set<unsigned>& projection,std::map<unsigned,Register*>& bindings,const std::map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a plan into an operator tree
 {
    switch (plan->op) {
@@ -452,18 +454,25 @@ static Operator* translatePlan(Runtime& runtime,const std::map<unsigned,Register
    return 0;
 }
 //---------------------------------------------------------------------------
-static unsigned allocateRegisters(std::map<const QueryGraph::Node*,unsigned>& registers,const QueryGraph::SubQuery& query,unsigned id)
+static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registers,map<unsigned,set<unsigned> >& registerClasses,const QueryGraph::SubQuery& query,unsigned id)
    // Allocate registers
 {
-   for (std::vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
-      registers[&(*iter)]=id;
+   for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
+      const QueryGraph::Node& node=*iter;
+      registers[&node]=id;
+      if (!node.constSubject)
+         registerClasses[node.subject].insert(id+0);
+      if (!node.constPredicate)
+         registerClasses[node.predicate].insert(id+1);
+      if (!node.constObject)
+         registerClasses[node.object].insert(id+2);
       id+=3;
    }
-   for (std::vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter)
-      id=allocateRegisters(registers,(*iter),id);
-   for (std::vector<std::vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter)
-      for (std::vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
-         id=allocateRegisters(registers,(*iter2),id);
+   for (vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter)
+      id=allocateRegisters(registers,registerClasses,(*iter),id);
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter)
+      for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         id=allocateRegisters(registers,registerClasses,(*iter2),id);
    return id;
 }
 //---------------------------------------------------------------------------
@@ -471,26 +480,54 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
    // Perform a naive translation of a query into an operator tree
 {
    // Allocate registers for all relations
-   std::map<const QueryGraph::Node*,unsigned> registers;
-   unsigned registerCount=allocateRegisters(registers,query.getQuery(),0);
+   map<const QueryGraph::Node*,unsigned> registers;
+   map<unsigned,set<unsigned> > registerClasses;
+   unsigned registerCount=allocateRegisters(registers,registerClasses,query.getQuery(),0);
    unsigned unboundVariable=registerCount;
    runtime.allocateRegisters(unboundVariable+1);
 
+   // Prepare domain information for join attributes
+   {
+      // Count the required number of domains
+      unsigned domainCount=0;
+      for (map<unsigned,set<unsigned> >::const_iterator iter=registerClasses.begin(),limit=registerClasses.end();iter!=limit;++iter) {
+         // No join attribute?
+         if ((*iter).second.size()<2)
+            continue;
+         // We have a new domain
+         domainCount++;
+      }
+      runtime.allocateDomainDescriptions(domainCount);
+
+      // And assign registers to domains
+      domainCount=0;
+      for (map<unsigned,set<unsigned> >::const_iterator iter=registerClasses.begin(),limit=registerClasses.end();iter!=limit;++iter) {
+         // No join attribute?
+         if ((*iter).second.size()<2)
+            continue;
+         // Lookup the register addresses
+         PotentialDomainDescription* domain=runtime.getDomainDescription(domainCount++);
+         for (set<unsigned>::const_iterator iter2=(*iter).second.begin(),limit2=(*iter).second.end();iter2!=limit2;++iter2)
+            runtime.getRegister(*iter2)->domain=domain;
+      }
+   }
+
    // Build the operator tree
    Operator* tree;
-   std::vector<Register*> output;
+   vector<Register*> output;
+
    if (query.knownEmpty()) {
       tree=new EmptyScan();
    } else if (!plan) {
       tree=new SingletonScan();
    } else {
       // Construct the projection
-      std::set<unsigned> projection;
+      set<unsigned> projection;
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
          projection.insert(*iter);
 
       // And build the tree
-      std::map<unsigned,Register*> context,bindings;
+      map<unsigned,Register*> context,bindings;
       tree=translatePlan(runtime,context,projection,bindings,registers,plan);
 
       // Remember the output registers
@@ -514,9 +551,9 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
    return tree;
 }
 //---------------------------------------------------------------------------
-void CodeGen::collectVariables(std::set<unsigned>& variables,Plan* plan)
+void CodeGen::collectVariables(set<unsigned>& variables,Plan* plan)
    // Collect all variables contained in a plan
 {
-   ::collectVariables(std::map<unsigned,Register*>(),variables,plan);
+   ::collectVariables(map<unsigned,Register*>(),variables,plan);
 }
 //---------------------------------------------------------------------------

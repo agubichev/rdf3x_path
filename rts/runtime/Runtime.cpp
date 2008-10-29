@@ -9,6 +9,13 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+void Register::reset()
+   // Reset the register (both value and domain)
+{
+   value=~0u;
+   domain=0;
+}
+//---------------------------------------------------------------------------
 Runtime::Runtime(Database& db)
    : db(db)
    // Constructor
@@ -27,6 +34,13 @@ void Runtime::allocateRegisters(unsigned count)
    registers.resize(count);
 
    for (unsigned index=0;index<count;index++)
-      registers[index].value=~0u;
+      registers[index].reset();
+}
+//---------------------------------------------------------------------------
+void Runtime::allocateDomainDescriptions(unsigned count)
+   // Set the number of domain descriptions
+{
+   domainDescriptions.clear();
+   domainDescriptions.resize(count);
 }
 //---------------------------------------------------------------------------

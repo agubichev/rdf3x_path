@@ -10,6 +10,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+#include "rts/runtime/DomainDescription.hpp"
 #include <vector>
 //---------------------------------------------------------------------------
 class Database;
@@ -20,6 +21,11 @@ class Register
    public:
    /// The value
    unsigned value;
+   /// The potential domain (if known)
+   PotentialDomainDescription* domain;
+
+   /// Reset the register (both value and domain)
+   void reset();
 };
 //---------------------------------------------------------------------------
 /// The runtime system
@@ -30,6 +36,8 @@ class Runtime
    Database& db;
    /// The registers
    std::vector<Register> registers;
+   /// The domain descriptions
+   std::vector<PotentialDomainDescription> domainDescriptions;
 
    public:
    /// Constructor
@@ -43,6 +51,10 @@ class Runtime
    void allocateRegisters(unsigned count);
    /// Access a specific register
    Register* getRegister(unsigned slot) { return &(registers[slot]); }
+   /// Set the number of domain descriptions
+   void allocateDomainDescriptions(unsigned count);
+   /// Access a specific domain description
+   PotentialDomainDescription* getDomainDescription(unsigned slot) { return &(domainDescriptions[slot]); }
 };
 //---------------------------------------------------------------------------
 #endif
