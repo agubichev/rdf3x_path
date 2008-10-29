@@ -86,21 +86,33 @@ AggregatedIndexScan::Hint::~Hint()
 void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
    // Scanning hint
 {
-   if (scan.bound1)
-      value1=scan.value1->value; else
+   if (scan.bound1) {
+      value1=scan.value1->value;
+   } else {
       value1=0;
+      if (scan.value1->domain)
+         value1=scan.value1->domain->nextCandidate(value1);
+   }
    for (std::vector<Register*>::const_iterator iter=scan.merge1.begin(),limit=scan.merge1.end();iter!=limit;++iter) {
       unsigned v=(*iter)->value;
       if ((~v)&&(v>value1))
          value1=v;
+      if ((*iter)->domain)
+         value1=(*iter)->domain->nextCandidate(value1);
    }
-   if (scan.bound2)
-      value2=scan.value2->value; else
+   if (scan.bound2) {
+      value2=scan.value2->value;
+   } else {
       value2=0;
+      if (scan.value2->domain)
+         value2=scan.value2->domain->nextCandidate(value2);
+   }
    for (std::vector<Register*>::const_iterator iter=scan.merge2.begin(),limit=scan.merge2.end();iter!=limit;++iter) {
       unsigned v=(*iter)->value;
       if ((~v)&&(v>value2))
          value2=v;
+      if ((*iter)->domain)
+         value2=(*iter)->domain->nextCandidate(value2);
    }
 }
 //---------------------------------------------------------------------------
