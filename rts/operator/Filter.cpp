@@ -41,6 +41,15 @@ Filter::~Filter()
 unsigned Filter::first()
    // Produce the first tuple
 {
+   // Do we know the domain?
+   if ((!exclude)&&(filter->domain)) {
+      ObservedDomainDescription domain;
+      for (unsigned index=min;index<=max;index++)
+         if (valid[index-min])
+            domain.add(index);
+      filter->domain->restrictTo(domain);
+   }
+
    // Empty input?
    unsigned count;
    if ((count=input->first())==0)
