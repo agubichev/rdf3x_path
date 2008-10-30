@@ -11,7 +11,9 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-HashJoin::HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail)
+using namespace std;
+//---------------------------------------------------------------------------
+HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail)
    : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned))
    // Constructor
 {
@@ -35,17 +37,17 @@ void HashJoin::insert(Entry* e)
    bool firstTable=true;
    for (unsigned index=0;index<hashTableSize;index++) {
       unsigned slot=firstTable?hash1(e->key,hashTableSize):hash2(e->key,hashTableSize);
-      std::swap(e,hashTable[slot]);
+      swap(e,hashTable[slot]);
       if (!e)
          return;
       firstTable=!firstTable;
    }
 
    // No place found, rehash
-   std::vector<Entry*> oldTable;
+   vector<Entry*> oldTable;
    oldTable.resize(4*hashTableSize);
    swap(hashTable,oldTable);
-   for (std::vector<Entry*>::const_iterator iter=oldTable.begin(),limit=oldTable.end();iter!=limit;++iter)
+   for (vector<Entry*>::const_iterator iter=oldTable.begin(),limit=oldTable.end();iter!=limit;++iter)
       if (*iter)
          insert(*iter);
    insert(e);
@@ -67,12 +69,33 @@ HashJoin::Entry* HashJoin::lookup(unsigned key)
 unsigned HashJoin::first()
    // Produce the first tuple
 {
+   // Prepare relevant domain informations
+   vector<Register*> domainRegs;
+   if (leftValue->domain)
+      domainRegs.push_back(leftValue);
+   for (vector<Register*>::const_iterator iter=leftTail.begin(),limit=leftTail.end();iter!=limit;++iter)
+      if ((*iter)->domain)
+         domainRegs.push_back(*iter);
+   vector<ObservedDomainDescription> observedDomains;
+   observedDomains.resize(domainRegs.size());
+
    // Build the hash table from the left side
    unsigned hashTableSize = 1024;
    unsigned tailLength=leftTail.size();
    hashTable.clear();
    hashTable.resize(2*hashTableSize);
    for (unsigned leftCount=left->first();leftCount;leftCount=left->next()) {
+      // Check the domain first
+      bool joinCandidate=true;
+      for (unsigned index=0,limit=domainRegs.size();index<limit;++index) {
+         if (!domainRegs[index]->domain->couldQualify(domainRegs[index]->value)) {
+            joinCandidate=false;
+            break;
+         }
+         observedDomains[index].add(domainRegs[index]->value);
+      }
+      if (!joinCandidate)
+         continue;
       // Compute the slots
       unsigned leftKey=leftValue->value;
       unsigned slot1=hash1(leftKey,hashTableSize),slot2=hash2(leftKey,hashTableSize);
@@ -126,6 +149,10 @@ unsigned HashJoin::first()
       hashTableSize=hashTable.size()/2;
    }
 
+   // Update the domains
+   for (unsigned index=0,limit=domainRegs.size();index<limit;++index)
+      domainRegs[index]->domain->restrictTo(observedDomains[index]);
+
    // Read the first tuple from the right side
    if ((rightCount=right->first())==0)
       return false;
@@ -161,20 +188,20 @@ unsigned HashJoin::next()
 void HashJoin::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<HashJoin ";
-   printRegister(dict,leftValue); std::cout << "="; printRegister(dict,rightValue);
-   std::cout << " [";
-   for (std::vector<Register*>::const_iterator iter=leftTail.begin(),limit=leftTail.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(dict,*iter);
+   indent(level); cout << "<HashJoin ";
+   printRegister(dict,leftValue); cout << "="; printRegister(dict,rightValue);
+   cout << " [";
+   for (vector<Register*>::const_iterator iter=leftTail.begin(),limit=leftTail.end();iter!=limit;++iter) {
+      cout << " "; printRegister(dict,*iter);
    }
-   std::cout << "] [";
-   for (std::vector<Register*>::const_iterator iter=rightTail.begin(),limit=rightTail.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(dict,*iter);
+   cout << "] [";
+   for (vector<Register*>::const_iterator iter=rightTail.begin(),limit=rightTail.end();iter!=limit;++iter) {
+      cout << " "; printRegister(dict,*iter);
    }
-   std::cout << "]" << std::endl;
+   cout << "]" << endl;
    left->print(dict,level+1);
    right->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   indent(level); cout << ">" << endl;
 }
 //---------------------------------------------------------------------------
 void HashJoin::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
