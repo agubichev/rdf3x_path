@@ -77,6 +77,8 @@ class FactsSegment : public Segment
       /// The scan hint
       Hint* hint;
 
+      /// Perform a binary search
+      bool find(unsigned value1,unsigned value2,unsigned value3);
       /// Read the next page
       bool readNextPage();
 

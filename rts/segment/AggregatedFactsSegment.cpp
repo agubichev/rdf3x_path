@@ -151,6 +151,30 @@ bool AggregatedFactsSegment::Scan::first(AggregatedFactsSegment& segment,unsigne
    }
 }
 //---------------------------------------------------------------------------
+bool AggregatedFactsSegment::Scan::find(unsigned value1,unsigned value2)
+    // Perform a binary search
+{
+   const Triple* l=pos,*r=posLimit;
+   while (l<r) {
+      const Triple* m=l+((r-l)/2);
+      if (greater(m->value1,m->value2,value1,value2)) {
+         r=m;
+      } else if (greater(value1,value2,m->value1,m->value2)) {
+         if (((m+1)<r)&&(!greater(m[1].value1,m[1].value2,value1,value2))) {
+            l=m+1;
+         } else {
+            pos=l;
+            return true;
+         }
+      } else {
+         pos=m;
+         return true;
+      }
+   }
+   pos=posLimit;
+   return false;
+}
+//---------------------------------------------------------------------------
 static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }
 static unsigned readDelta2(const unsigned char* pos) { return (pos[0]<<8)|pos[1]; }
 static unsigned readDelta3(const unsigned char* pos) { return (pos[0]<<16)|(pos[1]<<8)|pos[2]; }
@@ -330,22 +354,32 @@ bool AggregatedFactsSegment::Scan::readNextPage()
       ++writer;
    }
 
-   // Check if we should make a skip
-   if (hint) {
-      unsigned next1=tripples[0].value1,next2=tripples[0].value2;
-      hint->next(next1,next2);
-      if ((writer[-1].value1<next1)||((writer[-1].value1==next1)&&(writer[-1].value2<next2))) {
-         if (!seg->lookup(next1,next2,current))
-            return false;
-         pos=posLimit=0;
-         ++pos;
-         return readNextPage();
-      }
-   }
-
    // Update the entries
    pos=triples;
    posLimit=writer;
+
+   // Check if we should make a skip
+   if (hint) {
+      unsigned next1=triples[0].value1,next2=triples[0].value2;
+      while (true) {
+         // Compute the next hint
+         hint->next(next1,next2);
+
+         // No entry on this page?
+         const Triple* oldPos=pos;
+         if (!find(next1,next2)) {
+            if (!seg->lookup(next1,next2,current))
+               return false;
+            pos=posLimit=0;
+            ++pos;
+            return readNextPage();
+         }
+
+         // Stop if we are at a suitable position
+         if (oldPos==pos)
+            break;
+      }
+   }
 
    return true;
 }
