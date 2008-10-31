@@ -266,7 +266,7 @@ bool FactsSegment::Scan::readNextPage()
 
    // Check if we should make a skip
    if (hint) {
-      unsigned next1,next2,next3;
+      unsigned next1=tripples[0].value1,next2=tripples[0].value2,next3=tripples[0].value3;
       hint->next(next1,next2,next3);
       if ((writer[-1].value1<next1)||((writer[-1].value1==next1)&&((writer[-1].value2<next2)||((writer[-1].value2==next2)&&(writer[-1].value3<next3))))) {
          if (!seg->lookup(next1,next2,next3,current))

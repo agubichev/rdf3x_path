@@ -154,7 +154,6 @@ void IndexScan::Hint::next(unsigned& value1,unsigned& value2,unsigned& value3)
    if (scan.bound1) {
       value1=scan.value1->value;
    } else {
-      value1=0;
       if (scan.value1->domain)
          value1=scan.value1->domain->nextCandidate(value1);
    }
@@ -168,7 +167,6 @@ void IndexScan::Hint::next(unsigned& value1,unsigned& value2,unsigned& value3)
    if (scan.bound2) {
       value2=scan.value2->value;
    } else {
-      value2=0;
       if (scan.value2->domain)
          value2=scan.value2->domain->nextCandidate(value2);
    }
@@ -182,7 +180,6 @@ void IndexScan::Hint::next(unsigned& value1,unsigned& value2,unsigned& value3)
    if (scan.bound3) {
       value3=scan.value3->value;
    } else {
-      value3=0;
       if (scan.value3->domain)
          value3=scan.value3->domain->nextCandidate(value3);
    }

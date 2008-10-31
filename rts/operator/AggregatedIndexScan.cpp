@@ -89,7 +89,6 @@ void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
    if (scan.bound1) {
       value1=scan.value1->value;
    } else {
-      value1=0;
       if (scan.value1->domain)
          value1=scan.value1->domain->nextCandidate(value1);
    }
@@ -103,7 +102,6 @@ void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
    if (scan.bound2) {
       value2=scan.value2->value;
    } else {
-      value2=0;
       if (scan.value2->domain)
          value2=scan.value2->domain->nextCandidate(value2);
    }
