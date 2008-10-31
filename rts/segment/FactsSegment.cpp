@@ -268,7 +268,7 @@ bool FactsSegment::Scan::readNextPage()
    if (hint) {
       unsigned next1=tripples[0].value1,next2=tripples[0].value2,next3=tripples[0].value3;
       hint->next(next1,next2,next3);
-      if ((writer[-1].value1<next1)||((writer[-1].value1==next1)&&((writer[-1].value2<next2)||((writer[-1].value2==next2)&&(writer[-1].value3<next3))))) {
+      if (greater(next1,next2,next3,writer[-1].value1,writer[-1].value2,writer[-1].value3)) {
          if (!seg->lookup(next1,next2,next3,current))
             return false;
          pos=posLimit=0;

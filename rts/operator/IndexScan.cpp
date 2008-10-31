@@ -151,44 +151,73 @@ IndexScan::Hint::~Hint()
 void IndexScan::Hint::next(unsigned& value1,unsigned& value2,unsigned& value3)
    // Scanning hint
 {
+   // First value
    if (scan.bound1) {
-      value1=scan.value1->value;
-   } else {
-      if (scan.value1->domain)
-         value1=scan.value1->domain->nextCandidate(value1);
+      unsigned v=scan.value1->value;
+      if ((~v)&&(v>value1)) {
+         value1=v;
+         value2=0;
+         value3=0;
+      }
    }
    for (std::vector<Register*>::const_iterator iter=scan.merge1.begin(),limit=scan.merge1.end();iter!=limit;++iter) {
       unsigned v=(*iter)->value;
-      if ((~v)&&(v>value1))
+      if ((~v)&&(v>value1)) {
          value1=v;
-      if ((*iter)->domain)
-         value1=(*iter)->domain->nextCandidate(value1);
+         value2=0;
+         value3=0;
+      }
    }
+   if (scan.value1->domain) {
+      unsigned v=scan.value1->domain->nextCandidate(value1);
+      if (v>value1) {
+         value1=v;
+         value2=0;
+         value3=0;
+      }
+   }
+
+   // Second value
    if (scan.bound2) {
-      value2=scan.value2->value;
-   } else {
-      if (scan.value2->domain)
-         value2=scan.value2->domain->nextCandidate(value2);
+      unsigned v=scan.value2->value;
+      if ((~v)&&(v>value2)) {
+         value2=v;
+         value3=0;
+      }
    }
    for (std::vector<Register*>::const_iterator iter=scan.merge2.begin(),limit=scan.merge2.end();iter!=limit;++iter) {
       unsigned v=(*iter)->value;
-      if ((~v)&&(v>value2))
+      if ((~v)&&(v>value2)) {
          value2=v;
-      if ((*iter)->domain)
-         value2=(*iter)->domain->nextCandidate(value2);
+         value3=0;
+      }
    }
+   if (scan.value2->domain) {
+      unsigned v=scan.value2->domain->nextCandidate(value2);
+      if (v>value2) {
+         value2=v;
+         value3=0;
+      }
+   }
+
+   // Third value
    if (scan.bound3) {
-      value3=scan.value3->value;
-   } else {
-      if (scan.value3->domain)
-         value3=scan.value3->domain->nextCandidate(value3);
+      unsigned v=scan.value3->value;
+      if ((~v)&&(v>value3)) {
+         value3=v;
+      }
    }
    for (std::vector<Register*>::const_iterator iter=scan.merge3.begin(),limit=scan.merge3.end();iter!=limit;++iter) {
       unsigned v=(*iter)->value;
-      if ((~v)&&(v>value3))
+      if ((~v)&&(v>value3)) {
          value3=v;
-      if ((*iter)->domain)
-         value3=(*iter)->domain->nextCandidate(value3);
+      }
+   }
+   if (scan.value3->domain) {
+      unsigned v=scan.value3->domain->nextCandidate(value3);
+      if (v>value3) {
+         value3=v;
+      }
    }
 }
 //---------------------------------------------------------------------------
