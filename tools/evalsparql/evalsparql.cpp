@@ -69,6 +69,8 @@ static void evalQuery(Database& db,const string& query,bool silent)
       cout << "plan generation failed" << endl;
       return;
    }
+   if (getenv("SHOWCOSTS"))
+      plan->print(0);
 
    // Build a physical plan
    Runtime runtime(db);

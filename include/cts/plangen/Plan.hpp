@@ -37,6 +37,9 @@ struct Plan
 
    /// The next plan in problem chaining
    Plan* next;
+
+   /// Print the plan
+   void print(unsigned indent) const;
 };
 //---------------------------------------------------------------------------
 /// A container for plans. Encapsulates the memory management
