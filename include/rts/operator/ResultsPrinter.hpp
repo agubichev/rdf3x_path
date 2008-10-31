@@ -33,12 +33,14 @@ class ResultsPrinter : public Operator
    DictionarySegment& dictionary;
    /// The duplicate handling
    DuplicateHandling duplicateHandling;
+   /// Maximum number of output tuples
+   unsigned limit;
    /// Skip the printing, resolve only?
    bool silent;
 
    public:
    /// Constructor
-   ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,bool silent=false);
+   ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit=~0u,bool silent=false);
    /// Destructor
    ~ResultsPrinter();
 

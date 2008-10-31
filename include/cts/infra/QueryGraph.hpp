@@ -79,6 +79,8 @@ class QueryGraph
    std::vector<unsigned> projection;
    /// The duplicate handling
    DuplicateHandling duplicateHandling;
+   /// Maximum result size
+   unsigned limit;
    /// Is the query known to produce an empty result?
    bool knownEmptyResult;
 
@@ -100,6 +102,10 @@ class QueryGraph
    void setDuplicateHandling(DuplicateHandling d) { duplicateHandling=d; }
    /// Get the duplicate handling mode
    DuplicateHandling getDuplicateHandling() const { return duplicateHandling; }
+   /// Set the result limit
+   void setLimit(unsigned l) { limit=l; }
+   /// Get the result limit
+   unsigned getLimit() const { return limit; }
    /// Known empty result
    void markAsKnownEmpty() { knownEmptyResult=true; }
    /// Known empty result?

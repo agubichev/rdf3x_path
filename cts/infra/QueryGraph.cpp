@@ -52,7 +52,7 @@ QueryGraph::Edge::~Edge()
 }
 //---------------------------------------------------------------------------
 QueryGraph::QueryGraph()
-   : duplicateHandling(AllDuplicates),knownEmptyResult(false)
+   : duplicateHandling(AllDuplicates),limit(~0u),knownEmptyResult(false)
    // Constructor
 {
 }

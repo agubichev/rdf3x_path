@@ -95,6 +95,8 @@ class SPARQLParser
    std::vector<unsigned> projection;
    /// The pattern
    PatternGroup patterns;
+   /// The result limit
+   unsigned limit;
 
    /// Lookup or create a named variable
    unsigned nameVariable(const std::string& name);
@@ -118,6 +120,8 @@ class SPARQLParser
    void parseFrom();
    /// Parse the where part if any
    void parseWhere();
+   /// Parse the limit part if any
+   void parseLimit();
 
    public:
    /// Constructor
@@ -140,6 +144,8 @@ class SPARQLParser
 
    /// The projection modifier
    ProjectionModifier getProjectionModifier() const { return projectionModifier; }
+   /// The size limit
+   unsigned getLimit() const { return limit; }
 };
 //---------------------------------------------------------------------------
 #endif

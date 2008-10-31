@@ -16,8 +16,8 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,bool silent)
-   : output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),silent(silent)
+ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
+   : output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),limit(limit),silent(silent)
    // Constructor
 {
 }
@@ -80,6 +80,7 @@ unsigned ResultsPrinter::first()
    vector<unsigned> results;
    map<unsigned,CacheEntry> stringCache;
    unsigned minCount=(duplicateHandling==ShowDuplicates)?2:1;
+   unsigned entryCount=0;
    do {
       if (count<minCount) continue;
       results.push_back(count);
@@ -88,6 +89,7 @@ unsigned ResultsPrinter::first()
          results.push_back(id);
          if (~id) stringCache[id];
       }
+      if ((++entryCount)>=this->limit) break;
    } while ((count=input->next())!=0);
 
    // Lookup the strings

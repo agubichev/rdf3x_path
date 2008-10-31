@@ -207,6 +207,9 @@ bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
       case SPARQLParser::Modifier_Duplicates: output.setDuplicateHandling(QueryGraph::ShowDuplicates); break;
    }
 
+   // Set the limit
+   output.setLimit(input.getLimit());
+
    return true;
 }
 //---------------------------------------------------------------------------

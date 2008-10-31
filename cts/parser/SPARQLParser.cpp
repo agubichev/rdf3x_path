@@ -39,7 +39,7 @@ SPARQLParser::Pattern::~Pattern()
 }
 //---------------------------------------------------------------------------
 SPARQLParser::SPARQLParser(SPARQLLexer& lexer)
-   : lexer(lexer),variableCount(0),projectionModifier(Modifier_None)
+   : lexer(lexer),variableCount(0),projectionModifier(Modifier_None),limit(~0u)
    // Constructor
 {
 }
@@ -428,6 +428,22 @@ void SPARQLParser::parseWhere()
    }
 }
 //---------------------------------------------------------------------------
+void SPARQLParser::parseLimit()
+   // Parse the limit part if any
+{
+   SPARQLLexer::Token token=lexer.getNext();
+
+   if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("limit"))) {
+      if (lexer.getNext()!=SPARQLLexer::Identifier)
+         throw ParserException("number expected after 'limit'");
+      limit=atoi(lexer.getTokenValue().c_str());
+      if (limit==0)
+         throw ParserException("invalid limit specifier");
+   } else {
+      lexer.unget(token);
+   }
+}
+//---------------------------------------------------------------------------
 void SPARQLParser::parse()
    // Parse the input
 {
@@ -442,6 +458,9 @@ void SPARQLParser::parse()
 
    // Parse the where clause
    parseWhere();
+
+   // Parse the limit clause
+   parseLimit();
 
    // Check that the input is done
    if (lexer.getNext()!=SPARQLLexer::Eof)

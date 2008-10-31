@@ -509,7 +509,7 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
       case QueryGraph::NoDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break;
       case QueryGraph::ShowDuplicates: duplicateHandling=ResultsPrinter::ShowDuplicates; break;
    }
-   tree=new ResultsPrinter(runtime.getDatabase(),tree,output,duplicateHandling,silent);
+   tree=new ResultsPrinter(runtime.getDatabase(),tree,output,duplicateHandling,query.getLimit(),silent);
 
    return tree;
 }
