@@ -416,8 +416,8 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
    } else {
       db->getStatistics(ro).lookup(rs);
    }
-   if (!ls.card) ls.card=1;
-   if (!rs.card) rs.card=1;
+   ls.card=getCardinality(*db,lo,l1,l2,l3);
+   rs.card=getCardinality(*db,ro,r1,r2,r3);
 
    // Estimate the selectivity
    double lsel=(1.0/(ls.card*rs.card)),rsel=lsel;
