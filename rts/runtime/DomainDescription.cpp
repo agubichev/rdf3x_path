@@ -46,13 +46,51 @@ unsigned DomainDescription::nextCandidate(unsigned value) const
    if (value<min) value=min;
    if (value>max) return ~0u;
 
+   // Potential value?
    unsigned bit=value%(filterSize*filterEntryBits);
-   if (filter[bit/filterEntryBits]&(filterEntry1<<(bit%filterEntryBits)))
+   unsigned slot=bit/filterEntryBits,ofs=bit%filterEntryBits;
+   FilterEntry entry=filter[slot],mask=filterEntry1<<ofs;
+   if (entry&mask)
       return value;
 
-   if (~value)
-      return value+1; else
+   // No, check the next highest bit in this entry
+   if (entry&(~(mask-1))) {
+      while (!(entry&mask)) {
+         mask<<=1;
+         value++;
+      }
+      if (value>max) return ~0u;
       return value;
+   }
+   value+=filterEntryBits-ofs;
+
+   // Scan for the next non-zero entry
+   for (unsigned index=slot+1;index<filterSize;index++)
+      if (filter[index]) {
+         value+=filterEntryBits*(index-slot-1);
+         entry=filter[index]; mask=filterEntry1;
+         while (!(entry&mask)) {
+            mask<<=1;
+            value++;
+         }
+         if (value>max) return ~0u;
+         return value;
+      }
+   value+=filterEntryBits*(filterSize-slot);
+   for (unsigned index=0;index<=slot;index++)
+      if (filter[index]) {
+         value+=filterEntryBits*(index);
+         entry=filter[index]; mask=filterEntry1;
+         while (!(entry&mask)) {
+            mask<<=1;
+            value++;
+         }
+         if (value>max) return ~0u;
+         return value;
+      }
+
+   // No set bit? This should not happen...
+   return ~0u;
 }
 //---------------------------------------------------------------------------
 PotentialDomainDescription::PotentialDomainDescription()
