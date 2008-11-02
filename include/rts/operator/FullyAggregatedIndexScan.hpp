@@ -13,6 +13,7 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include <vector>
 //---------------------------------------------------------------------------
 class Register;
 //---------------------------------------------------------------------------
@@ -20,6 +21,22 @@ class Register;
 class FullyAggregatedIndexScan : public Operator
 {
    private:
+   /// Hints during scanning
+   class Hint : public FullyAggregatedFactsSegment::Scan::Hint {
+      private:
+      /// The scan
+      FullyAggregatedIndexScan& scan;
+
+      public:
+      /// Constructor
+      Hint(FullyAggregatedIndexScan& scan);
+      /// Destructor
+      ~Hint();
+      /// The next hint
+      void next(unsigned& value1);
+   };
+   friend class Hint;
+
    /// The registers for the different parts of the triple
    Register* value1;
    /// The different boundings
@@ -30,6 +47,10 @@ class FullyAggregatedIndexScan : public Operator
    Database::DataOrder order;
    /// The scan
    FullyAggregatedFactsSegment::Scan scan;
+   /// The hinting mechanism
+   Hint hint;
+   /// Merge hints
+   std::vector<Register*> merge1;
 
    /// Constructor
    FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1);

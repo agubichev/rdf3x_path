@@ -40,8 +40,43 @@ class FullyAggregatedIndexScan::ScanPrefix1 : public FullyAggregatedIndexScan {
    unsigned next();
 };
 //---------------------------------------------------------------------------
+FullyAggregatedIndexScan::Hint::Hint(FullyAggregatedIndexScan& scan)
+   : scan(scan)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+FullyAggregatedIndexScan::Hint::~Hint()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+void FullyAggregatedIndexScan::Hint::next(unsigned& value1)
+   // Scanning hint
+{
+   // First value
+   if (scan.bound1) {
+      unsigned v=scan.value1->value;
+      if ((~v)&&(v>value1)) {
+         value1=v;
+      }
+   }
+   for (std::vector<Register*>::const_iterator iter=scan.merge1.begin(),limit=scan.merge1.end();iter!=limit;++iter) {
+      unsigned v=(*iter)->value;
+      if ((~v)&&(v>value1)) {
+         value1=v;
+      }
+   }
+   if (scan.value1->domain) {
+      unsigned v=scan.value1->domain->nextCandidate(value1);
+      if (v>value1) {
+         value1=v;
+      }
+   }
+}
+//---------------------------------------------------------------------------
 FullyAggregatedIndexScan::FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1)
-   : value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order)
+   : value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
    // Constructor
 {
 }
@@ -70,9 +105,25 @@ void FullyAggregatedIndexScan::print(DictionarySegment& dict,unsigned level)
    indent(level); std::cout << ">" << std::endl;
 }
 //---------------------------------------------------------------------------
-void FullyAggregatedIndexScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
+static void handleHints(Register* reg1,Register* reg2,Register* result,std::vector<Register*>& merges)
+   // Add hints
+{
+   bool has1=false,has2=false;
+   for (std::vector<Register*>::const_iterator iter=merges.begin(),limit=merges.end();iter!=limit;++iter) {
+      if ((*iter)==reg1) has1=true;
+      if ((*iter)==reg2) has2=true;
+   }
+   if (reg1==result) has1=true;
+   if (reg2==result) has2=true;
+
+   if (has1&&(!has2)) merges.push_back(reg2);
+   if (has2&&(!has1)) merges.push_back(reg1);
+}
+//---------------------------------------------------------------------------
+void FullyAggregatedIndexScan::addMergeHint(Register* reg1,Register* reg2)
    // Add a merge join hint
 {
+   handleHints(reg1,reg2,value1,merge1);
 }
 //---------------------------------------------------------------------------
 FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)

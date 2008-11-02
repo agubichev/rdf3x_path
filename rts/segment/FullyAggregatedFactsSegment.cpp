@@ -59,8 +59,18 @@ bool FullyAggregatedFactsSegment::lookup(unsigned start1,BufferReference& ref)
    }
 }
 //---------------------------------------------------------------------------
-FullyAggregatedFactsSegment::Scan::Scan()
-   : seg(0)
+FullyAggregatedFactsSegment::Scan::Hint::Hint()
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+FullyAggregatedFactsSegment::Scan::Hint::~Hint()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+FullyAggregatedFactsSegment::Scan::Scan(Hint* hint)
+   : seg(0),hint(hint)
    // Constructor
 {
 }
@@ -100,6 +110,30 @@ bool FullyAggregatedFactsSegment::Scan::first(FullyAggregatedFactsSegment& segme
       if (getValue1()>=start1)
          return true;
    }
+}
+//---------------------------------------------------------------------------
+bool FullyAggregatedFactsSegment::Scan::find(unsigned value1)
+    // Perform a binary search
+{
+   const Triple* l=pos,*r=posLimit;
+   while (l<r) {
+      const Triple* m=l+((r-l)/2);
+      if (m->value1>value1) {
+         r=m;
+      } else if (value1>m->value1) {
+         if (((m+1)<r)&&(!(m[1].value1>value1))) {
+            l=m+1;
+         } else {
+            pos=l;
+            return true;
+         }
+      } else {
+         pos=m;
+         return true;
+      }
+   }
+   pos=posLimit;
+   return false;
 }
 //---------------------------------------------------------------------------
 static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }
@@ -181,6 +215,29 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
    // Update the entries
    pos=triples;
    posLimit=writer;
+
+   // Check if we should make a skip
+   if (hint) {
+      unsigned next1=triples[0].value1;
+      while (true) {
+         // Compute the next hint
+         hint->next(next1);
+
+         // No entry on this page?
+         const Triple* oldPos=pos;
+         if (!find(next1)) {
+            if (!seg->lookup(next1,current))
+               return false;
+            pos=posLimit=0;
+            ++pos;
+            return readNextPage();
+         }
+
+         // Stop if we are at a suitable position
+         if (oldPos==pos)
+            break;
+      }
+   }
 
    return true;
 }
