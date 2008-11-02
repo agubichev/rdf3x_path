@@ -13,7 +13,7 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-SPARQLParser::ParserException::ParserException(const std::string& message)
+SPARQLParser::ParserException::ParserException(const string& message)
   : message(message)
    // Constructor
 {
@@ -52,7 +52,7 @@ SPARQLParser::~SPARQLParser()
 {
 }
 //---------------------------------------------------------------------------
-unsigned SPARQLParser::nameVariable(const std::string& name)
+unsigned SPARQLParser::nameVariable(const string& name)
    // Lookup or create a named variable
 {
    if (namedVariables.count(name))
@@ -73,12 +73,12 @@ void SPARQLParser::parsePrefix()
          // Parse the prefix entry
          if (lexer.getNext()!=SPARQLLexer::Identifier)
             throw ParserException("prefix name expected");
-         std::string name=lexer.getTokenValue();
+         string name=lexer.getTokenValue();
          if (lexer.getNext()!=SPARQLLexer::Colon)
             throw ParserException("':' expected");
          if (lexer.getNext()!=SPARQLLexer::IRI)
             throw ParserException("IRI expected");
-         std::string iri=lexer.getTokenValue();
+         string iri=lexer.getTokenValue();
 
          // Register the new prefix
          if (prefixes.count(name))
@@ -144,7 +144,7 @@ void SPARQLParser::parseFrom()
    }
 }
 //---------------------------------------------------------------------------
-void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars)
+void SPARQLParser::parseFilter(PatternGroup& group,map<string,unsigned>& localVars)
    // Parse a filter condition
 {
    // '('
@@ -157,7 +157,7 @@ void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned
       throw ParserException("filter variable expected");
 
    // Prepare the setuo
-   std::vector<Element> values;
+   vector<Element> values;
    Filter::Type type;
 
    // 'in'?
@@ -213,7 +213,7 @@ void SPARQLParser::parseFilter(PatternGroup& group,std::map<std::string,unsigned
    group.filters.push_back(f);
 }
 //---------------------------------------------------------------------------
-SPARQLParser::Element SPARQLParser::parseBlankNode(PatternGroup& group,std::map<std::string,unsigned>& localVars)
+SPARQLParser::Element SPARQLParser::parseBlankNode(PatternGroup& group,map<string,unsigned>& localVars)
    // Parse blank node patterns
 {
    // The subject is a blank node
@@ -256,7 +256,7 @@ SPARQLParser::Element SPARQLParser::parseBlankNode(PatternGroup& group,std::map<
    }
 }
 //---------------------------------------------------------------------------
-SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,std::map<std::string,unsigned>& localVars)
+SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<string,unsigned>& localVars)
    // Parse an entry in a pattern
 {
    Element result;
@@ -294,7 +294,7 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,std:
       result.type=Element::IRI;
       result.value=lexer.getTokenValue();
    } else if (token==SPARQLLexer::Identifier) {
-      std::string prefix=lexer.getTokenValue();
+      string prefix=lexer.getTokenValue();
       // Handle the keyword 'a'
       if (prefix=="a") {
          result.type=Element::IRI;
@@ -319,7 +319,7 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,std:
 void SPARQLParser::parseGraphPattern(PatternGroup& group)
    // Parse a graph pattern
 {
-   std::map<std::string,unsigned> localVars;
+   map<string,unsigned> localVars;
 
    // Parse the first pattern
    Element subject=parsePatternElement(group,localVars);
@@ -371,8 +371,8 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
          // Union statement?
          token=lexer.getNext();
          if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("union"))) {
-            group.unions.push_back(std::vector<PatternGroup>());
-            std::vector<PatternGroup>& currentUnion=group.unions.back();
+            group.unions.push_back(vector<PatternGroup>());
+            vector<PatternGroup>& currentUnion=group.unions.back();
             currentUnion.push_back(newGroup);
             while (true) {
                if (lexer.getNext()!=SPARQLLexer::LCurly)
@@ -398,7 +398,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
       } else if ((token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
          // Distinguish filter conditions
          if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("filter"))) {
-            std::map<std::string,unsigned> localVars;
+            map<string,unsigned> localVars;
             parseFilter(group,localVars);
          } else {
             lexer.unget(token);
@@ -471,7 +471,7 @@ void SPARQLParser::parse()
 
    // Fixup empty projections (i.e. *)
    if (!projection.size()) {
-      for (std::map<std::string,unsigned>::const_iterator iter=namedVariables.begin(),limit=namedVariables.end();iter!=limit;++iter)
+      for (map<string,unsigned>::const_iterator iter=namedVariables.begin(),limit=namedVariables.end();iter!=limit;++iter)
          projection.push_back((*iter).second);
    }
 }
