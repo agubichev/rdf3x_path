@@ -188,26 +188,64 @@ void Dumper2::flush()
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
-static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,Database::DataOrder order)
+static void buildCountMap(Database& db,const char* fileName)
+   // Build a map with aggregated counts
+{
+   // Prepare the output file
+   ofstream out(fileName,ios::out|ios::binary|ios::trunc);
+   if (!out.is_open()) {
+      cerr << "unable to write " << fileName << endl;
+      throw;
+   }
+
+   // Scan all aggregated indices at once
+   FullyAggregatedFactsSegment::Scan scanS,scanO,scanP;
+   bool doneS=!scanS.first(db.getFullyAggregatedFacts(Database::Order_Subject_Predicate_Object));
+   bool doneP=!scanP.first(db.getFullyAggregatedFacts(Database::Order_Predicate_Subject_Object));
+   bool doneO=!scanO.first(db.getFullyAggregatedFacts(Database::Order_Object_Subject_Predicate));
+   for (unsigned id=0;(!doneS)||(!doneP)||(!doneO);++id) {
+      unsigned counts[3];
+      if (doneS||(scanS.getValue1()>id)) {
+         counts[0]=0;
+      } else {
+         counts[0]=scanS.getCount();
+         doneS=!scanS.next();
+      }
+      if (doneP||(scanP.getValue1()>id)) {
+         counts[1]=0;
+      } else {
+         counts[1]=scanP.getCount();
+         doneP=!scanP.next();
+      }
+      if (doneO||(scanO.getValue1()>id)) {
+         counts[2]=0;
+      } else {
+         counts[2]=scanO.getCount();
+         doneO=!scanO.next();
+      }
+      out.write(reinterpret_cast<char*>(counts),3*sizeof(unsigned));
+   }
+   out.flush();
+}
+//---------------------------------------------------------------------------
+static void addCounts(const char* countMap,unsigned id,unsigned long long multiplicity,unsigned long long& countS,unsigned long long & countP,unsigned long long& countO)
+   // Add all counts
+{
+   const unsigned* base=reinterpret_cast<const unsigned*>(countMap)+(3*id);
+   countS+=multiplicity*static_cast<unsigned long long>(base[0]);
+   countP+=multiplicity*static_cast<unsigned long long>(base[1]);
+   countO+=multiplicity*static_cast<unsigned long long>(base[2]);
+}
+//---------------------------------------------------------------------------
+static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,Database::DataOrder order,const char* countMap)
    // Compute the exact statistics for patterns with two constants
 {
    Dumper2 dumper(out,page);
 
    FactsSegment::Scan scan;
    if (scan.first(db.getFacts(order))) {
-      // Prepare scanning the aggregated indices
-      Register mergeValue,valueS,valueP,valueO;
-      mergeValue.reset(); valueS.reset(); valueP.reset(); valueO.reset();
-      FullyAggregatedIndexScan* scanS=FullyAggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&valueS,false,0,false,0,false);
-      FullyAggregatedIndexScan* scanP=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,&valueP,false,0,false);
-      FullyAggregatedIndexScan* scanO=FullyAggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,0,false,0,false,&valueO,false);
-      scanS->addMergeHint(&mergeValue,&valueS);
-      scanP->addMergeHint(&mergeValue,&valueP);
-      scanO->addMergeHint(&mergeValue,&valueO);
-
       // And scan
       unsigned last1=~0u,last2=~0u;
-      unsigned lastS=0,lastP=0,lastO=0;
       unsigned long long countS=0,countP=0,countO=0;
       do {
          // A new entry?
@@ -220,119 +258,42 @@ static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,Databa
             countS=0;
             countP=0;
             countO=0;
-            mergeValue.value=scan.getValue3();
-            lastS=scanS->first();
-            lastP=scanP->first();
-            lastO=scanO->first();
          }
-         // Compare
-         mergeValue.value=scan.getValue3();
-         while (lastS) {
-            if (mergeValue.value==valueS.value) {
-               countS+=lastS;
-               break;
-            }
-            if (mergeValue.value<valueS.value)
-               break;
-            lastS=scanS->next();
-         }
-         while (lastP) {
-            if (mergeValue.value==valueP.value) {
-               countP+=lastP;
-               break;
-            }
-            if (mergeValue.value<valueP.value)
-               break;
-            lastP=scanP->next();
-         }
-         while (lastO) {
-            if (mergeValue.value==valueO.value) {
-               countO+=lastO;
-               break;
-            }
-            if (mergeValue.value<valueO.value)
-               break;
-            lastO=scanO->next();
-         }
+         // Add entries
+         addCounts(countMap,scan.getValue3(),1,countS,countP,countO);
       } while (scan.next());
       // Add the last entry
       if (~last1) {
          dumper.add(last1,last2,countS,countP,countO);
       }
-      // Cleanup
-      delete scanS;
-      delete scanP;
-      delete scanO;
    }
 
    // Write pending entries if any
    dumper.flush();
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database::DataOrder order)
+static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database::DataOrder order,const char* countMap)
    // Compute the exact statistics for patterns with two constants
 {
-   computeExact2Leaves(db,out,page,order);
+   computeExact2Leaves(db,out,page,order,countMap);
    return 0;
 }
 //---------------------------------------------------------------------------
-static unsigned collectMatches(FullyAggregatedIndexScan* scan,bool first,const Register& v1,const Register& v2,unsigned& c)
-   // Collect matching entries
-{
-   // First?
-   if (first) {
-      c=scan->first();
-      if (!c) return 0;
-   }
-   while (true) {
-      // Compare
-      if (v1.value==v2.value)
-         return c;
-      if (v1.value<v2.value)
-         return 0;
-      c=scan->next();
-      if (!c) return 0;
-   }
-}
-//---------------------------------------------------------------------------
-static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*/,Database::DataOrder order1,Database::DataOrder order2)
+static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*/,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
    AggregatedFactsSegment::Scan scan1,scan2;
    if (scan1.first(db.getAggregatedFacts(order1))&&scan2.first(db.getAggregatedFacts(order2))) {
-      // Prepare scanning the aggregated indices
-      Register mergeValue1,valueS1,valueP1,valueO1;
-      mergeValue1.reset(); valueS1.reset(); valueP1.reset(); valueO1.reset();
-      FullyAggregatedIndexScan* scanS1=FullyAggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&valueS1,false,0,false,0,false);
-      FullyAggregatedIndexScan* scanP1=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,&valueP1,false,0,false);
-      FullyAggregatedIndexScan* scanO1=FullyAggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,0,false,0,false,&valueO1,false);
-      scanS1->addMergeHint(&mergeValue1,&valueS1);
-      scanP1->addMergeHint(&mergeValue1,&valueP1);
-      scanO1->addMergeHint(&mergeValue1,&valueO1);
-      Register mergeValue2,valueS2,valueP2,valueO2;
-      mergeValue2.reset(); valueS2.reset(); valueP2.reset(); valueO2.reset();
-      FullyAggregatedIndexScan* scanS2=FullyAggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&valueS2,false,0,false,0,false);
-      FullyAggregatedIndexScan* scanP2=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,&valueP2,false,0,false);
-      FullyAggregatedIndexScan* scanO2=FullyAggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,0,false,0,false,&valueO2,false);
-      scanS2->addMergeHint(&mergeValue2,&valueS2);
-      scanP2->addMergeHint(&mergeValue2,&valueP2);
-      scanO2->addMergeHint(&mergeValue2,&valueO2);
-
-      // And scan
+      // Scan
       bool done=false;
       while (!done) {
          // Read scan1
-         unsigned last1=scan1.getValue1(),cs1,cp1,co1;
+         unsigned last1=scan1.getValue1();
          unsigned long long countS1=0,countP1=0,countO1=0;
-         bool first1=true;
          while (true) {
             if (scan1.getValue1()!=last1)
                break;
-            mergeValue1.value=scan1.getValue2();
-            countS1+=collectMatches(scanS1,first1,mergeValue1,valueS1,cs1);
-            countP1+=collectMatches(scanP1,first1,mergeValue1,valueP1,cp1);
-            countO1+=collectMatches(scanO1,first1,mergeValue1,valueO1,co1);
-            first1=false;
+            addCounts(countMap,scan1.getValue2(),scan1.getCount(),countS1,countP1,countO1);
             if (!scan1.next()) {
                done=true;
                break;
@@ -340,17 +301,12 @@ static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*
          }
 
          // Read scan2
-         unsigned last2=scan2.getValue1(),cs2,cp2,co2;
+         unsigned last2=scan2.getValue1();
          unsigned long long countS2=0,countP2=0,countO2=0;
-         bool first2=true;
          while (true) {
             if (scan2.getValue1()!=last2)
                break;
-            mergeValue2.value=scan2.getValue2();
-            countS2+=collectMatches(scanS2,first2,mergeValue2,valueS2,cs2);
-            countP2+=collectMatches(scanP2,first2,mergeValue2,valueP2,cp2);
-            countO2+=collectMatches(scanO2,first2,mergeValue2,valueO2,co2);
-            first2=false;
+            addCounts(countMap,scan2.getValue2(),scan2.getCount(),countS2,countP2,countO2);
             if (!scan2.next()) {
                done=true;
                break;
@@ -361,55 +317,43 @@ static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*
          assert(last1==last2);
          cout << last1 << " " << countS1 << " " << countP1 << " " << countO1 << " " << countS2 << " " << countP2 << " " << countO2 << std::endl;
       }
-
-      // Cleanup
-      delete scanS1;
-      delete scanP1;
-      delete scanO1;
-      delete scanS2;
-      delete scanP2;
-      delete scanO2;
    }
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2)
+static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
-   computeExact1Leaves(db,out,page,order1,order2);
+   computeExact1Leaves(db,out,page,order1,order2,countMap);
    return 0;
 }
 //---------------------------------------------------------------------------
-static unsigned long long computeExact0(Database& db,Database::DataOrder order1,Database::DataOrder order2)
+static unsigned long long computeExact0(MemoryMappedFile& countMap,unsigned ofs1,unsigned ofs2)
    // Compute the exact statistics for patterns without constants
 {
-   FullyAggregatedFactsSegment::Scan scan1,scan2;
-   if (scan1.first(db.getFullyAggregatedFacts(order1))&&scan2.first(db.getFullyAggregatedFacts(order2))) {
-      unsigned long long result=0;
-      while (true) {
-         if (scan1.getValue1()<scan2.getValue1()) {
-            if (!scan1.next()) break;
-         } else if (scan1.getValue1()>scan2.getValue1()) {
-            if (!scan2.next()) break;
-         } else {
-            result+=static_cast<unsigned long long>(scan1.getCount())*
-                    static_cast<unsigned long long>(scan2.getCount());
-            if (!scan1.next()) break;
-            if (!scan2.next()) break;
-         }
-      }
-      return result;
-   } else {
-      return 0;
+   const unsigned* data=reinterpret_cast<const unsigned*>(countMap.getBegin());
+   const unsigned* limit=reinterpret_cast<const unsigned*>(countMap.getEnd());
+   unsigned long long result=0;
+   for (const unsigned* iter=data;iter<limit;iter+=3) {
+      result+=static_cast<unsigned long long>(iter[ofs1])*static_cast<unsigned long long>(iter[ofs2]);
    }
+   return result;
 }
 //---------------------------------------------------------------------------
-void DatabaseBuilder::computeExactStatistics()
+void DatabaseBuilder::computeExactStatistics(const char* tmpFile)
    // Compute exact statistics (after loading)
 {
    // Open the database again
    Database db;
    if (!db.open(dbFile)) {
       cout << "Unable to open " << dbFile << endl;
+      throw;
+   }
+
+   // Build aggregated count map
+   buildCountMap(db,tmpFile);
+   MemoryMappedFile countMap;
+   if (!countMap.open(tmpFile)) {
+      cout << "Unable to open " << tmpFile << endl;
       throw;
    }
 
@@ -422,25 +366,25 @@ void DatabaseBuilder::computeExactStatistics()
    unsigned page=out.tellp()/pageSize;
 
    // Compute the exact 2 statistics
-   unsigned exactPS=computeExact2(db,out,page,Database::Order_Predicate_Subject_Object);
-   unsigned exactPO=computeExact2(db,out,page,Database::Order_Predicate_Object_Subject);
-   unsigned exactSO=computeExact2(db,out,page,Database::Order_Subject_Object_Predicate);
+   unsigned exactPS=computeExact2(db,out,page,Database::Order_Predicate_Subject_Object,countMap.getBegin());
+   unsigned exactPO=computeExact2(db,out,page,Database::Order_Predicate_Object_Subject,countMap.getBegin());
+   unsigned exactSO=computeExact2(db,out,page,Database::Order_Subject_Object_Predicate,countMap.getBegin());
 
    // Compute the exact 1 statistics
-   unsigned exactS=computeExact1(db,out,page,Database::Order_Subject_Predicate_Object,Database::Order_Subject_Object_Predicate);
-   unsigned exactP=computeExact1(db,out,page,Database::Order_Predicate_Subject_Object,Database::Order_Predicate_Object_Subject);
-   unsigned exactO=computeExact1(db,out,page,Database::Order_Object_Subject_Predicate,Database::Order_Object_Predicate_Subject);
+   unsigned exactS=computeExact1(db,out,page,Database::Order_Subject_Predicate_Object,Database::Order_Subject_Object_Predicate,countMap.getBegin());
+   unsigned exactP=computeExact1(db,out,page,Database::Order_Predicate_Subject_Object,Database::Order_Predicate_Object_Subject,countMap.getBegin());
+   unsigned exactO=computeExact1(db,out,page,Database::Order_Object_Subject_Predicate,Database::Order_Object_Predicate_Subject,countMap.getBegin());
 
    // Compute the exact 0 statistics
-   unsigned long long exact0SS=computeExact0(db,Database::Order_Subject_Predicate_Object,Database::Order_Subject_Predicate_Object);
-   unsigned long long exact0SP=computeExact0(db,Database::Order_Subject_Predicate_Object,Database::Order_Predicate_Subject_Object);
-   unsigned long long exact0SO=computeExact0(db,Database::Order_Subject_Predicate_Object,Database::Order_Object_Subject_Predicate);
-   unsigned long long exact0PS=computeExact0(db,Database::Order_Predicate_Subject_Object,Database::Order_Subject_Predicate_Object);
-   unsigned long long exact0PP=computeExact0(db,Database::Order_Predicate_Subject_Object,Database::Order_Predicate_Subject_Object);
-   unsigned long long exact0PO=computeExact0(db,Database::Order_Predicate_Subject_Object,Database::Order_Object_Subject_Predicate);
-   unsigned long long exact0OS=computeExact0(db,Database::Order_Object_Subject_Predicate,Database::Order_Subject_Predicate_Object);
-   unsigned long long exact0OP=computeExact0(db,Database::Order_Object_Subject_Predicate,Database::Order_Predicate_Subject_Object);
-   unsigned long long exact0OO=computeExact0(db,Database::Order_Object_Subject_Predicate,Database::Order_Object_Subject_Predicate);
+   unsigned long long exact0SS=computeExact0(countMap,0,0);
+   unsigned long long exact0SP=computeExact0(countMap,0,1);
+   unsigned long long exact0SO=computeExact0(countMap,0,2);
+   unsigned long long exact0PS=computeExact0(countMap,1,0);
+   unsigned long long exact0PP=computeExact0(countMap,1,1);
+   unsigned long long exact0PO=computeExact0(countMap,1,2);
+   unsigned long long exact0OS=computeExact0(countMap,2,0);
+   unsigned long long exact0OP=computeExact0(countMap,2,1);
+   unsigned long long exact0OO=computeExact0(countMap,2,2);
    cout << exact0SS << " " << exact0SP << " " << exact0SO << " " << exact0PS << " " << exact0PP << " " << exact0PO << " " << exact0OS << " " << exact0OP << " " << exact0OO << std::endl;
 
    // Update the directory page XXX
@@ -452,6 +396,7 @@ cout << exactPS << " " << exactPO << " " << exactSO << " " << exactS << " " << e
    out.flush();
    out.close();
    db.close();
-
+   countMap.close();
+   remove(tmpFile);
 }
 //---------------------------------------------------------------------------

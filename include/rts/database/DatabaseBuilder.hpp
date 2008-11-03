@@ -144,7 +144,7 @@ class DatabaseBuilder
    /// Compute statistics about frequent paths (after loading)
    void computePathStatistics();
    /// Compute the exact statistics (after loading)
-   void computeExactStatistics();
+   void computeExactStatistics(const char* tempFile);
 };
 //---------------------------------------------------------------------------
 #endif

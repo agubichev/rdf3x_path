@@ -576,7 +576,7 @@ static void loadStrings(DatabaseBuilder& builder,TempFile& stringTable)
    }
 }
 //---------------------------------------------------------------------------
-static void loadStatistics(DatabaseBuilder& builder)
+static void loadStatistics(DatabaseBuilder& builder,TempFile& facts)
    // Compute the statistics
 {
    cout << "Computing statistics..." << endl;
@@ -587,7 +587,9 @@ static void loadStatistics(DatabaseBuilder& builder)
    builder.computePathStatistics();
 
    cout << "Computing exact statistics..." << endl;
-   builder.computeExactStatistics();
+   TempFile tmp(facts.getBaseFile());
+   tmp.close();
+   builder.computeExactStatistics(tmp.getFile().c_str());
 }
 //---------------------------------------------------------------------------
 static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)
@@ -606,7 +608,7 @@ static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)
    builder.finishLoading();
 
    // Compute the statistics
-   loadStatistics(builder);
+   loadStatistics(builder,facts);
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])

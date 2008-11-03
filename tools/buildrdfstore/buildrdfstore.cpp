@@ -345,7 +345,7 @@ bool buildDatabase(DatabaseBuilder& builder,const char* factsFile,const char* st
    return true;
 }
 //---------------------------------------------------------------------------
-bool buildDatabaseStatistics(DatabaseBuilder& builder)
+bool buildDatabaseStatistics(DatabaseBuilder& builder,const char* targetName)
    // Build the database statistics
 {
    // Compute the individual statistics
@@ -358,7 +358,10 @@ bool buildDatabaseStatistics(DatabaseBuilder& builder)
    builder.computePathStatistics();
 
    cout << "Building exact statistic" << endl;
-   builder.computeExactStatistics();
+   string tmpName=targetName;
+   tmpName+=".tmp";
+   builder.computeExactStatistics(tmpName.c_str());
+   remove(tmpName.c_str());
 
    return true;
 }
@@ -378,7 +381,7 @@ int main(int argc,char* argv[])
       return 1;
 
    // Compute the missing statistics
-   if (!buildDatabaseStatistics(builder))
+   if (!buildDatabaseStatistics(builder,argv[3]))
       return 1;
 }
 //---------------------------------------------------------------------------
