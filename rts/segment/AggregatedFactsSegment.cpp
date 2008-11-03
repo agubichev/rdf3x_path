@@ -164,7 +164,7 @@ bool AggregatedFactsSegment::Scan::readNextPage()
    unsigned value1=readUint32Aligned(reader); reader+=4;
    unsigned value2=readUint32Aligned(reader); reader+=4;
    unsigned count=readUint32Aligned(reader); reader+=4;
-   Triple* writer=tripples;
+   Triple* writer=triples;
    (*writer).value1=value1;
    (*writer).value2=value2;
    (*writer).count=count;
@@ -321,7 +321,7 @@ bool AggregatedFactsSegment::Scan::readNextPage()
    }
 
    // Update the entries
-   pos=tripples;
+   pos=triples;
    posLimit=writer;
 
    return true;

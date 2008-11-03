@@ -19,7 +19,7 @@ namespace {
 //---------------------------------------------------------------------------
 const unsigned pageSize = DatabaseBuilder::pageSize;
 //---------------------------------------------------------------------------
-/// A RDF tripple
+/// A RDF triple
 struct Triple {
    /// The values as IDs
    unsigned subject,predicate,object;

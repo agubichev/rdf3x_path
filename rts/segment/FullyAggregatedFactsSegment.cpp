@@ -124,7 +124,7 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
    const unsigned char* reader=page+headerSize,*limit=page+BufferManager::pageSize;
    unsigned value1=readUint32Aligned(reader); reader+=4;
    unsigned count=readUint32Aligned(reader); reader+=4;
-   Triple* writer=tripples;
+   Triple* writer=triples;
    (*writer).value1=value1;
    (*writer).count=count;
    ++writer;
@@ -179,7 +179,7 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
    }
 
    // Update the entries
-   pos=tripples;
+   pos=triples;
    posLimit=writer;
 
    return true;

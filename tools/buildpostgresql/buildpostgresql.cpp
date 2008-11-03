@@ -18,13 +18,13 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
-/// A RDF tripple
+/// A RDF triple
 struct Triple {
    /// The values as IDs
    unsigned subject,predicate,object;
 };
 //---------------------------------------------------------------------------
-/// Order a RDF tripple lexicographically
+/// Order a RDF triple lexicographically
 struct OrderTripleByPredicate {
    bool operator()(const Triple& a,const Triple& b) const {
       return (a.predicate<b.predicate)||

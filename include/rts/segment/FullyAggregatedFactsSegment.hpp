@@ -55,8 +55,8 @@ class FullyAggregatedFactsSegment : public Segment
       FullyAggregatedFactsSegment* seg;
       /// The position on the current page
       const Triple* pos,*posLimit;
-      /// The decompressed tripples
-      Triple tripples[maxCount];
+      /// The decompressed triples
+      Triple triples[maxCount];
 
       Scan(const Scan&);
       void operator=(const Scan&);
