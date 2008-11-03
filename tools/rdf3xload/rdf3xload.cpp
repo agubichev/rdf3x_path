@@ -585,6 +585,9 @@ static void loadStatistics(DatabaseBuilder& builder)
       builder.computeStatistics(index);
 
    builder.computePathStatistics();
+
+   cout << "Computing exact statistics..." << endl;
+   builder.computeExactStatistics();
 }
 //---------------------------------------------------------------------------
 static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)

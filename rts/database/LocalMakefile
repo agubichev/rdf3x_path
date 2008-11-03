@@ -1,4 +1,5 @@
 src_rts_database:=					\
 	rts/database/Database.cpp			\
 	rts/database/DatabaseBuilder.cpp		\
-	rts/database/DatabaseBuilderStatistics.cpp
+	rts/database/DatabaseBuilderStatistics.cpp	\
+	rts/database/DatabaseBuilderExactStatistics.cpp

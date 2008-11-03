@@ -357,6 +357,9 @@ bool buildDatabaseStatistics(DatabaseBuilder& builder)
    cout << "Building path statistic" << endl;
    builder.computePathStatistics();
 
+   cout << "Building exact statistic" << endl;
+   builder.computeExactStatistics();
+
    return true;
 }
 //---------------------------------------------------------------------------
