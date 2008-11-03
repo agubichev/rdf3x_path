@@ -129,6 +129,33 @@ int main(int argc,char* argv[])
       return 1;
    }
 
+   // Raw dump?
+   if ((argc==3)&&(string(argv[2])=="--raw")) {
+      // Dump the facts
+      unsigned maxId=0;
+      {
+         FactsSegment::Scan scan;
+         if (scan.first(db.getFacts(Database::Order_Subject_Predicate_Object))) do {
+            cout << scan.getValue1() << " " << scan.getValue2() << " " << scan.getValue3() << std::endl;
+            maxId=max(maxId,scan.getValue1());
+            maxId=max(maxId,scan.getValue2());
+            maxId=max(maxId,scan.getValue3());
+         } while (scan.next());
+      }
+      // Dump the strings
+      {
+         const char* start,*stop;
+         DictionarySegment& dic=db.getDictionary();
+         for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop);++id) {
+            cerr << id << " ";
+            for (;start<stop;++start)
+               cerr << *start;
+            cerr << std::endl;
+         }
+      }
+      return 0;
+   }
+
    // Dump the database
    DictionarySegment& dic=db.getDictionary();
    Register subject,predicate,object;
