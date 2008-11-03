@@ -201,6 +201,29 @@ static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database
    return 0;
 }
 //---------------------------------------------------------------------------
+static unsigned computeExact0(Database& db,Database::DataOrder order1,Database::DataOrder order2)
+   // Compute the exact statistics for patterns without constants
+{
+   FullyAggregatedFactsSegment::Scan scan1,scan2;
+   if (scan1.first(db.getFullyAggregatedFacts(order1))&&scan2.first(db.getFullyAggregatedFacts(order2))) {
+      unsigned result=0;
+      while (true) {
+         if (scan1.getValue1()<scan2.getValue1()) {
+            if (!scan1.next()) break;
+         } else if (scan1.getValue1()>scan2.getValue1()) {
+            if (!scan2.next()) break;
+         } else {
+            result+=scan1.getCount()*scan2.getCount();
+            if (!scan1.next()) break;
+            if (!scan2.next()) break;
+         }
+      }
+      return result;
+   } else {
+      return 0;
+   }
+}
+//---------------------------------------------------------------------------
 void DatabaseBuilder::computeExactStatistics()
    // Compute exact statistics (after loading)
 {
@@ -228,6 +251,18 @@ void DatabaseBuilder::computeExactStatistics()
    unsigned exactS=computeExact1(db,out,page,Database::Order_Subject_Predicate_Object,Database::Order_Subject_Object_Predicate);
    unsigned exactP=computeExact1(db,out,page,Database::Order_Predicate_Subject_Object,Database::Order_Predicate_Object_Subject);
    unsigned exactO=computeExact1(db,out,page,Database::Order_Object_Subject_Predicate,Database::Order_Object_Predicate_Subject);
+
+   // Compute the exact 0 statistics
+   unsigned exact0SS=computeExact0(db,Database::Order_Subject_Predicate_Object,Database::Order_Subject_Predicate_Object);
+   unsigned exact0SP=computeExact0(db,Database::Order_Subject_Predicate_Object,Database::Order_Predicate_Subject_Object);
+   unsigned exact0SO=computeExact0(db,Database::Order_Subject_Predicate_Object,Database::Order_Object_Subject_Predicate);
+   unsigned exact0PS=computeExact0(db,Database::Order_Predicate_Subject_Object,Database::Order_Subject_Predicate_Object);
+   unsigned exact0PP=computeExact0(db,Database::Order_Predicate_Subject_Object,Database::Order_Predicate_Subject_Object);
+   unsigned exact0PO=computeExact0(db,Database::Order_Predicate_Subject_Object,Database::Order_Object_Subject_Predicate);
+   unsigned exact0OS=computeExact0(db,Database::Order_Object_Subject_Predicate,Database::Order_Subject_Predicate_Object);
+   unsigned exact0OP=computeExact0(db,Database::Order_Object_Subject_Predicate,Database::Order_Predicate_Subject_Object);
+   unsigned exact0OO=computeExact0(db,Database::Order_Object_Subject_Predicate,Database::Order_Object_Subject_Predicate);
+   cout << exact0SS << " " << exact0SP << " " << exact0SO << " " << exact0PS << " " << exact0PP << " " << exact0PO << " " << exact0OS << " " << exact0OP << " " << exact0OO << std::endl;
 
    // Update the directory page XXX
 //   out.seekp(static_cast<unsigned long long>(directory.statistics[order])*pageSize,ios::beg);
