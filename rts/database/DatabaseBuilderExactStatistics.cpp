@@ -1,9 +1,11 @@
 #include "rts/database/DatabaseBuilder.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/FullyAggregatedIndexScan.hpp"
 #include <iostream>
+#include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -28,8 +30,8 @@ static void computeExact2Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*
       FullyAggregatedIndexScan* scanP=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,&valueP,false,0,false);
       FullyAggregatedIndexScan* scanO=FullyAggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,0,false,0,false,&valueO,false);
       scanS->addMergeHint(&mergeValue,&valueS);
-      scanS->addMergeHint(&mergeValue,&valueP);
-      scanS->addMergeHint(&mergeValue,&valueO);
+      scanP->addMergeHint(&mergeValue,&valueP);
+      scanO->addMergeHint(&mergeValue,&valueO);
 
       // And scan
       unsigned last1=~0u,last2=~0u,countS=0,countP=0,countO=0;
@@ -98,9 +100,104 @@ static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database
    return 0;
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact1(Database& /*db*/,ofstream& /*out*/,unsigned& /*page*/,Database::DataOrder /*order*/)
+static unsigned collectMatches(FullyAggregatedIndexScan* scan,bool first,const Register& v1,const Register& v2,unsigned& c)
+   // Collect matching entries
+{
+   // First?
+   if (first) {
+      c=scan->first();
+      if (!c) return 0;
+   }
+   while (true) {
+      // Compare
+      if (v1.value==v2.value)
+         return c;
+      if (v1.value<v2.value)
+         return 0;
+      c=scan->next();
+      if (!c) return 0;
+   }
+}
+//---------------------------------------------------------------------------
+static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*/,Database::DataOrder order1,Database::DataOrder order2)
    // Compute the exact statistics for patterns with one constant
 {
+   AggregatedFactsSegment::Scan scan1,scan2;
+   if (scan1.first(db.getAggregatedFacts(order1))&&scan2.first(db.getAggregatedFacts(order2))) {
+      // Prepare scanning the aggregated indices
+      Register mergeValue1,valueS1,valueP1,valueO1;
+      mergeValue1.reset(); valueS1.reset(); valueP1.reset(); valueO1.reset();
+      FullyAggregatedIndexScan* scanS1=FullyAggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&valueS1,false,0,false,0,false);
+      FullyAggregatedIndexScan* scanP1=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,&valueP1,false,0,false);
+      FullyAggregatedIndexScan* scanO1=FullyAggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,0,false,0,false,&valueO1,false);
+      scanS1->addMergeHint(&mergeValue1,&valueS1);
+      scanP1->addMergeHint(&mergeValue1,&valueP1);
+      scanO1->addMergeHint(&mergeValue1,&valueO1);
+      Register mergeValue2,valueS2,valueP2,valueO2;
+      mergeValue2.reset(); valueS2.reset(); valueP2.reset(); valueO2.reset();
+      FullyAggregatedIndexScan* scanS2=FullyAggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&valueS2,false,0,false,0,false);
+      FullyAggregatedIndexScan* scanP2=FullyAggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,0,false,&valueP2,false,0,false);
+      FullyAggregatedIndexScan* scanO2=FullyAggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,0,false,0,false,&valueO2,false);
+      scanS2->addMergeHint(&mergeValue2,&valueS2);
+      scanP2->addMergeHint(&mergeValue2,&valueP2);
+      scanO2->addMergeHint(&mergeValue2,&valueO2);
+
+      // And scan
+      bool done=false;
+      while (!done) {
+         // Read scan1
+         unsigned last1=scan1.getValue1(),countS1=0,countP1=0,countO1=0,cs1,cp1,co1;
+         bool first1=true;
+         while (true) {
+            if (scan1.getValue1()!=last1)
+               break;
+            mergeValue1.value=scan1.getValue2();
+            countS1+=collectMatches(scanS1,first1,mergeValue1,valueS1,cs1);
+            countP1+=collectMatches(scanP1,first1,mergeValue1,valueP1,cp1);
+            countO1+=collectMatches(scanO1,first1,mergeValue1,valueO1,co1);
+            first1=false;
+            if (!scan1.next()) {
+               done=true;
+               break;
+            }
+         }
+
+         // Read scan2
+         unsigned last2=scan2.getValue1(),countS2=0,countP2=0,countO2=0,cs2,cp2,co2;
+         bool first2=true;
+         while (true) {
+            if (scan2.getValue1()!=last2)
+               break;
+            mergeValue2.value=scan2.getValue2();
+            countS2+=collectMatches(scanS2,first2,mergeValue2,valueS2,cs2);
+            countP2+=collectMatches(scanP2,first2,mergeValue2,valueP2,cp2);
+            countO2+=collectMatches(scanO2,first2,mergeValue2,valueO2,co2);
+            first2=false;
+            if (!scan2.next()) {
+               done=true;
+               break;
+            }
+         }
+
+         // Produce output tuple
+         assert(last1==last2);
+         cout << last1 << " " << countS1 << " " << countP1 << " " << countO1 << " " << countS2 << " " << countP2 << " " << countO2 << std::endl;
+      }
+
+      // Cleanup
+      delete scanS1;
+      delete scanP1;
+      delete scanO1;
+      delete scanS2;
+      delete scanP2;
+      delete scanO2;
+   }
+}
+//---------------------------------------------------------------------------
+static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2)
+   // Compute the exact statistics for patterns with one constant
+{
+   computeExact1Leaves(db,out,page,order1,order2);
    return 0;
 }
 //---------------------------------------------------------------------------
@@ -128,9 +225,9 @@ void DatabaseBuilder::computeExactStatistics()
    unsigned exactSO=computeExact2(db,out,page,Database::Order_Subject_Object_Predicate);
 
    // Compute the exact 1 statistics
-   unsigned exactS=computeExact1(db,out,page,Database::Order_Subject_Predicate_Object);
-   unsigned exactP=computeExact1(db,out,page,Database::Order_Predicate_Subject_Object);
-   unsigned exactO=computeExact1(db,out,page,Database::Order_Object_Predicate_Subject);
+   unsigned exactS=computeExact1(db,out,page,Database::Order_Subject_Predicate_Object,Database::Order_Subject_Object_Predicate);
+   unsigned exactP=computeExact1(db,out,page,Database::Order_Predicate_Subject_Object,Database::Order_Predicate_Object_Subject);
+   unsigned exactO=computeExact1(db,out,page,Database::Order_Object_Subject_Predicate,Database::Order_Object_Predicate_Subject);
 
    // Update the directory page XXX
 //   out.seekp(static_cast<unsigned long long>(directory.statistics[order])*pageSize,ios::beg);
