@@ -26,7 +26,7 @@ class Segment
    explicit Segment(BufferManager& bufferManager);
 
    /// Read a specific page
-   BufferRequest readShared(unsigned page);
+   BufferRequest readShared(unsigned page) const;
    /// Read a specific page
    BufferRequest readExclusive(unsigned page);
    /// Get the page ID

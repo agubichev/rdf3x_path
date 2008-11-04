@@ -21,7 +21,7 @@ Segment::~Segment()
 {
 }
 //---------------------------------------------------------------------------
-BufferRequest Segment::readShared(unsigned page)
+BufferRequest Segment::readShared(unsigned page) const
    // Read a specific page
 {
    return BufferRequest(bufferManager,page,true);

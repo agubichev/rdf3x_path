@@ -5,6 +5,7 @@
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
+#include "rts/segment/ExactStatisticsSegment.hpp"
 #include <map>
 #include <set>
 #include <algorithm>
@@ -125,21 +126,6 @@ static void normalizePattern(Database::DataOrder order,unsigned& c1,unsigned& c2
    c1=s; c2=p; c3=o;
 }
 //---------------------------------------------------------------------------
-static void denormalizePattern(Database::DataOrder order,unsigned& s,unsigned& p,unsigned& o)
-    // Extract data order
-{
-   unsigned c1=~0u,c2=~0u,c3=~0u;
-   switch (order) {
-      case Database::Order_Subject_Predicate_Object: c1=s; c2=p; c3=o; break;
-      case Database::Order_Subject_Object_Predicate: c1=s; c2=o; c3=p; break;
-      case Database::Order_Object_Predicate_Subject: c1=o; c2=p; c3=s; break;
-      case Database::Order_Object_Subject_Predicate: c1=o; c2=s; c3=p; break;
-      case Database::Order_Predicate_Subject_Object: c1=p; c2=s; c3=o; break;
-      case Database::Order_Predicate_Object_Subject: c1=p; c2=o; c3=s; break;
-   }
-   s=c1; p=c2; o=c3;
-}
-//---------------------------------------------------------------------------
 static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,unsigned& c3)
    // Reshuffle values to maximize the constant prefix
 {
@@ -171,24 +157,8 @@ static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,
 static unsigned getCardinality(Database& db,Database::DataOrder order,unsigned c1,unsigned c2,unsigned c3)
    // Estimate the cardinality of a predicate
 {
-   maximizePrefix(order,c1,c2,c3);
-
-   // Lookup the cardinality
-   if (~c3) {
-      return 1;
-   } else if (~c2) {
-      AggregatedFactsSegment::Scan scan;
-      if (scan.first(db.getAggregatedFacts(order),c1,c2))
-         return scan.getCount();
-      return 1;
-   } else if (~c1) {
-      FullyAggregatedFactsSegment::Scan scan;
-      if (scan.first(db.getFullyAggregatedFacts(order),c1))
-         return scan.getCount();
-      return 1;
-   } else {
-      return db.getFacts(order).getCardinality();
-   }
+   normalizePattern(order,c1,c2,c3);
+   return db.getExactStatistics().getCardinality(c1,c2,c3);
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C)
@@ -369,13 +339,6 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    return result;
 }
 //---------------------------------------------------------------------------
-static double buildMaxSel(double sel,unsigned hits1,unsigned card1,unsigned card2)
-   // Update the maximum selectivity
-{
-   double s1=static_cast<double>(hits1)/(static_cast<double>(card1)*card2);
-   return max(sel,s1);
-}
-//---------------------------------------------------------------------------
 PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& query,const QueryGraph::Edge& edge)
    // Build the informaion about a join
 {
@@ -384,95 +347,9 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
    result.left.set(edge.from);
    result.right.set(edge.to);
 
-   // Extract patterns
+   // Compute the join selectivity
    const QueryGraph::Node& l=query.nodes[edge.from],&r=query.nodes[edge.to];
-   Database::DataOrder lo=Database::Order_Subject_Predicate_Object,ro=Database::Order_Subject_Predicate_Object;
-   unsigned l1=l.constSubject?l.subject:~0u,l2=l.constPredicate?l.predicate:~0u,l3=l.constObject?l.object:~0u;
-   unsigned r1=l.constSubject?r.subject:~0u,r2=r.constPredicate?r.predicate:~0u,r3=r.constObject?r.object:~0u;
-   maximizePrefix(lo,l1,l2,l3);
-   maximizePrefix(ro,r1,r2,r3);
-   unsigned lv1=(!l.constSubject)?l.subject:~0u,lv2=(!l.constPredicate)?l.predicate:~0u,lv3=(!l.constObject)?l.object:~0u;
-   unsigned rv1=(!l.constSubject)?r.subject:~0u,rv2=(!r.constPredicate)?r.predicate:~0u,rv3=(!r.constObject)?r.object:~0u;
-   denormalizePattern(lo,lv1,lv2,lv3);
-   denormalizePattern(ro,rv1,rv2,rv3);
-
-   // Query the statistics
-   StatisticsSegment::Bucket ls,rs;
-   if (~l3) {
-      db->getStatistics(lo).lookup(l1,l2,l3,ls);
-   } else if (~l2) {
-      db->getStatistics(lo).lookup(l1,l2,ls);
-   } else if (~l1) {
-      db->getStatistics(lo).lookup(l1,ls);
-   } else {
-      db->getStatistics(lo).lookup(ls);
-   }
-   if (~r3) {
-      db->getStatistics(ro).lookup(r1,r2,r3,rs);
-   } else if (~r2) {
-      db->getStatistics(ro).lookup(r1,r2,rs);
-   } else if (~r1) {
-      db->getStatistics(ro).lookup(r1,rs);
-   } else {
-      db->getStatistics(ro).lookup(rs);
-   }
-   ls.card=getCardinality(*db,lo,l1,l2,l3);
-   rs.card=getCardinality(*db,ro,r1,r2,r3);
-
-   // Estimate the selectivity
-   double lsel=(1.0/(ls.card*rs.card)),rsel=lsel;
-   for (vector<unsigned>::const_iterator iter=edge.common.begin(),limit=edge.common.end();iter!=limit;++iter) {
-      unsigned v=(*iter);
-      if (v==lv1) {
-         if ((v==r.subject)&&(!r.constSubject))
-            lsel=buildMaxSel(lsel,ls.val1S,ls.card,rs.card);
-         if ((v==r.predicate)&&(!r.constPredicate))
-            lsel=buildMaxSel(lsel,ls.val1P,ls.card,rs.card);
-         if ((v==r.object)&&(!r.constObject))
-            lsel=buildMaxSel(lsel,ls.val1O,ls.card,rs.card);
-      }
-      if (v==lv2) {
-         if ((v==r.subject)&&(!r.constSubject))
-            lsel=buildMaxSel(lsel,ls.val2S,ls.card,rs.card);
-         if ((v==r.predicate)&&(!r.constPredicate))
-            lsel=buildMaxSel(lsel,ls.val2P,ls.card,rs.card);
-         if ((v==r.object)&&(!r.constObject))
-            lsel=buildMaxSel(lsel,ls.val2O,ls.card,rs.card);
-      }
-      if (v==lv3) {
-         if ((v==r.subject)&&(!r.constSubject))
-            lsel=buildMaxSel(lsel,ls.val3S,ls.card,rs.card);
-         if ((v==r.predicate)&&(!r.constPredicate))
-            lsel=buildMaxSel(lsel,ls.val3P,ls.card,rs.card);
-         if ((v==r.object)&&(!r.constObject))
-            lsel=buildMaxSel(lsel,ls.val3O,ls.card,rs.card);
-      }
-      if (v==rv1) {
-         if ((v==l.subject)&&(!l.constSubject))
-            rsel=buildMaxSel(rsel,rs.val1S,rs.card,ls.card);
-         if ((v==l.predicate)&&(!l.constPredicate))
-            rsel=buildMaxSel(rsel,rs.val1P,rs.card,ls.card);
-         if ((v==l.object)&&(!l.constObject))
-            rsel=buildMaxSel(rsel,ls.val1O,ls.card,ls.card);
-      }
-      if (v==rv2) {
-         if ((v==l.subject)&&(!l.constSubject))
-            rsel=buildMaxSel(rsel,rs.val2S,rs.card,ls.card);
-         if ((v==l.predicate)&&(!l.constPredicate))
-            rsel=buildMaxSel(rsel,rs.val2P,rs.card,ls.card);
-         if ((v==l.object)&&(!l.constObject))
-            rsel=buildMaxSel(rsel,rs.val2O,rs.card,ls.card);
-      }
-      if (v==rv3) {
-         if ((v==l.subject)&&(!l.constSubject))
-            rsel=buildMaxSel(rsel,rs.val3S,rs.card,ls.card);
-         if ((v==l.predicate)&&(!l.constPredicate))
-            rsel=buildMaxSel(rsel,rs.val3P,rs.card,ls.card);
-         if ((v==l.object)&&(!l.constObject))
-            rsel=buildMaxSel(rsel,rs.val3O,rs.card,ls.card);
-      }
-   }
-   result.selectivity=(lsel+rsel)/2.0;
+   result.selectivity=db->getExactStatistics().getJoinSelectivity(l.constSubject,l.subject,l.constPredicate,l.predicate,l.constObject,l.object,r.constSubject,r.subject,r.constPredicate,r.predicate,r.constObject,r.object);
 
    // Look up suitable orderings
    if (!edge.common.empty()) {

@@ -15,6 +15,7 @@ class FactsSegment;
 class AggregatedFactsSegment;
 class FullyAggregatedFactsSegment;
 class DictionarySegment;
+class ExactStatisticsSegment;
 class StatisticsSegment;
 class PathStatisticsSegment;
 //---------------------------------------------------------------------------
@@ -43,6 +44,8 @@ class Database
    StatisticsSegment* statistics[6];
    /// The path statistics
    PathStatisticsSegment* pathStatistics[2];
+   /// The exact statistics
+   ExactStatisticsSegment* exactStatistics;
 
    Database(const Database&);
    void operator=(const Database&);
@@ -68,6 +71,8 @@ class Database
    StatisticsSegment& getStatistics(DataOrder order);
    /// Get path statistics
    PathStatisticsSegment& getPathStatistics(bool stars);
+   /// Get the exact statistics
+   ExactStatisticsSegment& getExactStatistics();
    /// Get the dictionary
    DictionarySegment& getDictionary();
 };

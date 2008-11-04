@@ -2,6 +2,7 @@
 #include "rts/buffer/BufferManager.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "rts/segment/ExactStatisticsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
@@ -17,7 +18,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 Database::Database()
-   : bufferManager(0),dictionary(0)
+   : bufferManager(0),dictionary(0),exactStatistics(0)
    // Constructor
 {
    for (unsigned index=0;index<6;index++) {
@@ -38,6 +39,14 @@ Database::~Database()
 }
 //---------------------------------------------------------------------------
 static unsigned readUint32(const unsigned char* data) { return (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3]; }
+//---------------------------------------------------------------------------
+static unsigned long long readUint64(const unsigned char* data)
+{
+   unsigned long long result=0;
+   for (unsigned index=0;index<8;index++)
+      result=(result<<8)|static_cast<unsigned long long>(data[7-index]);
+   return result;
+}
 //---------------------------------------------------------------------------
 bool Database::open(const char* fileName)
    // Open a database
@@ -82,6 +91,12 @@ bool Database::open(const char* fileName)
          unsigned pathStatisticsPages[2];
          for (unsigned index=0;index<2;index++)
             pathStatisticsPages[index]=readUint32(page+284+4*index);
+         unsigned exactStatisticsPages[6];
+         for (unsigned index=0;index<6;index++)
+            exactStatisticsPages[index]=readUint32(page+292+4*index);
+         unsigned long long exactStatisticsJoinCounts[9];
+         for (unsigned index=0;index<9;index++)
+            exactStatisticsJoinCounts[index]=readUint64(page+316+8*index);
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
@@ -93,6 +108,7 @@ bool Database::open(const char* fileName)
             fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*bufferManager,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
          for (unsigned index=0;index<2;index++)
             pathStatistics[index]=new PathStatisticsSegment(*bufferManager,pathStatisticsPages[index]);
+         exactStatistics=new ExactStatisticsSegment(*bufferManager,*this,exactStatisticsPages[0],exactStatisticsPages[1],exactStatisticsPages[2],exactStatisticsPages[3],exactStatisticsPages[4],exactStatisticsPages[5],exactStatisticsJoinCounts[0],exactStatisticsJoinCounts[1],exactStatisticsJoinCounts[2],exactStatisticsJoinCounts[3],exactStatisticsJoinCounts[4],exactStatisticsJoinCounts[5],exactStatisticsJoinCounts[6],exactStatisticsJoinCounts[7],exactStatisticsJoinCounts[8]);
          dictionary=new DictionarySegment(*bufferManager,stringStart,stringMapping,stringIndex);
 
          return true;
@@ -124,6 +140,8 @@ void Database::close()
       delete pathStatistics[index];
       pathStatistics[index]=0;
    }
+   delete exactStatistics;
+   exactStatistics=0;
    delete dictionary;
    dictionary=0;
    delete bufferManager;
@@ -158,6 +176,12 @@ PathStatisticsSegment& Database::getPathStatistics(bool stars)
    // Get path statistics
 {
    return *(pathStatistics[stars]);
+}
+//---------------------------------------------------------------------------
+ExactStatisticsSegment& Database::getExactStatistics()
+   // Get the exact statistics
+{
+   return *exactStatistics;
 }
 //---------------------------------------------------------------------------
 DictionarySegment& Database::getDictionary()
