@@ -112,7 +112,12 @@ static void dumpObject(DictionarySegment& dic,unsigned id)
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
+   bool rawDump=false;
+   if ((argc==3)&&(string(argv[2])=="--raw"))
+     rawDump=true;
+
    // Greeting
+   if (!rawDump)
    cerr << "RDF-3X turtle exporter" << endl
         << "(c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x" << endl;
 
@@ -130,7 +135,7 @@ int main(int argc,char* argv[])
    }
 
    // Raw dump?
-   if ((argc==3)&&(string(argv[2])=="--raw")) {
+   if (rawDump) {
       // Dump the facts
       unsigned maxId=0;
       {
@@ -147,10 +152,7 @@ int main(int argc,char* argv[])
          const char* start,*stop;
          DictionarySegment& dic=db.getDictionary();
          for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop);++id) {
-            cerr << id << " ";
-            for (;start<stop;++start)
-               cerr << *start;
-            cerr << std::endl;
+            cerr << id << " " << string(start,stop) << std::endl;
          }
       }
       return 0;
