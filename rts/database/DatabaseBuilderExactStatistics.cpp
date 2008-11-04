@@ -22,6 +22,17 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
+static void writePage(ofstream& out,unsigned page,const void* data)
+   // Write a page to the file
+{
+   unsigned long long ofs=static_cast<unsigned long long>(page)*static_cast<unsigned long long>(BufferManager::pageSize);
+   if (static_cast<unsigned long long>(out.tellp())!=ofs) {
+      cout << "internal error: tried to write page " << page << " (ofs " << ofs << ") at position " << out.tellp() << endl;
+      throw;
+   }
+   out.write(static_cast<const char*>(data),BufferManager::pageSize);
+}
+//---------------------------------------------------------------------------
 /// Output for two-constant statistics
 class Dumper2 {
    private:
@@ -43,6 +54,8 @@ class Dumper2 {
    Entry entries[maxEntries];
    /// The current count
    unsigned count;
+   /// The page bounadries
+   vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries;
 
    /// Write entries to a buffer
    bool writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nextPage);
@@ -51,7 +64,7 @@ class Dumper2 {
 
    public:
    /// Constructor
-   Dumper2(ofstream& out,unsigned& page) : out(out),page(page),count(0) {}
+   Dumper2(ofstream& out,unsigned& page,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries) : out(out),page(page),count(0),boundaries(boundaries) {}
 
    /// Add an entry
    void add(unsigned value1,unsigned value2,unsigned long long s,unsigned long long p,unsigned long long o);
@@ -127,6 +140,7 @@ bool Dumper2::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
    pageBuffer[5]=(len>>16)&0xFF;
    pageBuffer[6]=(len>>8)&0xFF;
    pageBuffer[7]=(len>>0)&0xFF;
+   boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>(pair<unsigned,unsigned>(entries[len-1].value1,entries[len-1].value2),page));
    memcpy(pageBuffer+8,buffer2,len);
    memset(pageBuffer+8+len,0,BufferManager::pageSize-(8+len));
 
@@ -153,14 +167,12 @@ void Dumper2::writeSome(bool potentiallyLast)
    if (best<count)
       potentiallyLast=0;
    writeEntries(best,pageBuffer,potentiallyLast?0:(page+1));
-   out.write(reinterpret_cast<char*>(pageBuffer),BufferManager::pageSize);
+   writePage(out,page,pageBuffer);
    page++;
 
    // And move the entries
    memmove(entries,entries+best,sizeof(Entry)*(count-best));
    count-=best;
-
-   cout << "packed " << best << " entries into one page" << std::endl;
 }
 //---------------------------------------------------------------------------
 void Dumper2::add(unsigned value1,unsigned value2,unsigned long long s,unsigned long long p,unsigned long long o)
@@ -207,6 +219,8 @@ class Dumper1 {
    Entry entries[maxEntries];
    /// The current count
    unsigned count;
+   /// The page bounadries
+   vector<pair<unsigned,unsigned> >& boundaries;
 
    /// Write entries to a buffer
    bool writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nextPage);
@@ -215,7 +229,7 @@ class Dumper1 {
 
    public:
    /// Constructor
-   Dumper1(ofstream& out,unsigned& page) : out(out),page(page),count(0) {}
+   Dumper1(ofstream& out,unsigned& page,vector<pair<unsigned,unsigned> >& boundaries) : out(out),page(page),count(0),boundaries(boundaries) {}
 
    /// Add an entry
    void add(unsigned value1,unsigned long long s1,unsigned long long p1,unsigned long long o1,unsigned long long s2,unsigned long long p2,unsigned long long o2);
@@ -281,6 +295,7 @@ bool Dumper1::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
    pageBuffer[5]=(len>>16)&0xFF;
    pageBuffer[6]=(len>>8)&0xFF;
    pageBuffer[7]=(len>>0)&0xFF;
+   boundaries.push_back(pair<unsigned,unsigned>(entries[len-1].value1,page));
    memcpy(pageBuffer+8,buffer2,len);
    memset(pageBuffer+8+len,0,BufferManager::pageSize-(8+len));
 
@@ -307,14 +322,12 @@ void Dumper1::writeSome(bool potentiallyLast)
    if (best<count)
       potentiallyLast=0;
    writeEntries(best,pageBuffer,potentiallyLast?0:(page+1));
-   out.write(reinterpret_cast<char*>(pageBuffer),BufferManager::pageSize);
+   writePage(out,page,pageBuffer);
    page++;
 
    // And move the entries
    memmove(entries,entries+best,sizeof(Entry)*(count-best));
    count-=best;
-
-   cout << "packed " << best << " entries into one page" << std::endl;
 }
 //---------------------------------------------------------------------------
 void Dumper1::add(unsigned value1,unsigned long long s1,unsigned long long p1,unsigned long long o1,unsigned long long s2,unsigned long long p2,unsigned long long o2)
@@ -393,10 +406,10 @@ static void addCounts(const char* countMap,unsigned id,unsigned long long multip
    countO+=multiplicity*static_cast<unsigned long long>(base[2]);
 }
 //---------------------------------------------------------------------------
-static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,Database::DataOrder order,const char* countMap)
+static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries,Database::DataOrder order,const char* countMap)
    // Compute the exact statistics for patterns with two constants
 {
-   Dumper2 dumper(out,page);
+   Dumper2 dumper(out,page,boundaries);
 
    FactsSegment::Scan scan;
    if (scan.first(db.getFacts(order))) {
@@ -428,17 +441,83 @@ static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,Databa
    dumper.flush();
 }
 //---------------------------------------------------------------------------
+static void writeUint32(unsigned char* target,unsigned value)
+   // Write a 32bit value
+{
+   target[0]=value>>24;
+   target[1]=(value>>16)&0xFF;
+   target[2]=(value>>8)&0xFF;
+   target[3]=value&0xFF;
+}
+//---------------------------------------------------------------------------
+static unsigned computeExact2Inner(ofstream& out,const vector<pair<pair<unsigned,unsigned>,unsigned> >& data,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries,unsigned page)
+   // Create inner nodes
+{
+   const unsigned headerSize = 16; // marker+next+count+padding
+   unsigned char buffer[BufferManager::pageSize];
+   unsigned bufferPos=headerSize,bufferCount=0;
+
+   for (vector<pair<pair<unsigned,unsigned>,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+      // Do we have to start a new page?
+      if ((bufferPos+12)>BufferManager::pageSize) {
+         writeUint32(buffer,0xFFFFFFFF);
+         writeUint32(buffer+4,page+1);
+         writeUint32(buffer+8,bufferCount);
+         writeUint32(buffer+12,0);
+         for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+            buffer[index]=0;
+         writePage(out,page,buffer);
+         boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>((*(iter-1)).first,page));
+         ++page;
+         bufferPos=headerSize; bufferCount=0;
+      }
+      // Write the entry
+      writeUint32(buffer+bufferPos,(*iter).first.first); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).first.second); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).second); bufferPos+=4;
+      bufferCount++;
+   }
+   // Write the least page
+   writeUint32(buffer,0xFFFFFFFF);
+   writeUint32(buffer+4,0);
+   writeUint32(buffer+8,bufferCount);
+   writeUint32(buffer+12,0);
+   for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+      buffer[index]=0;
+   writePage(out,page,buffer);
+   boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>(data.back().first,page));
+   ++page;
+
+   return page;
+}
+//---------------------------------------------------------------------------
 static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database::DataOrder order,const char* countMap)
    // Compute the exact statistics for patterns with two constants
 {
-   computeExact2Leaves(db,out,page,order,countMap);
-   return 0;
+   // Write the leave nodes
+   vector<pair<pair<unsigned,unsigned>,unsigned> > boundaries;
+   computeExact2Leaves(db,out,page,boundaries,order,countMap);
+
+   // Only one leaf node? Special case this
+   if (boundaries.size()==1) {
+      vector<pair<pair<unsigned,unsigned>,unsigned> > newBoundaries;
+      page=computeExact2Inner(out,boundaries,newBoundaries,page);
+      return page-1;
+   }
+
+   // Write the inner nodes
+   while (boundaries.size()>1) {
+      vector<pair<pair<unsigned,unsigned>,unsigned> > newBoundaries;
+      page=computeExact2Inner(out,boundaries,newBoundaries,page);
+      swap(boundaries,newBoundaries);
+   }
+   return page-1;
 }
 //---------------------------------------------------------------------------
-static void computeExact1Leaves(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
+static void computeExact1Leaves(Database& db,ofstream& out,unsigned& page,vector<pair<unsigned,unsigned> >& boundaries,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
-   Dumper1 dumper(out,page);
+   Dumper1 dumper(out,page,boundaries);
 
    AggregatedFactsSegment::Scan scan1,scan2;
    if (scan1.first(db.getAggregatedFacts(order1))&&scan2.first(db.getAggregatedFacts(order2))) {
@@ -481,11 +560,67 @@ static void computeExact1Leaves(Database& db,ofstream& out,unsigned& page,Databa
    dumper.flush();
 }
 //---------------------------------------------------------------------------
+static unsigned computeExact1Inner(ofstream& out,const vector<pair<unsigned,unsigned> >& data,vector<pair<unsigned,unsigned> >& boundaries,unsigned page)
+   // Create inner nodes
+{
+   const unsigned headerSize = 16; // marker+next+count+padding
+   unsigned char buffer[BufferManager::pageSize];
+   unsigned bufferPos=headerSize,bufferCount=0;
+
+   for (vector<pair<unsigned,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+      // Do we have to start a new page?
+      if ((bufferPos+8)>BufferManager::pageSize) {
+         writeUint32(buffer,0xFFFFFFFF);
+         writeUint32(buffer+4,page+1);
+         writeUint32(buffer+8,bufferCount);
+         writeUint32(buffer+12,0);
+         for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+            buffer[index]=0;
+         writePage(out,page,buffer);
+         boundaries.push_back(pair<unsigned,unsigned>((*(iter-1)).first,page));
+         ++page;
+         bufferPos=headerSize; bufferCount=0;
+      }
+      // Write the entry
+      writeUint32(buffer+bufferPos,(*iter).first); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).second); bufferPos+=4;
+      bufferCount++;
+   }
+   // Write the least page
+   writeUint32(buffer,0xFFFFFFFF);
+   writeUint32(buffer+4,0);
+   writeUint32(buffer+8,bufferCount);
+   writeUint32(buffer+12,0);
+   for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+      buffer[index]=0;
+   writePage(out,page,buffer);
+   boundaries.push_back(pair<unsigned,unsigned>(data.back().first,page));
+   ++page;
+
+   return page;
+}
+//---------------------------------------------------------------------------
 static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
-   computeExact1Leaves(db,out,page,order1,order2,countMap);
-   return 0;
+   // Write the leave nodes
+   vector<pair<unsigned,unsigned> > boundaries;
+   computeExact1Leaves(db,out,page,boundaries,order1,order2,countMap);
+
+   // Only one leaf node? Special case this
+   if (boundaries.size()==1) {
+      vector<pair<unsigned,unsigned> > newBoundaries;
+      page=computeExact1Inner(out,boundaries,newBoundaries,page);
+      return page-1;
+   }
+
+   // Write the inner nodes
+   while (boundaries.size()>1) {
+      vector<pair<unsigned,unsigned> > newBoundaries;
+      page=computeExact1Inner(out,boundaries,newBoundaries,page);
+      swap(boundaries,newBoundaries);
+   }
+   return page-1;
 }
 //---------------------------------------------------------------------------
 static unsigned long long computeExact0(MemoryMappedFile& countMap,unsigned ofs1,unsigned ofs2)
