@@ -98,6 +98,7 @@ bool Dumper2::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
 
    // Write the entries
    unsigned char* writer=buffer1,*limit=buffer1+maxSize;
+   writer=writeUIntV(writer,count);
    writer=writeUIntV(writer,entries[0].value1);
    for (unsigned index=1;index<count;index++) {
       writer=writeUIntV(writer,entries[index].value1-entries[index-1].value1);
@@ -251,6 +252,7 @@ bool Dumper1::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
 
    // Write the entries
    unsigned char* writer=buffer1,*limit=buffer1+maxSize;
+   writer=writeUIntV(writer,count);
    writer=writeUIntV(writer,entries[0].value1);
    for (unsigned index=1;index<count;index++) {
       writer=writeUIntV(writer,entries[index].value1-entries[index-1].value1);
