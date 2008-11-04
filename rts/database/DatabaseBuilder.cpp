@@ -122,8 +122,9 @@ DatabaseBuilder::~DatabaseBuilder()
 static void writePage(ofstream& out,unsigned page,const void* data)
    // Write a page to the file
 {
-   if (static_cast<unsigned>(out.tellp())!=(page*pageSize)) {
-      cout << "internal error: tried to write page " << page << " (ofs " << (page*pageSize) << ") at position " << out.tellp() << endl;
+   unsigned long long ofs=static_cast<unsigned long long>(page)*static_cast<unsigned long long>(pageSize);
+   if (static_cast<unsigned long long>(out.tellp())!=ofs) {
+      cout << "internal error: tried to write page " << page << " (ofs " << ofs << ") at position " << out.tellp() << endl;
       throw;
    }
    out.write(static_cast<const char*>(data),pageSize);
