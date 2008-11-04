@@ -22,7 +22,7 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
-static void writePage(ofstream& out,unsigned page,const void* data)
+static void writePage(fstream& out,unsigned page,const void* data)
    // Write a page to the file
 {
    unsigned long long ofs=static_cast<unsigned long long>(page)*static_cast<unsigned long long>(BufferManager::pageSize);
@@ -47,7 +47,7 @@ class Dumper2 {
    static const unsigned maxEntries = 32768;
 
    /// The output
-   ofstream& out;
+   fstream& out;
    /// The current page
    unsigned& page;
    /// The entries
@@ -64,7 +64,7 @@ class Dumper2 {
 
    public:
    /// Constructor
-   Dumper2(ofstream& out,unsigned& page,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries) : out(out),page(page),count(0),boundaries(boundaries) {}
+   Dumper2(fstream& out,unsigned& page,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries) : out(out),page(page),count(0),boundaries(boundaries) {}
 
    /// Add an entry
    void add(unsigned value1,unsigned value2,unsigned long long s,unsigned long long p,unsigned long long o);
@@ -212,7 +212,7 @@ class Dumper1 {
    static const unsigned maxEntries = 32768;
 
    /// The output
-   ofstream& out;
+   fstream& out;
    /// The current page
    unsigned& page;
    /// The entries
@@ -229,7 +229,7 @@ class Dumper1 {
 
    public:
    /// Constructor
-   Dumper1(ofstream& out,unsigned& page,vector<pair<unsigned,unsigned> >& boundaries) : out(out),page(page),count(0),boundaries(boundaries) {}
+   Dumper1(fstream& out,unsigned& page,vector<pair<unsigned,unsigned> >& boundaries) : out(out),page(page),count(0),boundaries(boundaries) {}
 
    /// Add an entry
    void add(unsigned value1,unsigned long long s1,unsigned long long p1,unsigned long long o1,unsigned long long s2,unsigned long long p2,unsigned long long o2);
@@ -406,7 +406,7 @@ static void addCounts(const char* countMap,unsigned id,unsigned long long multip
    countO+=multiplicity*static_cast<unsigned long long>(base[2]);
 }
 //---------------------------------------------------------------------------
-static void computeExact2Leaves(Database& db,ofstream& out,unsigned& page,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries,Database::DataOrder order,const char* countMap)
+static void computeExact2Leaves(Database& db,fstream& out,unsigned& page,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries,Database::DataOrder order,const char* countMap)
    // Compute the exact statistics for patterns with two constants
 {
    Dumper2 dumper(out,page,boundaries);
@@ -450,7 +450,14 @@ static void writeUint32(unsigned char* target,unsigned value)
    target[3]=value&0xFF;
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact2Inner(ofstream& out,const vector<pair<pair<unsigned,unsigned>,unsigned> >& data,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries,unsigned page)
+static void writeUint64(unsigned char* target,unsigned long long value)
+   // Write a 64bit value
+{
+   for (unsigned index=0;index<8;index++)
+      target[index]=static_cast<unsigned char>((value>>(8*(7-index)))&0xFF);
+}
+//---------------------------------------------------------------------------
+static unsigned computeExact2Inner(fstream& out,const vector<pair<pair<unsigned,unsigned>,unsigned> >& data,vector<pair<pair<unsigned,unsigned>,unsigned> >& boundaries,unsigned page)
    // Create inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
@@ -491,7 +498,7 @@ static unsigned computeExact2Inner(ofstream& out,const vector<pair<pair<unsigned
    return page;
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database::DataOrder order,const char* countMap)
+static unsigned computeExact2(Database& db,fstream& out,unsigned& page,Database::DataOrder order,const char* countMap)
    // Compute the exact statistics for patterns with two constants
 {
    // Write the leave nodes
@@ -514,7 +521,7 @@ static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database
    return page-1;
 }
 //---------------------------------------------------------------------------
-static void computeExact1Leaves(Database& db,ofstream& out,unsigned& page,vector<pair<unsigned,unsigned> >& boundaries,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
+static void computeExact1Leaves(Database& db,fstream& out,unsigned& page,vector<pair<unsigned,unsigned> >& boundaries,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
    Dumper1 dumper(out,page,boundaries);
@@ -560,7 +567,7 @@ static void computeExact1Leaves(Database& db,ofstream& out,unsigned& page,vector
    dumper.flush();
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact1Inner(ofstream& out,const vector<pair<unsigned,unsigned> >& data,vector<pair<unsigned,unsigned> >& boundaries,unsigned page)
+static unsigned computeExact1Inner(fstream& out,const vector<pair<unsigned,unsigned> >& data,vector<pair<unsigned,unsigned> >& boundaries,unsigned page)
    // Create inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
@@ -600,7 +607,7 @@ static unsigned computeExact1Inner(ofstream& out,const vector<pair<unsigned,unsi
    return page;
 }
 //---------------------------------------------------------------------------
-static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
+static unsigned computeExact1(Database& db,fstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
    // Write the leave nodes
@@ -654,7 +661,7 @@ void DatabaseBuilder::computeExactStatistics(const char* tmpFile)
    }
 
    // Prepare for appending
-   ofstream out(dbFile,ios::in|ios::out|ios::ate|ios::binary);
+   fstream out(dbFile,ios::in|ios::out|ios::ate|ios::binary);
    if (!out.is_open()) {
       cout << "Unable to write " << dbFile << endl;
       throw;
@@ -681,12 +688,29 @@ void DatabaseBuilder::computeExactStatistics(const char* tmpFile)
    unsigned long long exact0OS=computeExact0(countMap,2,0);
    unsigned long long exact0OP=computeExact0(countMap,2,1);
    unsigned long long exact0OO=computeExact0(countMap,2,2);
-   cout << exact0SS << " " << exact0SP << " " << exact0SO << " " << exact0PS << " " << exact0PP << " " << exact0PO << " " << exact0OS << " " << exact0OP << " " << exact0OO << std::endl;
 
-   // Update the directory page XXX
-//   out.seekp(static_cast<unsigned long long>(directory.statistics[order])*pageSize,ios::beg);
-//   out.write(reinterpret_cast<char*>(statisticPage),pageSize);
-cout << exactPS << " " << exactPO << " " << exactSO << " " << exactS << " " << exactP << " " << exactO << endl;
+   // Update the directory page
+   unsigned char directory[BufferManager::pageSize];
+   out.seekp(0,ios_base::beg);
+   out.read(reinterpret_cast<char*>(directory),BufferManager::pageSize);
+   unsigned char* base=directory+292;
+   writeUint32(base,exactPS);
+   writeUint32(base+4,exactPO);
+   writeUint32(base+8,exactSO);
+   writeUint32(base+12,exactS);
+   writeUint32(base+16,exactP);
+   writeUint32(base+20,exactO);
+   writeUint64(base+24,exact0SS);
+   writeUint64(base+32,exact0SP);
+   writeUint64(base+40,exact0SO);
+   writeUint64(base+48,exact0PS);
+   writeUint64(base+56,exact0PP);
+   writeUint64(base+64,exact0PO);
+   writeUint64(base+72,exact0OS);
+   writeUint64(base+80,exact0OP);
+   writeUint64(base+88,exact0OO);
+   out.seekp(0,ios_base::beg);
+   writePage(out,0,directory);
 
    // Close the database
    out.flush();
