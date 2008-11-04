@@ -186,6 +186,162 @@ void Dumper2::flush()
       writeSome(true);
 }
 //---------------------------------------------------------------------------
+/// Output for one-constant statistics
+class Dumper1 {
+   private:
+   /// An entry
+   struct Entry {
+      /// The constant value
+      unsigned value1;
+      /// The join partners
+      unsigned long long s1,p1,o1,s2,p2,o2;
+   };
+   /// The maximum number of entries per page
+   static const unsigned maxEntries = 32768;
+
+   /// The output
+   ofstream& out;
+   /// The current page
+   unsigned& page;
+   /// The entries
+   Entry entries[maxEntries];
+   /// The current count
+   unsigned count;
+
+   /// Write entries to a buffer
+   bool writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nextPage);
+   /// Write some entries
+   void writeSome(bool potentiallyLast);
+
+   public:
+   /// Constructor
+   Dumper1(ofstream& out,unsigned& page) : out(out),page(page),count(0) {}
+
+   /// Add an entry
+   void add(unsigned value1,unsigned long long s1,unsigned long long p1,unsigned long long o1,unsigned long long s2,unsigned long long p2,unsigned long long o2);
+   /// Flush pending entries
+   void flush();
+};
+//---------------------------------------------------------------------------
+bool Dumper1::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nextPage)
+   // Write a page
+{
+   // Refuse to handle empty ranges
+   if (!count)
+      return false;
+
+   // Temp space
+   static const unsigned maxSize=10*BufferManager::pageSize;
+   unsigned char buffer1[maxSize+32];
+   unsigned char buffer2[maxSize+(maxSize/15)];
+
+   // Write the entries
+   unsigned char* writer=buffer1,*limit=buffer1+maxSize;
+   writer=writeUIntV(writer,entries[0].value1);
+   for (unsigned index=1;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].value1-entries[index-1].value1);
+      if (writer>limit) return false;
+   }
+   for (unsigned index=0;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].s1);
+      if (writer>limit) return false;
+   }
+   for (unsigned index=0;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].p1);
+      if (writer>limit) return false;
+   }
+   for (unsigned index=0;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].o1);
+      if (writer>limit) return false;
+   }
+   for (unsigned index=0;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].s2);
+      if (writer>limit) return false;
+   }
+   for (unsigned index=0;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].p2);
+      if (writer>limit) return false;
+   }
+   for (unsigned index=0;index<count;index++) {
+      writer=writeUIntV(writer,entries[index].o2);
+      if (writer>limit) return false;
+   }
+
+   // Compress them
+   unsigned len=fastlz_compress(buffer1,writer-buffer1,buffer2);
+   if (len>=(BufferManager::pageSize-8))
+      return false;
+
+   // And write the page
+   pageBuffer[0]=(nextPage>>24)&0xFF;
+   pageBuffer[1]=(nextPage>>16)&0xFF;
+   pageBuffer[2]=(nextPage>>8)&0xFF;
+   pageBuffer[3]=(nextPage>>0)&0xFF;
+   pageBuffer[4]=(len>>24)&0xFF;
+   pageBuffer[5]=(len>>16)&0xFF;
+   pageBuffer[6]=(len>>8)&0xFF;
+   pageBuffer[7]=(len>>0)&0xFF;
+   memcpy(pageBuffer+8,buffer2,len);
+   memset(pageBuffer+8+len,0,BufferManager::pageSize-(8+len));
+
+   return true;
+}
+//---------------------------------------------------------------------------
+void Dumper1::writeSome(bool potentiallyLast)
+   /// Write some entries
+{
+   // Find the maximum fill size
+   unsigned char pageBuffer[2*BufferManager::pageSize];
+   unsigned l=0,r=count,best=1;
+   while (l<r) {
+      unsigned m=(l+r)/2;
+      if (writeEntries(m+1,pageBuffer,0)) {
+         if (m+1>best)
+            best=m+1;
+         l=m+1;
+      } else {
+         r=m;
+      }
+   }
+   // Write the page
+   if (best<count)
+      potentiallyLast=0;
+   writeEntries(best,pageBuffer,potentiallyLast?0:(page+1));
+   out.write(reinterpret_cast<char*>(pageBuffer),BufferManager::pageSize);
+   page++;
+
+   // And move the entries
+   memmove(entries,entries+best,sizeof(Entry)*(count-best));
+   count-=best;
+
+   cout << "packed " << best << " entries into one page" << std::endl;
+}
+//---------------------------------------------------------------------------
+void Dumper1::add(unsigned value1,unsigned long long s1,unsigned long long p1,unsigned long long o1,unsigned long long s2,unsigned long long p2,unsigned long long o2)
+   // Add an entry
+{
+   // Full? Then write some entries
+   if (count==maxEntries)
+      writeSome(false);
+
+   // Append
+   entries[count].value1=value1;
+   entries[count].s1=s1;
+   entries[count].p1=p1;
+   entries[count].o1=o1;
+   entries[count].s2=s2;
+   entries[count].p2=p2;
+   entries[count].o2=o2;
+   ++count;
+}
+//---------------------------------------------------------------------------
+void Dumper1::flush()
+   // Flush pending entries
+{
+   while (count)
+      writeSome(true);
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 static void buildCountMap(Database& db,const char* fileName)
@@ -279,9 +435,11 @@ static unsigned computeExact2(Database& db,ofstream& out,unsigned& page,Database
    return 0;
 }
 //---------------------------------------------------------------------------
-static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*/,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
+static void computeExact1Leaves(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
    // Compute the exact statistics for patterns with one constant
 {
+   Dumper1 dumper(out,page);
+
    AggregatedFactsSegment::Scan scan1,scan2;
    if (scan1.first(db.getAggregatedFacts(order1))&&scan2.first(db.getAggregatedFacts(order2))) {
       // Scan
@@ -315,9 +473,12 @@ static void computeExact1Leaves(Database& db,ofstream& /*out*/,unsigned& /*page*
 
          // Produce output tuple
          assert(last1==last2);
-         cout << last1 << " " << countS1 << " " << countP1 << " " << countO1 << " " << countS2 << " " << countP2 << " " << countO2 << std::endl;
+         dumper.add(last1,countS1,countP1,countO1,countS2,countP2,countO2);
       }
    }
+
+   // Write pending entries if any
+   dumper.flush();
 }
 //---------------------------------------------------------------------------
 static unsigned computeExact1(Database& db,ofstream& out,unsigned& page,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
