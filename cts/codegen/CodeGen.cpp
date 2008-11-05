@@ -4,6 +4,7 @@
 #include "rts/operator/AggregatedIndexScan.hpp"
 #include "rts/operator/EmptyScan.hpp"
 #include "rts/operator/Filter.hpp"
+#include "rts/operator/FullyAggregatedIndexScan.hpp"
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
 #include "rts/operator/IndexScan.hpp"
@@ -96,12 +97,33 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigne
                                       object,constObject);
 }
 //---------------------------------------------------------------------------
+static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate an fully aggregated index scan into an operator tree
+{
+   const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
+   Database::DataOrder order=static_cast<Database::DataOrder>(plan->opArg);
+
+   // Initialize the registers
+   bool constSubject,constPredicate,constObject;
+   Register* subject,*predicate,*object;
+   resolveScanVariable(runtime,context,projection,bindings,registers,0,node,subject,constSubject,(order!=Database::Order_Subject_Predicate_Object)&&(order!=Database::Order_Subject_Object_Predicate));
+   resolveScanVariable(runtime,context,projection,bindings,registers,1,node,predicate,constPredicate,(order!=Database::Order_Predicate_Subject_Object)&&(order==Database::Order_Predicate_Object_Subject));
+   resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject,(order!=Database::Order_Object_Subject_Predicate)&&(order!=Database::Order_Object_Predicate_Subject));
+
+   // And return the operator
+   return FullyAggregatedIndexScan::create(runtime.getDatabase(),order,
+                                           subject,constSubject,
+                                           predicate,constPredicate,
+                                           object,constObject);
+}
+//---------------------------------------------------------------------------
 static void collectVariables(const map<unsigned,Register*>& context,set<unsigned>& variables,Plan* plan)
    // Collect all variables contained in a plan
 {
    switch (plan->op) {
       case Plan::IndexScan:
-      case Plan::AggregatedIndexScan: {
+      case Plan::AggregatedIndexScan:
+      case Plan::FullyAggregatedIndexScan: {
          const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
          if ((!node.constSubject)&&(!context.count(node.subject)))
             variables.insert(node.subject);
@@ -441,6 +463,7 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
    switch (plan->op) {
       case Plan::IndexScan: return translateIndexScan(runtime,context,projection,bindings,registers,plan);
       case Plan::AggregatedIndexScan: return translateAggregatedIndexScan(runtime,context,projection,bindings,registers,plan);
+      case Plan::FullyAggregatedIndexScan: return translateFullyAggregatedIndexScan(runtime,context,projection,bindings,registers,plan);
       case Plan::NestedLoopJoin: return translateNestedLoopJoin(runtime,context,projection,bindings,registers,plan);
       case Plan::MergeJoin: return translateMergeJoin(runtime,context,projection,bindings,registers,plan);
       case Plan::HashJoin: return translateHashJoin(runtime,context,projection,bindings,registers,plan);

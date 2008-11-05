@@ -48,6 +48,8 @@ class PlanGen
    void buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C);
    /// Generate an aggregated index scan
    void buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C);
+   /// Generate an fully aggregated index scan
+   void buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C);
    /// Generate base table accesses
    Problem* buildScan(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned id);
    /// Build the informaion about a join

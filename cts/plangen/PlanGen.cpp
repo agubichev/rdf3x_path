@@ -254,6 +254,64 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
    addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
+static unsigned getFullyAggregatedCardinality(Database& db,Database::DataOrder order,unsigned c1)
+   // Estimate the cardinality of a predicate
+{
+   unsigned c2=~0u,c3=~0u;
+   maximizePrefix(order,c1,c2,c3);
+
+   // Query the statistics
+   StatisticsSegment::Bucket result;
+   if ((~c3)||(~c2)) {
+      return 1;
+   } else if (~c1) {
+      db.getStatistics(order).lookup(c1,result);
+      if (result.prefix1Card)
+         return (result.card+result.prefix1Card-1)/result.prefix1Card;
+      return 1;
+   } else {
+      return db.getFullyAggregatedFacts(order).getLevel1Groups();
+   }
+}
+//---------------------------------------------------------------------------
+void PlanGen::buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C)
+   // Build an fully aggregated index scan
+{
+   // Initialize a new plan
+   Plan* plan=plans.alloc();
+   plan->op=Plan::FullyAggregatedIndexScan;
+   plan->opArg=order;
+   plan->left=0;
+   plan->right=0;
+   plan->next=0;
+
+   // Compute the statistics
+   unsigned scanned=getFullyAggregatedCardinality(*db,order,value1C);
+   unsigned fullSize=getCardinality(*db,order,value1C,~0u,~0u);
+   if (scanned>fullSize)
+      scanned=fullSize-1;
+   if (!scanned) scanned=1;
+   plan->cardinality=scanned;
+   if (!~value1) {
+      plan->ordering=~0u;
+   } else {
+      scanned=getFullyAggregatedCardinality(*db,order,~0u);
+      fullSize=getCardinality(*db,order,~0u,~0u,~0u);
+      if (scanned>fullSize)
+         scanned=fullSize-1;
+      if (!scanned) scanned=1;
+      plan->ordering=value1;
+   }
+   unsigned pages=1+static_cast<unsigned>(db->getFullyAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getFullyAggregatedFacts(order).getLevel1Groups())));
+   plan->costs=Costs::seekBtree()+Costs::scan(pages);
+
+   // Apply filters
+   plan=buildFilters(plans,query,plan,value1,~0u,~0u);
+
+   // And store it
+   addPlan(result,plan);
+}
+//---------------------------------------------------------------------------
 static bool isUnused(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned val)
    // Check if a variable is unused outside its primary pattern
 {
@@ -308,24 +366,34 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    unsigned sc=node.constSubject?node.subject:~0u,pc=node.constPredicate?node.predicate:~0u,oc=node.constObject?node.object:~0u;
 
    // Build all relevant scans
-   if (unusedObject)
-      buildAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc); else
-      buildIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc,o,oc);
-   if (unusedPredicate)
-      buildAggregatedIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc); else
-      buildIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc,p,pc);
-   if (unusedSubject)
-      buildAggregatedIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc); else
-      buildIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc,s,sc);
-   if (unusedPredicate)
-      buildAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc); else
-      buildIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc,p,pc);
-   if (unusedObject)
-      buildAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc); else
-      buildIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc,o,oc);
-   if (unusedSubject)
-      buildAggregatedIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc); else
-      buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc,s,sc);
+   if ((unusedSubject+unusedPredicate+unusedObject)>=2) {
+      if (!unusedSubject) {
+         buildFullyAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc);
+      } else if (!unusedObject) {
+         buildFullyAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc);
+      } else {
+         buildFullyAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,s,sc);
+      }
+   } else {
+      if (unusedObject)
+         buildAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc); else
+         buildIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc,o,oc);
+      if (unusedPredicate)
+         buildAggregatedIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc); else
+         buildIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc,p,pc);
+      if (unusedSubject)
+         buildAggregatedIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc); else
+         buildIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc,s,sc);
+      if (unusedPredicate)
+         buildAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc); else
+         buildIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc,p,pc);
+      if (unusedObject)
+         buildAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc); else
+         buildIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc,o,oc);
+      if (unusedSubject)
+         buildAggregatedIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc); else
+         buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc,s,sc);
+   }
 
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {
@@ -549,6 +617,7 @@ Plan* PlanGen::addComplexFilters(Plan* plan,const QueryGraph::SubQuery& query)
          break;
       case Plan::IndexScan:
       case Plan::AggregatedIndexScan:
+      case Plan::FullyAggregatedIndexScan:
       case Plan::Filter:
       case Plan::NestedLoopFilter:
          // We reached a leaf. XXX check for complex filters involving a single pattern

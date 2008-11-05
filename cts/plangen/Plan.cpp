@@ -36,6 +36,7 @@ void Plan::print(unsigned indent) const
    switch (op) {
       case IndexScan: cout << "IndexScan"; break;
       case AggregatedIndexScan: cout << "AggregatedIndexScan"; break;
+      case FullyAggregatedIndexScan: cout << "FullyAggregatedIndexScan"; break;
       case NestedLoopJoin: cout << "NestedLoopJoin"; break;
       case MergeJoin: cout << "MergeJoin"; break;
       case HashJoin: cout << "HashJoin"; break;
@@ -50,6 +51,7 @@ void Plan::print(unsigned indent) const
    switch (op) {
       case IndexScan: break;
       case AggregatedIndexScan: break;
+      case FullyAggregatedIndexScan: break;
       case NestedLoopJoin:
       case MergeJoin:
       case HashJoin: left->print(indent+1); right->print(indent+1); break;
