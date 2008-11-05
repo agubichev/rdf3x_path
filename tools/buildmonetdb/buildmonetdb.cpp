@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include "infra/osdep/MemoryMappedFile.hpp"
+#include "../rdf3xload/TempFile.hpp"
+#include "../rdf3xload/Sorter.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -18,11 +21,7 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
-/// A RDF triple
-struct Triple {
-   /// The values as IDs
-   unsigned subject,predicate,object;
-};
+struct Triple { unsigned subject,predicate,object; };
 //---------------------------------------------------------------------------
 /// Order a RDF triple lexicographically
 struct OrderTripleByPredicate {
@@ -33,22 +32,7 @@ struct OrderTripleByPredicate {
    }
 };
 //---------------------------------------------------------------------------
-string monetDBCommand()
-   // Build the base command
-{
-   return string(getenv("HOME"))+"/MonetDB/bin/mclient --language=sql --database=rdf";
-}
-//---------------------------------------------------------------------------
-bool executeSQLFile(const std::string& file)
-{
-   string command=monetDBCommand()+" '"+file+"'";
-   if (system(command.c_str())!=0) {
-      return false;
-   }
-   return true;
-}
-//---------------------------------------------------------------------------
-bool readFacts(vector<Triple>& facts,const char* fileName)
+bool readFacts(TempFile& out,const char* fileName)
    // Read the facts table
 {
    ifstream in(fileName);
@@ -57,40 +41,54 @@ bool readFacts(vector<Triple>& facts,const char* fileName)
       return false;
    }
 
-   facts.clear();
    while (true) {
       Triple t;
       in >> t.subject >> t.predicate >> t.object;
       if (!in.good()) break;
-      facts.push_back(t);
+      out.write(sizeof(t),reinterpret_cast<char*>(&t));
    }
 
    return true;
 }
 //---------------------------------------------------------------------------
-void dumpFacts(ofstream& out,vector<Triple>& facts,set<unsigned>& predicates,set<unsigned>& partitionedPredicates)
+static const char* skipTriple(const char* reader)
+   // Skip a materialized triple
+{
+   return reader+sizeof(Triple);
+}
+//---------------------------------------------------------------------------
+static int compareTriple(const char* left,const char* right)
+   // Sort by predicate,subject,object
+{
+   const Triple& l=*reinterpret_cast<const Triple*>(left);
+   const Triple& r=*reinterpret_cast<const Triple*>(right);
+
+   if (l.predicate<r.predicate) return -1;
+   if (l.predicate>r.predicate) return 1;
+   if (l.subject<r.subject) return -1;
+   if (l.subject>r.subject) return 1;
+   if (l.object<r.object) return -1;
+   if (l.object>r.object) return 1;
+   return 0;
+}
+//---------------------------------------------------------------------------
+void dumpFacts(ofstream& out,TempFile& rawFacts,set<unsigned>& predicates,set<unsigned>& partitionedPredicates)
    // Dump the facts
 {
    // Sort the facts
-   sort(facts.begin(),facts.end(),OrderTripleByPredicate());
-
-   // Eliminate duplicates
-   vector<Triple>::iterator writer=facts.begin();
-   unsigned lastSubject=~0u,lastPredicate=~0u,lastObject=~0u;
-   for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-      if ((((*iter).subject)!=lastSubject)||(((*iter).predicate)!=lastPredicate)||(((*iter).object)!=lastObject)) {
-         *writer=*iter;
-         ++writer;
-         lastSubject=(*iter).subject; lastPredicate=(*iter).predicate; lastObject=(*iter).object;
-      }
-   facts.resize(writer-facts.begin());
+   TempFile sortedFacts(rawFacts.getBaseFile());
+   Sorter::sort(rawFacts,sortedFacts,skipTriple,compareTriple,true);
 
    // Compute the predicate statistics
+   MemoryMappedFile in;
+   in.open(sortedFacts.getFile().c_str());
+   const Triple* triplesBegin=reinterpret_cast<const Triple*>(in.getBegin());
+   const Triple* triplesEnd=reinterpret_cast<const Triple*>(in.getEnd());
    unsigned cutOff=0;
    {
       vector<unsigned> statistics;
-      statistics.resize(facts.back().predicate+1);
-      for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+      statistics.resize(triplesEnd[-1].predicate+1);
+      for (const Triple* iter=triplesBegin,*limit=triplesEnd;iter!=limit;++iter)
          statistics[(*iter).predicate]++;
       sort(statistics.begin(),statistics.end(),greater<unsigned>());
       if (statistics.size()>1000)
@@ -99,12 +97,12 @@ void dumpFacts(ofstream& out,vector<Triple>& facts,set<unsigned>& predicates,set
    }
 
    // And dump them
-   vector<Triple>::const_iterator lastStart=facts.begin();
+   const Triple* lastStart=triplesBegin;
    unsigned smallCount=0;
-   lastPredicate=~0u;
+   unsigned lastPredicate=~0u;
    bool needsBigTable=false;
-   for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-      if ((iter==facts.end())||((*iter).predicate!=lastPredicate)) {
+   for (const Triple* iter=triplesBegin,*limit=triplesEnd;;++iter) {
+      if ((iter==limit)||((*iter).predicate!=lastPredicate)) {
          if (iter!=lastStart) {
             if ((iter-lastStart)>=cutOff) {
                out << "create table p" << lastPredicate << "(subject int not null, object int not null);" << endl;
@@ -119,7 +117,7 @@ void dumpFacts(ofstream& out,vector<Triple>& facts,set<unsigned>& predicates,set
             }
             predicates.insert(lastPredicate);
          }
-         if (iter==facts.end())
+         if (iter==limit)
             break;
          lastPredicate=(*iter).predicate;
       }
@@ -129,9 +127,9 @@ void dumpFacts(ofstream& out,vector<Triple>& facts,set<unsigned>& predicates,set
    if (needsBigTable) {
       out << "create table otherpredicates(subject int not null, predicate int not null, object int not null);" << endl;
       out << "copy " << smallCount << " records into \"otherpredicates\" from stdin using delimiters '\\t';" << endl;
-      lastStart=facts.begin(); lastPredicate=~0u;
-      for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-         if ((iter==facts.end())||((*iter).predicate!=lastPredicate)) {
+      lastStart=triplesBegin; lastPredicate=~0u;
+      for (const Triple* iter=triplesBegin,*limit=triplesEnd;;++iter) {
+         if ((iter==limit)||((*iter).predicate!=lastPredicate)) {
             if (iter!=lastStart) {
                if ((iter-lastStart)>=cutOff) {
                   lastStart=iter;
@@ -140,7 +138,7 @@ void dumpFacts(ofstream& out,vector<Triple>& facts,set<unsigned>& predicates,set
                      out << (*lastStart).subject << "\t" << (*lastStart).predicate << "\t" << (*lastStart).object << endl;
                }
             }
-            if (iter==facts.end())
+            if (iter==limit)
                break;
             lastPredicate=(*iter).predicate;
          }
@@ -277,12 +275,12 @@ int main(int argc,char* argv[])
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
-      vector<Triple> facts;
-      if (!readFacts(facts,argv[1]))
+      TempFile rawFacts("commands.sql");
+      if (!readFacts(rawFacts,argv[1]))
          return 1;
 
       // Write them to the database
-      dumpFacts(out,facts,properties,partitionedProperties);
+      dumpFacts(out,rawFacts,properties,partitionedProperties);
    }
 
    // Process the strings
@@ -297,8 +295,5 @@ int main(int argc,char* argv[])
 
    // Run it
    out2.close();
-
-//   executeSQLFile("commands.sql");
-//   executeSQLFile("commands2.sql");
 }
 //---------------------------------------------------------------------------
