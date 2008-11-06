@@ -169,6 +169,23 @@ string escapeCopy(const string& s)
 bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>& properties,const set<unsigned>& partitionedProperties)
    // Read the facts table and store it in the database
 {
+   // Read the strings once to find the maximum string len
+   unsigned maxLen=4000;
+   {
+      ifstream in(fileName);
+      if (!in.is_open()) {
+         cout << "unable to open " << fileName << endl;
+         return false;
+      }
+      string s;
+      while (in) {
+         if (!getline(in,s)) break;
+         unsigned l=s.length();
+         if (l>maxLen) maxLen=l;
+      }
+      if (maxLen%100) maxLen+=100-(maxLen%100);
+   }
+
    // Now open the strings again
    ifstream in(fileName);
    if (!in.is_open()) {
@@ -178,7 +195,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
 
    // Prepare the strings table
    // out << "drop table strings;" << endl
-   out << "create table strings(id int not null primary key, value varchar(4000) not null);" << endl;
+   out << "create table strings(id int not null primary key, value varchar(" << maxLen << ") not null);" << endl;
 
    // Prepare the filter
    static const char* filterStrings[]={"http://simile.mit.edu/2006/01/ontologies/mods3#access","http://simile.mit.edu/2006/01/ontologies/mods3#address","http://simile.mit.edu/2006/01/ontologies/mods3#affiliation","http://simile.mit.edu/2006/01/ontologies/mods3#authority","http://simile.mit.edu/2006/01/ontologies/mods3#catalogingLanguage","http://simile.mit.edu/2006/01/ontologies/mods3#changed","http://simile.mit.edu/2006/01/ontologies/mods3#code","http://simile.mit.edu/2006/01/ontologies/mods3#contents","http://simile.mit.edu/2006/01/ontologies/mods3#copyrightDate","http://simile.mit.edu/2006/01/ontologies/mods3#created","http://simile.mit.edu/2006/01/ontologies/mods3#dateCreated","http://simile.mit.edu/2006/01/ontologies/mods3#dates","http://simile.mit.edu/2006/01/ontologies/mods3#edition","http://simile.mit.edu/2006/01/ontologies/mods3#encoding","http://simile.mit.edu/2006/01/ontologies/mods3#extent","http://simile.mit.edu/2006/01/ontologies/mods3#fullName","http://simile.mit.edu/2006/01/ontologies/mods3#issuance","http://simile.mit.edu/2006/01/ontologies/mods3#language","http://simile.mit.edu/2006/01/ontologies/mods3#nonSort","http://simile.mit.edu/2006/01/ontologies/mods3#origin","http://simile.mit.edu/2006/01/ontologies/mods3#partName","http://simile.mit.edu/2006/01/ontologies/mods3#partNumber","http://simile.mit.edu/2006/01/ontologies/mods3#physicalDescription","http://simile.mit.edu/2006/01/ontologies/mods3#point","http://simile.mit.edu/2006/01/ontologies/mods3#qualifier","http://simile.mit.edu/2006/01/ontologies/mods3#records","http://simile.mit.edu/2006/01/ontologies/mods3#sub","http://www.w3.org/1999/02/22-rdf-syntax-ns#type",0};
@@ -199,7 +216,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
 
       // Store the string
       stringCache.push_back(pair<unsigned,string>(id,s));
-      if (stringCache.size()==100000) {
+      if (stringCache.size()==10000) {
          out << "copy " << stringCache.size() << " records into \"strings\" from stdin using delimiters '\\t';" << endl;
          for (vector<pair<unsigned,string> >::const_iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter)
             out << (*iter).first << "\t\"" << escapeCopy((*iter).second) << "\"" << endl;
@@ -223,7 +240,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
 
    // Dump the property names
    // out << "drop table propertynames;" << endl
-   out << "create table propertynames (id int not null primary key, name varchar(4000) not null);" << endl;
+   out << "create table propertynames (id int not null primary key, name varchar(" << maxLen << ") not null);" << endl;
    out << "copy " << propertyNames.size() << " records into \"propertynames\" from stdin using delimiters '\\t';" << endl;
    for (vector<pair<unsigned,string> >::const_iterator iter=propertyNames.begin(),limit=propertyNames.end();iter!=limit;++iter) {
       out << ((*iter).first) << "\t\"" << escapeCopy((*iter).second) << "\"" << endl;
