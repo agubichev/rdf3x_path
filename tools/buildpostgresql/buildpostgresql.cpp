@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include "infra/osdep/MemoryMappedFile.hpp"
+#include "../rdf3xload/TempFile.hpp"
+#include "../rdf3xload/Sorter.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -33,7 +36,7 @@ struct OrderTripleByPredicate {
    }
 };
 //---------------------------------------------------------------------------
-bool readFacts(vector<Triple>& facts,const char* fileName)
+bool readFacts(TempFile& out,const char* fileName)
    // Read the facts table
 {
    ifstream in(fileName);
@@ -42,39 +45,53 @@ bool readFacts(vector<Triple>& facts,const char* fileName)
       return false;
    }
 
-   facts.clear();
    while (true) {
       Triple t;
       in >> t.subject >> t.predicate >> t.object;
       if (!in.good()) break;
-      facts.push_back(t);
+      out.write(sizeof(t),reinterpret_cast<char*>(&t));
    }
 
    return true;
 }
 //---------------------------------------------------------------------------
-void dumpFacts(ofstream& out,const string& name,vector<Triple>& facts)
+static const char* skipTriple(const char* reader)
+   // Skip a materialized triple
+{
+   return reader+sizeof(Triple);
+}
+//---------------------------------------------------------------------------
+static int compareTriple(const char* left,const char* right)
+   // Sort by predicate,subject,object
+{
+   const Triple& l=*reinterpret_cast<const Triple*>(left);
+   const Triple& r=*reinterpret_cast<const Triple*>(right);
+
+   if (l.predicate<r.predicate) return -1;
+   if (l.predicate>r.predicate) return 1;
+   if (l.subject<r.subject) return -1;
+   if (l.subject>r.subject) return 1;
+   if (l.object<r.object) return -1;
+   if (l.object>r.object) return 1;
+   return 0;
+}
+//---------------------------------------------------------------------------
+void dumpFacts(ofstream& out,TempFile& rawFacts,const string& name)
    // Dump the facts
 {
    // Sort the facts
-   sort(facts.begin(),facts.end(),OrderTripleByPredicate());
-
-   // Eliminate duplicates
-   vector<Triple>::iterator writer=facts.begin();
-   unsigned lastSubject=~0u,lastPredicate=~0u,lastObject=~0u;
-   for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-      if ((((*iter).subject)!=lastSubject)||(((*iter).predicate)!=lastPredicate)||(((*iter).object)!=lastObject)) {
-         *writer=*iter;
-         ++writer;
-         lastSubject=(*iter).subject; lastPredicate=(*iter).predicate; lastObject=(*iter).object;
-      }
-   facts.resize(writer-facts.begin());
+   TempFile sortedFacts(rawFacts.getBaseFile());
+   Sorter::sort(rawFacts,sortedFacts,skipTriple,compareTriple,true);
 
    // Dump the facts
    {
-      unlink("/tmp/facts.sql");
-      ofstream out("/tmp/facts.sql");
-      for (vector<Triple>::const_iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
+      unlink("facts.sql");
+      ofstream out("facts.sql");
+      MemoryMappedFile in;
+      in.open(sortedFacts.getFile().c_str());
+      const Triple* triplesBegin=reinterpret_cast<const Triple*>(in.getBegin());
+      const Triple* triplesEnd=reinterpret_cast<const Triple*>(in.getEnd());
+      for (const Triple* iter=triplesBegin,*limit=triplesEnd;iter!=limit;++iter)
          out << (*iter).subject << "\t" << (*iter).predicate << "\t" << (*iter).object << std::endl;
    }
 
@@ -82,7 +99,7 @@ void dumpFacts(ofstream& out,const string& name,vector<Triple>& facts)
    out << "drop schema if exists " << name << " cascade;" << endl;
    out << "create schema " << name << ";" << endl;
    out << "create table " << name << ".facts(subject int not null, predicate int not null, object int not null);" << endl;
-   out << "copy " << name << ".facts from '/tmp/facts.sql';" << endl;
+   out << "copy " << name << ".facts from 'facts.sql';" << endl;
 
    // Create indices
    out << "create index facts_spo on " << name << ".facts (subject, predicate, object);" << endl;
@@ -100,6 +117,8 @@ string escapeCopy(const string& s)
          case '\\': result+="\\\\"; break;
          case '\"': result+="\\\""; break;
          case '\'': result+="\\\'"; break;
+         case '\t': result+="\\\t"; break;
+         case '\0': result+="\\x00"; break;
          default:
             /* if (c<' ') {
                result+='\\';
@@ -113,6 +132,23 @@ string escapeCopy(const string& s)
 bool readAndStoreStrings(ofstream& out,const string& name,const char* fileName)
    // Read the facts table and store it in the database
 {
+   // Read the strings once to find the maximum string len
+   unsigned maxLen=4000;
+   {
+      ifstream in(fileName);
+      if (!in.is_open()) {
+         cout << "unable to open " << fileName << endl;
+         return false;
+      }
+      string s;
+      while (in) {
+         if (!getline(in,s)) break;
+         unsigned l=s.length();
+         if (l>maxLen) maxLen=l;
+      }
+      if (maxLen%100) maxLen+=100-(maxLen%100);
+   }
+
    // Now open the strings again
    ifstream in(fileName);
    if (!in.is_open()) {
@@ -121,12 +157,12 @@ bool readAndStoreStrings(ofstream& out,const string& name,const char* fileName)
    }
 
    // Prepare the strings table
-   out << "create table " << name << ".strings(id int not null primary key, value varchar(4000) not null);" << endl;
+   out << "create table " << name << ".strings(id int not null primary key, value varchar(" << maxLen << ") not null);" << endl;
 
    // Scan the strings and dump them
    {
-      unlink("/tmp/strings.sql");
-      ofstream out("/tmp/strings.sql");
+      unlink("strings.sql");
+      ofstream out("strings.sql");
       string s;
       while (true) {
          unsigned id;
@@ -143,7 +179,7 @@ bool readAndStoreStrings(ofstream& out,const string& name,const char* fileName)
    }
 
    // Add the copy statement
-   out << "copy " << name << ".strings from '/tmp/strings.sql';" << endl;
+   out << "copy " << name << ".strings from 'strings.sql';" << endl;
 
    return true;
 }
@@ -164,12 +200,12 @@ int main(int argc,char* argv[])
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
-      vector<Triple> facts;
-      if (!readFacts(facts,argv[1]))
+      TempFile rawFacts("commands.sql");
+      if (!readFacts(rawFacts,argv[1]))
          return 1;
 
       // Write them to the database
-      dumpFacts(out,argv[3],facts);
+      dumpFacts(out,rawFacts,argv[3]);
    }
 
    // Process the strings
