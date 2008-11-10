@@ -1,0 +1,6 @@
+select s.name
+form (select distinct predicate
+from allproperties
+) p, strings s
+where p.predicate=s.id
+

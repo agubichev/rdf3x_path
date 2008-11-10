@@ -1,0 +1,9 @@
+PREFIX uni: <http://purl.uniprot.org/core/>
+
+SELECT ?protein ?begin ?end 
+
+WHERE {?annotation a <http://purl.uniprot.org/core/Transmembrane_Annotation>; uni:range ?range. 
+	?range uni:begin ?begin; uni:end ?end.
+	?protein a uni:Protein; uni:annotation ?annotation. }
+LIMIT 50
+
