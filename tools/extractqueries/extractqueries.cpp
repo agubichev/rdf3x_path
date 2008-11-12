@@ -9,6 +9,7 @@
 #include <iostream>
 #include <vector>
 #include <set>
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 //---------------------------------------------------------------------------
@@ -119,23 +120,30 @@ template <class T> void eliminateDuplicates(vector<T>& data)
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
+static vector<pair<unsigned,unsigned> > findLiterals(unsigned node,Database& db,const vector<unsigned>& allNodes,unsigned size)
+   // Find literals connected to a node
+{
+   vector<pair<unsigned,unsigned> > literals;
+
+   FactsSegment::Scan scan;
+   if (scan.first(db.getFacts(Database::Order_Subject_Predicate_Object),node,0,0)) do {
+      if (scan.getValue1()!=node) break;
+      if (contains(allNodes,scan.getValue2())) continue;
+      literals.push_back(pair<unsigned,unsigned>(scan.getValue2(),scan.getValue3()));
+   } while (scan.next());
+   assert(literals.size()>=size);
+   for (unsigned index=0;index<size;index++)
+      swap(literals[index],literals[index+(random()%(literals.size()-index))]);
+   literals.resize(size);
+
+   return literals;
+}
+//---------------------------------------------------------------------------
 static vector<unsigned> buildStar(unsigned node,Database& db,const vector<unsigned>& allNodes,unsigned size,unsigned& relationID)
    // Build a star pattern
 {
    // Pick some suitable literals
-   vector<pair<unsigned,unsigned> > literals;
-   {
-      FactsSegment::Scan scan;
-      if (scan.first(db.getFacts(Database::Order_Subject_Predicate_Object),node,0,0)) do {
-         if (scan.getValue1()!=node) break;
-         if (contains(allNodes,scan.getValue2())) continue;
-         literals.push_back(pair<unsigned,unsigned>(scan.getValue2(),scan.getValue3()));
-      } while (scan.next());
-      assert(literals.size()>=size);
-      for (unsigned index=0;index<size;index++)
-         swap(literals[index],literals[index+(random()%(literals.size()-index))]);
-      literals.resize(size);
-   }
+   vector<pair<unsigned,unsigned> > literals=findLiterals(node,db,allNodes,size);
 
    // Output base sizes
    double independentSize=1.0;
@@ -230,6 +238,45 @@ static vector<unsigned> buildChain(unsigned from,const vector<unsigned>& fromIds
    return result;
 }
 //---------------------------------------------------------------------------
+static string lookupURL(Database& db,unsigned id)
+   // Lookup a URL
+{
+   const char* start=0,*end=start;
+   db.getDictionary().lookupById(id,start,end);
+   return "<"+string(start,end)+">";
+}
+//---------------------------------------------------------------------------
+static bool isBlankNode(const char* start,const char* stop)
+   // Looks like a blank node? XXX store in dictionary
+{
+   return (start+2>stop)&&(start[0]=='_')&&(start[1]==':');
+}
+//---------------------------------------------------------------------------
+static bool isURI(const char* start,const char* stop)
+   // Looks like a URI? XXX store in dictionary
+{
+   const char* limit=stop-5;
+   if (limit>start+10) limit=start+10;
+   for (;start<limit;++start) {
+      char c=*start;
+      if (c==' ') break;
+      if (c==':')
+         return (start[1]=='/')&&(start[2]=='/');
+   }
+   return false;
+}
+//---------------------------------------------------------------------------
+static string lookupLiteral(Database& db,unsigned id)
+   // Lookup a literal value
+{
+   const char* start=0,*end=start;
+   db.getDictionary().lookupById(id,start,end);
+
+   if (isBlankNode(start,end)||isURI(start,end))
+      return "<"+string(start,end)+">"; else
+      return "\""+string(start,end)+"\"";
+}
+//---------------------------------------------------------------------------
 static void constructQuery(unsigned id,Database& db,const vector<unsigned>& allNodes,const vector<unsigned>& central,const vector<pair<unsigned,unsigned> >& hops)
    // Build a query
 {
@@ -257,19 +304,37 @@ static void constructQuery(unsigned id,Database& db,const vector<unsigned>& allN
    }
 
    // Build a query
-   cout << "graph sparql" << id << endl;
-   unsigned relationID=0;
-   unsigned node1Scan=relationID;
-   vector<unsigned> node1Equiv=buildStar(node1,db,allNodes,6,relationID);
-   unsigned node2Scan=relationID;
-   vector<unsigned> node2Equiv=buildStar(node2,db,allNodes,5,relationID);
-   unsigned node3Scan=relationID;
-   vector<unsigned> node3Equiv=buildStar(node3,db,allNodes,5,relationID);
-   vector<unsigned> node12Equiv=buildChain(node1Scan,node1Equiv,node2Scan,node2Equiv,db,relationID);
-   vector<unsigned> node123Equiv=buildChain(node2Scan,node12Equiv,node3Scan,node3Equiv,db,relationID);
+   if (getenv("JOINGRAPH")) {
+      cout << "graph sparql" << id << endl;
+      unsigned relationID=0;
+      unsigned node1Scan=relationID;
+      vector<unsigned> node1Equiv=buildStar(node1,db,allNodes,6,relationID);
+      unsigned node2Scan=relationID;
+      vector<unsigned> node2Equiv=buildStar(node2,db,allNodes,5,relationID);
+      unsigned node3Scan=relationID;
+      vector<unsigned> node3Equiv=buildStar(node3,db,allNodes,5,relationID);
+      vector<unsigned> node12Equiv=buildChain(node1Scan,node1Equiv,node2Scan,node2Equiv,db,relationID);
+      vector<unsigned> node123Equiv=buildChain(node2Scan,node12Equiv,node3Scan,node3Equiv,db,relationID);
 
-   // Include statistics, could be used for corrections
-   cout << "# true cardinality " << node123Equiv.size() << ", ignored for now" << endl << endl;
+      // Include statistics, could be used for corrections
+      cout << "# true cardinality " << node123Equiv.size() << ", ignored for now" << endl << endl;
+   } else {
+      vector<pair<unsigned,unsigned> > literals1,literals2,literals3;
+      literals1=findLiterals(node1,db,allNodes,6);
+      literals2=findLiterals(node2,db,allNodes,5);
+      literals3=findLiterals(node3,db,allNodes,5);
+
+      cout << "select ?a ?vo" << endl
+           << "where {" << endl
+           << "   ?a " << lookupURL(db,literals1[0].first) << " ?vo ." << endl;
+      for (unsigned index=1;index<literals1.size();index++)
+         cout << "   ?a " << lookupURL(db,literals1[index].first) << " " << lookupLiteral(db,literals1[index].second);
+      for (unsigned index=0;index<literals2.size();index++)
+         cout << "   ?b " << lookupURL(db,literals2[index].first) << " " << lookupLiteral(db,literals2[index].second);
+      for (unsigned index=0;index<literals3.size();index++)
+         cout << "   ?c " << lookupURL(db,literals3[index].first) << " " << lookupLiteral(db,literals3[index].second);
+      cout << "   ?a [] ?ab . ?ab [] ?b . ?b [] ?bc . ?bc [] ?c ." << endl << "}" << endl << endl;
+   }
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
