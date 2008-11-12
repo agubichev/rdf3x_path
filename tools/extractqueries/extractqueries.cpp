@@ -2,6 +2,7 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/operator/AggregatedIndexScan.hpp"
+#include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
@@ -319,10 +320,25 @@ static void constructQuery(unsigned id,Database& db,const vector<unsigned>& allN
       // Include statistics, could be used for corrections
       cout << "# true cardinality " << node123Equiv.size() << ", ignored for now" << endl << endl;
    } else {
-      vector<pair<unsigned,unsigned> > literals1,literals2,literals3;
+      vector<pair<unsigned,unsigned> > literals1,literals2;
       literals1=findLiterals(node1,db,allNodes,6);
       literals2=findLiterals(node2,db,allNodes,5);
-      literals3=findLiterals(node3,db,allNodes,5);
+
+      // Get connection candidates
+      vector<pair<unsigned,unsigned> > connections;
+      {
+         Register ls,lp,lo,rs,rp,ro;
+         ls.reset(); lp.reset(); lo.reset(); rs.reset(); rp.reset(); ro.reset();
+         ls.value=node1; ro.value=node2;
+         IndexScan* scan1=IndexScan::create(db,Database::Order_Subject_Object_Predicate,&ls,true,&lp,false,&lo,false);
+         IndexScan* scan2=IndexScan::create(db,Database::Order_Object_Subject_Predicate,&rs,false,&rp,false,&ro,true);
+         vector<Register*> lt,rt; lt.push_back(&lp); rt.push_back(&rp);
+         MergeJoin join(scan1,&lo,lt,scan2,&rs,rt);
+
+         if (join.first()) do {
+            connections.push_back(pair<unsigned,unsigned>(lp.value,rp.value));
+         } while (join.next());
+      }
 
       cout << "select ?a ?vo" << endl
            << "where {" << endl
@@ -331,9 +347,8 @@ static void constructQuery(unsigned id,Database& db,const vector<unsigned>& allN
          cout << "   ?a " << lookupURL(db,literals1[index].first) << " " << lookupLiteral(db,literals1[index].second) << " ." << endl;
       for (unsigned index=0;index<literals2.size();index++)
          cout << "   ?b " << lookupURL(db,literals2[index].first) << " " << lookupLiteral(db,literals2[index].second) << " ." << endl;
-      for (unsigned index=0;index<literals3.size();index++)
-         cout << "   ?c " << lookupURL(db,literals3[index].first) << " " << lookupLiteral(db,literals3[index].second) << " ." << endl;
-      cout << "   ?a [] ?ab . ?ab [] ?b . ?b [] ?bc . ?bc [] ?c ." << endl << "}" << endl << endl;
+      unsigned ms=random()%connections.size();
+      cout << "   ?a " << lookupURL(db,connections[ms].first) << " ?ab . ?ab " << lookupURL(db,connections[ms].second) << " ?b ." << endl << "}" << endl << endl;
    }
 }
 //---------------------------------------------------------------------------
