@@ -1,5 +1,6 @@
 #include "cts/parser/SPARQLParser.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
+#include <cstdlib>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -9,6 +10,8 @@
 // of this license, visit http://creativecommons.org/licenses/by-nc-sa/3.0/
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
+//---------------------------------------------------------------------------
+using namespace std;
 //---------------------------------------------------------------------------
 SPARQLParser::ParserException::ParserException(const std::string& message)
   : message(message)
