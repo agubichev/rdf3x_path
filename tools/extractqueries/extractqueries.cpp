@@ -64,6 +64,8 @@ class LookupFilter : public Operator {
    unsigned next();
    /// Print the operator
    void print(DictionarySegment& dict,unsigned indent);
+   /// Handle a merge hint
+   void addMergeHint(Register* l,Register* r);
 };
 //---------------------------------------------------------------------------
 unsigned LookupFilter::first()
@@ -101,6 +103,12 @@ void LookupFilter::print(DictionarySegment& dict,unsigned level)
    std::cout << "]" << std::endl;
    input->print(dict,level+1);
    indent(level); std::cout << ">" << std::endl;
+}
+//---------------------------------------------------------------------------
+void LookupFilter::addMergeHint(Register* l,Register* r)
+   // Handle a merge hint
+{
+   input->addMergeHint(l,r);
 }
 //---------------------------------------------------------------------------
 template <class T> void eliminateDuplicates(vector<T>& data)
