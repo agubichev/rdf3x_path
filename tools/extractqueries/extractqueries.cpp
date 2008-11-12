@@ -328,11 +328,11 @@ static void constructQuery(unsigned id,Database& db,const vector<unsigned>& allN
            << "where {" << endl
            << "   ?a " << lookupURL(db,literals1[0].first) << " ?vo ." << endl;
       for (unsigned index=1;index<literals1.size();index++)
-         cout << "   ?a " << lookupURL(db,literals1[index].first) << " " << lookupLiteral(db,literals1[index].second);
+         cout << "   ?a " << lookupURL(db,literals1[index].first) << " " << lookupLiteral(db,literals1[index].second) << " ." << endl;
       for (unsigned index=0;index<literals2.size();index++)
-         cout << "   ?b " << lookupURL(db,literals2[index].first) << " " << lookupLiteral(db,literals2[index].second);
+         cout << "   ?b " << lookupURL(db,literals2[index].first) << " " << lookupLiteral(db,literals2[index].second) << " ." << endl;
       for (unsigned index=0;index<literals3.size();index++)
-         cout << "   ?c " << lookupURL(db,literals3[index].first) << " " << lookupLiteral(db,literals3[index].second);
+         cout << "   ?c " << lookupURL(db,literals3[index].first) << " " << lookupLiteral(db,literals3[index].second) << " ." << endl;
       cout << "   ?a [] ?ab . ?ab [] ?b . ?b [] ?bc . ?bc [] ?c ." << endl << "}" << endl << endl;
    }
 }
