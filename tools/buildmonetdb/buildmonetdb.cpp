@@ -172,7 +172,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
    // Read the facts table and store it in the database
 {
    // Read the strings once to find the maximum string len
-   unsigned maxLen=4000;
+   unsigned maxLen=4000,lineCount=0;
    {
       ifstream in(fileName);
       if (!in.is_open()) {
@@ -181,9 +181,13 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
       }
       string s;
       while (in) {
+         unsigned id;
+         in >> id;
+         in.get();
          if (!getline(in,s)) break;
          unsigned l=s.length();
          if (l>maxLen) maxLen=l;
+         ++lineCount;
       }
       if (maxLen%100) maxLen+=100-(maxLen%100);
    }
@@ -205,8 +209,8 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
 
    // Scan the strings and dump them
    vector<pair<unsigned,string> > propertyNames;
-   vector<pair<unsigned,string> > stringCache;
    string s;
+   out << "copy " << lineCount << " records into \"strings\" from stdin using delimiters '\\t';" << endl;
    while (true) {
       unsigned id;
       in >> id;
@@ -217,13 +221,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
          s=s.substr(0,s.length()-1);
 
       // Store the string
-      stringCache.push_back(pair<unsigned,string>(id,s));
-      if (stringCache.size()==10000) {
-         out << "copy " << stringCache.size() << " records into \"strings\" from stdin using delimiters '\\t';" << endl;
-         for (vector<pair<unsigned,string> >::const_iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter)
-            out << (*iter).first << "\t\"" << escapeCopy((*iter).second) << "\"" << endl;
-         stringCache.clear();
-      }
+      out << id << "\t\"" << escapeCopy(s) << "\"" << endl;
 
       // A known property?
       if (properties.count(id)) {
@@ -236,9 +234,6 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
             }
       }
    }
-   out << "copy " << stringCache.size() << " records into \"strings\" from stdin using delimiters '\\t';" << endl;
-   for (vector<pair<unsigned,string> >::const_iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter)
-      out << (*iter).first << "\t\"" << escapeCopy((*iter).second) << "\"" << endl;
 
    // Dump the property names
    // out << "drop table propertynames;" << endl
