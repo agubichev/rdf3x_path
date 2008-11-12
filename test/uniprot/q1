@@ -1,2 +1,8 @@
-SELECT DISTINCT ?p WHERE {?s ?p ?o}
+PREFIX uni: <http://purl.uniprot.org/core/>
+
+SELECT ?protein ?name 
+
+WHERE { ?protein a uni:Protein;
+        uni:encodedBy [ uni:name "CRB" ];
+        uni:name ?name }
 
