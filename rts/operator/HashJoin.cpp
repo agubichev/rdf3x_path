@@ -13,8 +13,115 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
+static inline unsigned hash1(unsigned key,unsigned hashTableSize) { return key&(hashTableSize-1); }
+static inline unsigned hash2(unsigned key,unsigned hashTableSize) { return hashTableSize+((key^(key>>3))&(hashTableSize-1)); }
+//---------------------------------------------------------------------------
+void HashJoin::BuildHashTable::run()
+   // Build the hash table
+{
+   if (done) return; // XXX support repeated executions under nested loop joins etc!
+
+   // Prepare relevant domain informations
+   Register* leftValue=join.leftValue;
+   vector<Register*> domainRegs;
+   if (leftValue->domain)
+      domainRegs.push_back(leftValue);
+   for (vector<Register*>::const_iterator iter=join.leftTail.begin(),limit=join.leftTail.end();iter!=limit;++iter)
+      if ((*iter)->domain)
+         domainRegs.push_back(*iter);
+   vector<ObservedDomainDescription> observedDomains;
+   observedDomains.resize(domainRegs.size());
+
+   // Build the hash table from the left side
+   unsigned hashTableSize = 1024;
+   unsigned tailLength=join.leftTail.size();
+   join.hashTable.clear();
+   join.hashTable.resize(2*hashTableSize);
+   for (unsigned leftCount=join.left->first();leftCount;leftCount=join.left->next()) {
+      // Check the domain first
+      bool joinCandidate=true;
+      for (unsigned index=0,limit=domainRegs.size();index<limit;++index) {
+         if (!domainRegs[index]->domain->couldQualify(domainRegs[index]->value)) {
+            joinCandidate=false;
+            break;
+         }
+         observedDomains[index].add(domainRegs[index]->value);
+      }
+      if (!joinCandidate)
+         continue;
+      // Compute the slots
+      unsigned leftKey=leftValue->value;
+      unsigned slot1=hash1(leftKey,hashTableSize),slot2=hash2(leftKey,hashTableSize);
+
+      // Scan if the entry already exists
+      Entry* e=join.hashTable[slot1];
+      if ((!e)||(e->key!=leftKey))
+         e=join.hashTable[slot2];
+      if (e&&(e->key==leftKey)) {
+         unsigned ofs=(e==join.hashTable[slot1])?slot1:slot2;
+         bool match=false;
+         for (Entry* iter=e;iter;iter=iter->next)
+            if (leftKey==iter->key) {
+               // Tuple already in the table?
+               match=true;
+               for (unsigned index2=0;index2<tailLength;index2++)
+                  if (join.leftTail[index2]->value!=iter->values[index2]) {
+                     match=false;
+                     break;
+                  }
+               // Then aggregate
+               if (match) {
+                  iter->count+=leftCount;
+                  break;
+               }
+            }
+         if (match)
+            continue;
+
+         // Append to the current bucket
+         e=join.entryPool.alloc();
+         e->next=join.hashTable[ofs];
+         join.hashTable[ofs]=e;
+         e->key=leftKey;
+         e->count=leftCount;
+         for (unsigned index2=0;index2<tailLength;index2++)
+            e->values[index2]=join.leftTail[index2]->value;
+         continue;
+      }
+
+      // Create a new tuple
+      e=join.entryPool.alloc();
+      e->next=0;
+      e->key=leftKey;
+      e->count=leftCount;
+      for (unsigned index2=0;index2<tailLength;index2++)
+         e->values[index2]=join.leftTail[index2]->value;
+
+      // And insert it
+      join.insert(e);
+      hashTableSize=join.hashTable.size()/2;
+   }
+
+   // Update the domains
+   // XXX implement locking to be on the safe side
+   for (unsigned index=0,limit=domainRegs.size();index<limit;++index)
+      domainRegs[index]->domain->restrictTo(observedDomains[index]);
+
+   done=true;
+}
+//---------------------------------------------------------------------------
+void HashJoin::ProbePeek::run()
+   // Produce the first tuple from the probe side
+{
+   if (done) return; // XXX support repeated executions under nested loop joins etc!
+
+   count=join.right->first();
+   done=true;
+}
+//---------------------------------------------------------------------------
 HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail)
-   : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned))
+   : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
+     buildHashTableTask(*this),probePeekTask(*this)
    // Constructor
 {
 }
@@ -25,9 +132,6 @@ HashJoin::~HashJoin()
    delete left;
    delete right;
 }
-//---------------------------------------------------------------------------
-static inline unsigned hash1(unsigned key,unsigned hashTableSize) { return key&(hashTableSize-1); }
-static inline unsigned hash2(unsigned key,unsigned hashTableSize) { return hashTableSize+((key^(key>>3))&(hashTableSize-1)); }
 //---------------------------------------------------------------------------
 void HashJoin::insert(Entry* e)
    // Insert into the hash table
@@ -69,92 +173,12 @@ HashJoin::Entry* HashJoin::lookup(unsigned key)
 unsigned HashJoin::first()
    // Produce the first tuple
 {
-   // Prepare relevant domain informations
-   vector<Register*> domainRegs;
-   if (leftValue->domain)
-      domainRegs.push_back(leftValue);
-   for (vector<Register*>::const_iterator iter=leftTail.begin(),limit=leftTail.end();iter!=limit;++iter)
-      if ((*iter)->domain)
-         domainRegs.push_back(*iter);
-   vector<ObservedDomainDescription> observedDomains;
-   observedDomains.resize(domainRegs.size());
-
-   // Build the hash table from the left side
-   unsigned hashTableSize = 1024;
-   unsigned tailLength=leftTail.size();
-   hashTable.clear();
-   hashTable.resize(2*hashTableSize);
-   for (unsigned leftCount=left->first();leftCount;leftCount=left->next()) {
-      // Check the domain first
-      bool joinCandidate=true;
-      for (unsigned index=0,limit=domainRegs.size();index<limit;++index) {
-         if (!domainRegs[index]->domain->couldQualify(domainRegs[index]->value)) {
-            joinCandidate=false;
-            break;
-         }
-         observedDomains[index].add(domainRegs[index]->value);
-      }
-      if (!joinCandidate)
-         continue;
-      // Compute the slots
-      unsigned leftKey=leftValue->value;
-      unsigned slot1=hash1(leftKey,hashTableSize),slot2=hash2(leftKey,hashTableSize);
-
-      // Scan if the entry already exists
-      Entry* e=hashTable[slot1];
-      if ((!e)||(e->key!=leftKey))
-         e=hashTable[slot2];
-      if (e&&(e->key==leftKey)) {
-         unsigned ofs=(e==hashTable[slot1])?slot1:slot2;
-         bool match=false;
-         for (Entry* iter=e;iter;iter=iter->next)
-            if (leftKey==iter->key) {
-               // Tuple already in the table?
-               match=true;
-               for (unsigned index2=0;index2<tailLength;index2++)
-                  if (leftTail[index2]->value!=iter->values[index2]) {
-                     match=false;
-                     break;
-                  }
-               // Then aggregate
-               if (match) {
-                  iter->count+=leftCount;
-                  break;
-               }
-            }
-         if (match)
-            continue;
-
-         // Append to the current bucket
-         e=entryPool.alloc();
-         e->next=hashTable[ofs];
-         hashTable[ofs]=e;
-         e->key=leftKey;
-         e->count=leftCount;
-         for (unsigned index2=0;index2<tailLength;index2++)
-            e->values[index2]=leftTail[index2]->value;
-         continue;
-      }
-
-      // Create a new tuple
-      e=entryPool.alloc();
-      e->next=0;
-      e->key=leftKey;
-      e->count=leftCount;
-      for (unsigned index2=0;index2<tailLength;index2++)
-         e->values[index2]=leftTail[index2]->value;
-
-      // And insert it
-      insert(e);
-      hashTableSize=hashTable.size()/2;
-   }
-
-   // Update the domains
-   for (unsigned index=0,limit=domainRegs.size();index<limit;++index)
-      domainRegs[index]->domain->restrictTo(observedDomains[index]);
+   // Build the hash table if not already done
+   buildHashTableTask.run();
 
    // Read the first tuple from the right side
-   if ((rightCount=right->first())==0)
+   probePeekTask.run();
+   if ((rightCount=probePeekTask.count)==0)
       return false;
 
    // Setup the lookup
@@ -213,7 +237,12 @@ void HashJoin::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
 void HashJoin::getAsyncInputCandidates(Scheduler& scheduler)
    // Register parts of the tree that can be executed asynchronous
 {
+   unsigned p1=scheduler.getRegisteredPoints();
    left->getAsyncInputCandidates(scheduler);
+   scheduler.registerAsyncPoint(buildHashTableTask,0,0,p1);
+
+   unsigned p2=scheduler.getRegisteredPoints();
    right->getAsyncInputCandidates(scheduler);
+   scheduler.registerAsyncPoint(probePeekTask,0,0,p2);
 }
 //---------------------------------------------------------------------------

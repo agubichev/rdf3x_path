@@ -11,6 +11,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include "rts/operator/Operator.hpp"
+#include "rts/operator/Scheduler.hpp"
 #include "infra/util/VarPool.hpp"
 #include <vector>
 //---------------------------------------------------------------------------
@@ -31,8 +32,40 @@ class HashJoin : public Operator
       /// Further values
       unsigned values[];
    };
-   /// Helper
-   class Rehasher;
+   /// Hash table task
+   class BuildHashTable : public Scheduler::AsyncPoint {
+      private:
+      /// The operator
+      HashJoin& join;
+      /// Already done?
+      bool done;
+
+      public:
+      /// Constructor
+      BuildHashTable(HashJoin& join) : join(join),done(false) {}
+      /// Perform the task
+      void run();
+   };
+   friend class BuildHashTable;
+   /// Probe peek task
+   class ProbePeek : public Scheduler::AsyncPoint {
+      private:
+      /// The operator
+      HashJoin& join;
+      /// The count
+      unsigned count;
+      /// Already done?
+      bool done;
+
+      friend class HashJoin;
+
+      public:
+      /// Constructor
+      ProbePeek(HashJoin& join) : join(join),count(0),done(false) {}
+      /// Perform the task
+      void run();
+   };
+   friend class ProbePeek;
 
    /// The input
    Operator* left,*right;
@@ -48,6 +81,10 @@ class HashJoin : public Operator
    Entry* hashTableIter;
    /// The tuple count from the right side
    unsigned rightCount;
+   /// Task
+   BuildHashTable buildHashTableTask;
+   /// Task
+   ProbePeek probePeekTask;
 
    /// Insert into the hash table
    void insert(Entry* e);

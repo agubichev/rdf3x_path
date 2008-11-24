@@ -82,6 +82,7 @@ void Scheduler::performWork()
 
    // Deregister
    workerThreads--;
+   workerSignal.notifyAll(workerLock);
    workerLock.unlock();
 }
 //---------------------------------------------------------------------------

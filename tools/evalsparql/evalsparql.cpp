@@ -8,6 +8,7 @@
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
+#include "rts/operator/Scheduler.hpp"
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -81,9 +82,7 @@ static void evalQuery(Database& db,const string& query,bool silent)
 
    // And execute it
    Timestamp start;
-   if (operatorTree->first()) {
-      while (operatorTree->next()) ;
-   }
+   Scheduler().execute(operatorTree);
    Timestamp stop;
    cout << "Execution time: " << (stop-start) << " ms" << endl;
 
