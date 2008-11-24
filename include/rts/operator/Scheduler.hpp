@@ -44,10 +44,12 @@ class Scheduler
    Event workerSignal;
    /// The queue of tasks
    std::vector<RegisteredPoint*> workQueue;
+   /// The number of threads to use
+   unsigned threads;
    /// The number of active threads
-   unsigned activeWorkers,workerThreads;
+   volatile unsigned activeWorkers,workerThreads;
    /// Should the workers die?
-   bool workersDie;
+   volatile bool workersDie;
 
    /// Perform the work of a worker thread
    void performWork();

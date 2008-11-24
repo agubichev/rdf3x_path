@@ -81,8 +81,9 @@ static void evalQuery(Database& db,const string& query,bool silent)
       operatorTree->print(db.getDictionary());
 
    // And execute it
+   Scheduler scheduler;
    Timestamp start;
-   Scheduler().execute(operatorTree);
+   scheduler.execute(operatorTree);
    Timestamp stop;
    cout << "Execution time: " << (stop-start) << " ms" << endl;
 

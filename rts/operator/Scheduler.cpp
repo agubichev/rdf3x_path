@@ -2,6 +2,7 @@
 #include "rts/operator/Operator.hpp"
 #include "infra/osdep/Thread.hpp"
 #include <cstdlib>
+#include <iostream>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -20,11 +21,36 @@ Scheduler::Scheduler()
    : activeWorkers(0),workerThreads(0),workersDie(false)
    // Constructor
 {
+   // How many threads should we use?
+   threads=0;
+   if (getenv("MAXTHREADS"))
+      threads=atoi(getenv("MAXTHREADS"));
+   if ((threads<2)||(threads>1000))
+      threads=0;
+
+   // Start worker threads
+   if (threads) {
+      workerLock.lock();
+      for (unsigned index=0;index<threads;index++)
+         Thread::start(asyncWorker,this);
+      workerLock.unlock();
+   }
 }
 //---------------------------------------------------------------------------
 Scheduler::~Scheduler()
    // Destructor
 {
+   // Wait for all workers to stop
+   if (threads) {
+      workerLock.lock();
+      workersDie=true;
+      workerSignal.notifyAll(workerLock);
+      while (workerThreads)
+         workerSignal.wait(workerLock);
+      workerLock.unlock();
+   }
+
+   // Cleanup registered execution points
    for (vector<RegisteredPoint*>::const_iterator iter=registeredPoints.begin(),limit=registeredPoints.end();iter!=limit;++iter)
       delete *iter;
    registeredPoints.clear();
@@ -95,11 +121,8 @@ void Scheduler::asyncWorker(void* info)
 void Scheduler::execute(Operator* root)
    // Execute a plan using, using potentially multiple threads
 {
-   // How many threads should we use?
-   unsigned threads=0;
-   if (getenv("MAXTHREADS"))
-      threads=atoi(getenv("MAXTHREADS"));
-   if ((threads<2)||(threads>1000)) {
+   // Run single threaded?
+   if (!threads) {
       executeSingleThreaded(root);
       return;
    }
@@ -109,12 +132,6 @@ void Scheduler::execute(Operator* root)
       delete *iter;
    registeredPoints.clear();
    root->getAsyncInputCandidates(*this);
-
-   // Start worker threads
-   workerLock.lock();
-   workersDie=false;
-   for (unsigned index=0;(index<threads)&&(index<registeredPoints.size());index++)
-      Thread::start(asyncWorker,this);
 
    // Execute all asynchronous execution points
    while (!registeredPoints.empty()) {
@@ -139,7 +156,7 @@ void Scheduler::execute(Operator* root)
       // No candidate found?
       if (!best) {
          // Still work?
-         if (activeWorkers) {
+         if (activeWorkers||workQueue.size()) {
             workerSignal.wait(workerLock);
             continue;
          }
@@ -152,11 +169,8 @@ void Scheduler::execute(Operator* root)
       registeredPoints.pop_back();
       workerSignal.notifyAll(workerLock);
    }
+   cout << activeWorkers << endl;
    while (activeWorkers)
-      workerSignal.wait(workerLock);
-   workersDie=true;
-   workerSignal.notifyAll(workerLock);
-   while (workerThreads)
       workerSignal.wait(workerLock);
    workerLock.unlock();
 
