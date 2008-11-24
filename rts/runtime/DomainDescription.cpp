@@ -1,4 +1,5 @@
 #include "rts/runtime/DomainDescription.hpp"
+#include "infra/osdep/Mutex.hpp"
 #include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -101,9 +102,16 @@ PotentialDomainDescription::PotentialDomainDescription()
    memset(filter,0xFF,sizeof(filter));
 }
 //---------------------------------------------------------------------------
+static const unsigned lockCount = 16;
+static Mutex lockTable[lockCount];
+static Mutex& getLock(void* ptr) { return lockTable[reinterpret_cast<uintptr_t>(ptr)%lockCount]; }
+//---------------------------------------------------------------------------
 void PotentialDomainDescription::sync(PotentialDomainDescription& other)
    // Synchronize with another domain, computing the intersection. Both are modified!
 {
+   Mutex& lock=getLock(this);
+   lock.lock();
+
    if (min<other.min)
       min=other.min;
    if (min>other.min)
@@ -117,17 +125,24 @@ void PotentialDomainDescription::sync(PotentialDomainDescription& other)
       filter[index]=n;
       other.filter[index]=n;
    }
+
+   lock.unlock();
 }
 //---------------------------------------------------------------------------
 void PotentialDomainDescription::restrictTo(const ObservedDomainDescription& other)
    // Restrict to an observed domain
 {
+   Mutex& lock=getLock(this);
+   lock.lock();
+
    if (min<other.min)
       min=other.min;
    if (max>other.max)
       max=other.max;
    for (unsigned index=0;index<filterSize;index++)
       filter[index]&=other.filter[index];
+
+   lock.unlock();
 }
 //---------------------------------------------------------------------------
 ObservedDomainDescription::ObservedDomainDescription()

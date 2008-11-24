@@ -103,7 +103,6 @@ void HashJoin::BuildHashTable::run()
    }
 
    // Update the domains
-   // XXX implement locking to be on the safe side
    for (unsigned index=0,limit=domainRegs.size();index<limit;++index)
       domainRegs[index]->domain->restrictTo(observedDomains[index]);
 
