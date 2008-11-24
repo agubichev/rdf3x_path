@@ -184,6 +184,11 @@ void AggregatedIndexScan::addMergeHint(Register* reg1,Register* reg2)
    handleHints(reg1,reg2,value2,merge2);
 }
 //---------------------------------------------------------------------------
+void AggregatedIndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
+   // Register parts of the tree that can be executed asynchronous
+{
+}
+//---------------------------------------------------------------------------
 AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
    // Constructor
 {

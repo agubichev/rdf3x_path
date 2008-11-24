@@ -76,6 +76,8 @@ class MergeJoin : public Operator
    void print(DictionarySegment& dict,unsigned indent);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
+   /// Register parts of the tree that can be executed asynchronous
+   void getAsyncInputCandidates(Scheduler& scheduler);
 };
 //---------------------------------------------------------------------------
 #endif

@@ -12,6 +12,7 @@
 //---------------------------------------------------------------------------
 class Register;
 class DictionarySegment;
+class Scheduler;
 //---------------------------------------------------------------------------
 /// Base class for all operators of the runtime system
 class Operator
@@ -37,6 +38,8 @@ class Operator
    virtual void print(DictionarySegment& dict,unsigned indent=0) = 0;
    /// Add a merge join hint
    virtual void addMergeHint(Register* reg1,Register* reg2) = 0;
+   /// Register parts of the tree that can be executed asynchronous
+   virtual void getAsyncInputCandidates(Scheduler& scheduler) = 0;
 };
 //---------------------------------------------------------------------------
 #endif

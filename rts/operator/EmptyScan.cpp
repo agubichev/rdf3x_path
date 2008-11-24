@@ -43,3 +43,8 @@ void EmptyScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
 {
 }
 //---------------------------------------------------------------------------
+void EmptyScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
+   // Register parts of the tree that can be executed asynchronous
+{
+}
+//---------------------------------------------------------------------------

@@ -158,3 +158,9 @@ void HashGroupify::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
    // Do not propagate as we break the pipeline
 }
 //---------------------------------------------------------------------------
+void HashGroupify::getAsyncInputCandidates(Scheduler& scheduler)
+   // Register parts of the tree that can be executed asynchronous
+{
+   input->getAsyncInputCandidates(scheduler);
+}
+//---------------------------------------------------------------------------

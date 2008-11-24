@@ -152,3 +152,9 @@ void ResultsPrinter::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
    // Do not propagate as we break the pipeline
 }
 //---------------------------------------------------------------------------
+void ResultsPrinter::getAsyncInputCandidates(Scheduler& scheduler)
+   // Register parts of the tree that can be executed asynchronous
+{
+   input->getAsyncInputCandidates(scheduler);
+}
+//---------------------------------------------------------------------------

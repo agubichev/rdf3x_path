@@ -340,3 +340,10 @@ void MergeJoin::addMergeHint(Register* reg1,Register* reg2)
    right->addMergeHint(reg1,reg2);
 }
 //---------------------------------------------------------------------------
+void MergeJoin::getAsyncInputCandidates(Scheduler& scheduler)
+   // Register parts of the tree that can be executed asynchronous
+{
+   left->getAsyncInputCandidates(scheduler);
+   right->getAsyncInputCandidates(scheduler);
+}
+//---------------------------------------------------------------------------

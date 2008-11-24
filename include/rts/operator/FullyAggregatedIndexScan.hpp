@@ -72,6 +72,8 @@ class FullyAggregatedIndexScan : public Operator
    void print(DictionarySegment& dict,unsigned indent);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
+   /// Register parts of the tree that can be executed asynchronous
+   void getAsyncInputCandidates(Scheduler& scheduler);
 
    /// Create a suitable operator
    static FullyAggregatedIndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);

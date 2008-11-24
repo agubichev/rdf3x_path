@@ -108,3 +108,10 @@ void Union::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
    // Do not propagate as we break the pipeline
 }
 //---------------------------------------------------------------------------
+void Union::getAsyncInputCandidates(Scheduler& scheduler)
+   // Register parts of the tree that can be executed asynchronous
+{
+   for (unsigned index=0;index<parts.size();index++)
+      parts[index]->getAsyncInputCandidates(scheduler);
+}
+//---------------------------------------------------------------------------

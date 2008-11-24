@@ -175,3 +175,9 @@ void Selection::addMergeHint(Register* reg1,Register* reg2)
    input->addMergeHint(reg1,reg2);
 }
 //---------------------------------------------------------------------------
+void Selection::getAsyncInputCandidates(Scheduler& scheduler)
+   // Register parts of the tree that can be executed asynchronous
+{
+   input->getAsyncInputCandidates(scheduler);
+}
+//---------------------------------------------------------------------------

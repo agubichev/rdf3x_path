@@ -43,3 +43,8 @@ void SingletonScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
 {
 }
 //---------------------------------------------------------------------------
+void SingletonScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
+   // Register parts of the tree that can be executed asynchronous
+{
+}
+//---------------------------------------------------------------------------

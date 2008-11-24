@@ -278,6 +278,11 @@ void IndexScan::addMergeHint(Register* reg1,Register* reg2)
    handleHints(reg1,reg2,value3,merge3);
 }
 //---------------------------------------------------------------------------
+void IndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
+   // Register parts of the tree that can be executed asynchronous
+{
+}
+//---------------------------------------------------------------------------
 IndexScan* IndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
    // Constructor
 {
