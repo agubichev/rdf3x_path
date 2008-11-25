@@ -2,7 +2,6 @@
 #include "rts/operator/Operator.hpp"
 #include "infra/osdep/Thread.hpp"
 #include <cstdlib>
-#include <iostream>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -169,7 +168,6 @@ void Scheduler::execute(Operator* root)
       registeredPoints.pop_back();
       workerSignal.notifyAll(workerLock);
    }
-   cout << activeWorkers << endl;
    while (activeWorkers)
       workerSignal.wait(workerLock);
    workerLock.unlock();
