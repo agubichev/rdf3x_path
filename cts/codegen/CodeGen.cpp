@@ -284,7 +284,7 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
          rightTail.push_back((*iter).second);
 
    // Build the operator
-   Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail);
+   Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,joinOn);

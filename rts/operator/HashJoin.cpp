@@ -118,9 +118,9 @@ void HashJoin::ProbePeek::run()
    done=true;
 }
 //---------------------------------------------------------------------------
-HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail)
+HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail,double hashPriority,double probePriority)
    : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
-     buildHashTableTask(*this),probePeekTask(*this)
+     buildHashTableTask(*this),probePeekTask(*this),hashPriority(hashPriority),probePriority(probePriority)
    // Constructor
 {
 }
@@ -238,10 +238,10 @@ void HashJoin::getAsyncInputCandidates(Scheduler& scheduler)
 {
    unsigned p1=scheduler.getRegisteredPoints();
    left->getAsyncInputCandidates(scheduler);
-   scheduler.registerAsyncPoint(buildHashTableTask,0,0,p1);
+   scheduler.registerAsyncPoint(buildHashTableTask,0,hashPriority,p1);
 
    unsigned p2=scheduler.getRegisteredPoints();
    right->getAsyncInputCandidates(scheduler);
-   scheduler.registerAsyncPoint(probePeekTask,0,0,p2);
+   scheduler.registerAsyncPoint(probePeekTask,1,probePriority,p2);
 }
 //---------------------------------------------------------------------------

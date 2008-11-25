@@ -85,6 +85,8 @@ class HashJoin : public Operator
    BuildHashTable buildHashTableTask;
    /// Task
    ProbePeek probePeekTask;
+   /// Task priorities
+   double hashPriority,probePriority;
 
    /// Insert into the hash table
    void insert(Entry* e);
@@ -93,7 +95,7 @@ class HashJoin : public Operator
 
    public:
    /// Constructor
-   HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail);
+   HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail,double hashPriority,double probePriority);
    /// Destructor
    ~HashJoin();
 
