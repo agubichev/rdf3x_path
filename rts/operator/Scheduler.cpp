@@ -168,6 +168,8 @@ void Scheduler::execute(Operator* root)
       registeredPoints.pop_back();
       workerSignal.notifyAll(workerLock);
    }
+   while (!workQueue.empty())
+      workerSignal.wait(workerLock);
    while (activeWorkers)
       workerSignal.wait(workerLock);
    workerLock.unlock();
