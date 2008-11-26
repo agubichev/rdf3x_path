@@ -25,18 +25,25 @@ bool smallAddressSpace()
    return sizeof(void*)<8;
 }
 //---------------------------------------------------------------------------
-static bool parse(istream& in,TempFile& facts,TempFile& strings)
+static bool parse(istream& in,const char* name,StringLookup& lookup,TempFile& facts,TempFile& strings)
    // Parse the input and store it into temporary files
 {
-   cerr << "Parsing input..." << endl;
+   cerr << "Parsing " << name << "..." << endl;
 
    TurtleParser parser(in);
-   StringLookup lookup;
 
    // Read the triples
    try {
       string subject,predicate,object;
-      while (parser.parse(subject,predicate,object)) {
+      while (true) {
+         try {
+            if (!parser.parse(subject,predicate,object))
+	       break;
+         } catch (const TurtleParser::Exception& e) {
+            // recover...
+            while (in.get()!='\n') ;
+            continue;
+         }
          // Construct IDs
          unsigned subjectId=lookup.lookupValue(strings,subject);
          unsigned predicateId=lookup.lookupPredicate(strings,predicate);
@@ -630,16 +637,20 @@ int main(int argc,char* argv[])
 
    // Parse the input
    TempFile rawFacts(argv[1]),rawStrings(argv[1]);
-   if (argc==3) {
-      ifstream in(argv[2]);
-      if (!in.is_open()) {
-         cerr << "Unable to open " << argv[2] << endl;
-         return 1;
+   if (argc>=3) {
+      StringLookup lookup;
+      for (int index=2;index<argc;index++) {
+         ifstream in(argv[index]);
+         if (!in.is_open()) {
+            cerr << "Unable to open " << argv[2] << endl;
+            return 1;
+         }
+         if (!parse(in,argv[index],lookup,rawFacts,rawStrings))
+            return 1;
       }
-      if (!parse(in,rawFacts,rawStrings))
-         return 1;
    } else {
-      if (!parse(cin,rawFacts,rawStrings))
+      StringLookup lookup;
+      if (!parse(cin,"stdin",lookup,rawFacts,rawStrings))
          return 1;
    }
 
