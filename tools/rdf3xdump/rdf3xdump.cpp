@@ -152,7 +152,21 @@ int main(int argc,char* argv[])
          const char* start,*stop;
          DictionarySegment& dic=db.getDictionary();
          for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop);++id) {
-            cerr << id << " " << string(start,stop) << std::endl;
+            cerr << id << " ";
+	    for (const char* iter=start;iter!=stop;++iter) {
+	       char c=*iter;
+	       if (c<=0) {
+	          unsigned v=(c&0xFF);
+		  const char hex[]="0123456789ABCDEF";
+		  cerr << "\\x" << hex[v>>4] << hex[v&0xF];
+	       } else switch (c) {
+	          case '\\': cerr << "\\\\"; break;
+		  case '\n': cerr << "\\n"; break;
+		  case '\r': cerr << "\\r"; break;
+	          default: cerr << c; break;
+	       }
+	    }
+	    cerr << endl;
          }
       }
       return 0;

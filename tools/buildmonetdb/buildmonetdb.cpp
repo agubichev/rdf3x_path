@@ -168,6 +168,40 @@ string escapeCopy(const string& s)
    return result;
 }
 //---------------------------------------------------------------------------
+static ifstream& getEscapedLine(ifstream& in,string& s)
+   // Read a line interpreting escapes
+{
+   if (!in) return in;
+   s.resize(0);
+   while (in) {
+      char c=in.get();
+      if ((c=='\n')||(c=='\r')) break;
+      if (c=='\\') {
+         c=in.get();
+         switch (c) {
+             case 'n': s+='\n'; break;
+             case 'r': s+='\r'; break;
+             case '\\': s+='\\'; break;
+             case 'x': {
+                unsigned h,l;
+                c=in.get();
+                if ((c>='0')&&(c<='9')) h=c-'0'; else
+                if ((c>='A')&&(c<='F')) h=c-'A'+10; else
+                if ((c>='a')&&(c<='f')) h=c-'a'+10; else h=0;
+                c=in.get();
+                if ((c>='0')&&(c<='9')) l=c-'0'; else
+                if ((c>='A')&&(c<='F')) l=c-'A'+10; else
+                if ((c>='a')&&(c<='f')) l=c-'a'+10; else l=0;
+                c=static_cast<char>((h<<4)|l);
+                s+=c;
+                } break;
+             default: s+='\\'; s+=c; break;
+         }
+      } else s+=c;
+   }
+   return in;
+}
+//---------------------------------------------------------------------------
 bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>& properties,const set<unsigned>& partitionedProperties)
    // Read the facts table and store it in the database
 {
@@ -184,7 +218,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
          unsigned id;
          in >> id;
          in.get();
-         if (!getline(in,s)) break;
+	 if (!getEscapedLine(in,s)) break;
          unsigned l=s.length();
          if (l>maxLen) maxLen=l;
          ++lineCount;
@@ -215,10 +249,7 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
       unsigned id;
       in >> id;
       in.get();
-      getline(in,s);
-      if (!in.good()) break;
-      while (s.length()&&((s[s.length()-1]=='\r')||(s[s.length()-1]=='\n')))
-         s=s.substr(0,s.length()-1);
+      if (!getEscapedLine(in,s)) break;
 
       // Store the string
       out << id << "\t\"" << escapeCopy(s) << "\"" << endl;
