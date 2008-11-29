@@ -75,7 +75,7 @@ class Dumper2 {
 static unsigned char* writeUIntV(unsigned char* writer,unsigned long long v)
    // Write a value with variable length
 {
-   while (v>128) {
+   while (v>=128) {
       *writer=static_cast<unsigned char>((v&0x7F)|0x80);
       v>>=7;
       ++writer;
