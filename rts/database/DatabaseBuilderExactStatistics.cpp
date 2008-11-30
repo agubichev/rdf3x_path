@@ -141,7 +141,6 @@ bool Dumper2::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
    pageBuffer[5]=(len>>16)&0xFF;
    pageBuffer[6]=(len>>8)&0xFF;
    pageBuffer[7]=(len>>0)&0xFF;
-   boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>(pair<unsigned,unsigned>(entries[len-1].value1,entries[len-1].value2),page));
    memcpy(pageBuffer+8,buffer2,len);
    memset(pageBuffer+8+len,0,BufferManager::pageSize-(8+len));
 
@@ -169,6 +168,7 @@ void Dumper2::writeSome(bool potentiallyLast)
       potentiallyLast=0;
    writeEntries(best,pageBuffer,potentiallyLast?0:(page+1));
    writePage(out,page,pageBuffer);
+   boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>(pair<unsigned,unsigned>(entries[best-1].value1,entries[best-1].value2),page));
    page++;
 
    // And move the entries
