@@ -94,9 +94,9 @@ bool ExactStatisticsSegment::getJoinInfo2(unsigned root,unsigned value1,unsigned
    // Lookup join cardinalities for two constants
 {
    // Traverse the B-Tree
-#define readInner1(page,slot) Segment::readUint32Aligned(page+16+12*slot)
-#define readInner2(page,slot) Segment::readUint32Aligned(page+16+12*slot+4)
-#define readInnerPage(page,slot) Segment::readUint32Aligned(page+16+12*slot+8)
+#define readInner1(page,slot) Segment::readUint32Aligned((page)+16+12*(slot))
+#define readInner2(page,slot) Segment::readUint32Aligned((page)+16+12*(slot)+4)
+#define readInnerPage(page,slot) Segment::readUint32Aligned((page)+16+12*(slot)+8)
 #define greater(a1,a2,b1,b2) (((a1)>(b1))||(((a1)==(b1))&&((a2)>(b2))))
    BufferReference ref;
    ref=readShared(root);
@@ -164,7 +164,7 @@ bool ExactStatisticsSegment::getJoinInfo2(unsigned root,unsigned value1,unsigned
       if (v&1)
          currentEntry=(v>>1); else
          currentEntry+=(v>>1);
-      if ((v==value2)&&(index>=min)&&(index<=max))
+      if ((currentEntry==value2)&&(index>=min)&&(index<=max))
          pos=index;
    }
    if (pos==count) return false;
@@ -190,8 +190,8 @@ bool ExactStatisticsSegment::getJoinInfo1(unsigned root,unsigned value1,unsigned
    // Lookup join cardinalities for two constants
 {
    // Traverse the B-Tree
-#define readInner1(page,slot) Segment::readUint32Aligned(page+16+8*slot)
-#define readInnerPage(page,slot) Segment::readUint32Aligned(page+16+8*slot+4)
+#define readInner1(page,slot) Segment::readUint32Aligned(page+16+8*(slot))
+#define readInnerPage(page,slot) Segment::readUint32Aligned(page+16+8*(slot)+4)
    BufferReference ref;
    ref=readShared(root);
    while (true) {
@@ -288,10 +288,7 @@ bool ExactStatisticsSegment::getJoinInfo(unsigned long long* joinInfo,unsigned s
    if (~subjectConstant) {
       if (~predicateConstant) {
          if (~objectConstant) {
-            joinInfo[0]=c0ss; joinInfo[1]=c0sp; joinInfo[2]=c0so;
-            joinInfo[3]=c0ps; joinInfo[4]=c0pp; joinInfo[5]=c0po;
-            joinInfo[6]=c0os; joinInfo[7]=c0op; joinInfo[8]=c0oo;
-            return true;
+            return false; // all constants, cannot participate in a join!
          } else {
             return getJoinInfo2(c2ps,predicateConstant,subjectConstant,joinInfo[6],joinInfo[7],joinInfo[8]);
          }
@@ -313,7 +310,10 @@ bool ExactStatisticsSegment::getJoinInfo(unsigned long long* joinInfo,unsigned s
          if (~objectConstant) {
             return getJoinInfo1(c1o,objectConstant,joinInfo[0],joinInfo[1],joinInfo[2],joinInfo[3],joinInfo[4],joinInfo[5]);
          } else {
-            return false;
+            joinInfo[0]=c0ss; joinInfo[1]=c0sp; joinInfo[2]=c0so;
+            joinInfo[3]=c0ps; joinInfo[4]=c0pp; joinInfo[5]=c0po;
+            joinInfo[6]=c0os; joinInfo[7]=c0op; joinInfo[8]=c0oo;
+            return true;
          }
       }
    }
@@ -323,8 +323,8 @@ double ExactStatisticsSegment::getJoinSelectivity(bool s1c,unsigned s1,bool p1c,
    // Compute the join selectivity
 {
    // Compute the individual sizes
-   unsigned card1=getCardinality(s1c?s1:~0u,p1c?p1:~0u,o1c?o1:~0u);
-   unsigned card2=getCardinality(s2c?s2:~0u,p2c?p2:~0u,o2c?o2:~0u);
+   double card1=getCardinality(s1c?s1:~0u,p1c?p1:~0u,o1c?o1:~0u);
+   double card2=getCardinality(s2c?s2:~0u,p2c?p2:~0u,o2c?o2:~0u);
 
    // Check that 1 is smaller than 2
    if (card2<card1) {
@@ -338,41 +338,68 @@ double ExactStatisticsSegment::getJoinSelectivity(bool s1c,unsigned s1,bool p1c,
    }
 
    // Lookup the join info
-   unsigned long long joinInfo[9],crossCard;
+   unsigned long long joinInfo[9]; double crossCard;
    if (!getJoinInfo(joinInfo,s1c?s1:~0u,p1c?p1:~0u,o1c?o1:~0u)) {
       // Could no locate 1, check 2
       if (!getJoinInfo(joinInfo,s2c?s2:~0u,p2c?p2:~0u,o2c?o2:~0u)) {
          // Could not locate either, guess!
          return 1; // we could guess 0 here, as the entry was not found, but this might be due to stale statistics
       } else {
-         crossCard=static_cast<unsigned long long>(card2)*static_cast<unsigned long long>(totalCardinality);
+         crossCard=card2*static_cast<double>(totalCardinality);
       }
    } else {
-      crossCard=static_cast<unsigned long long>(card1)*static_cast<unsigned long long>(totalCardinality);
+      crossCard=card1*static_cast<double>(totalCardinality);
    }
 
    // And construct the most likely result size
-   unsigned long long resultSize=crossCard;
-   if ((s1==s2)&&(!s1c)&&(!s2c))
-      resultSize=min(resultSize,joinInfo[0]);
-   if ((s1==p2)&&(!s1c)&&(!p2c))
-      resultSize=min(resultSize,joinInfo[1]);
-   if ((s1==o2)&&(!s1c)&&(!o2c))
-      resultSize=min(resultSize,joinInfo[2]);
-   if ((p1==s2)&&(!p1c)&&(!s2c))
-      resultSize=min(resultSize,joinInfo[3]);
-   if ((p1==p2)&&(!p1c)&&(!p2c))
-      resultSize=min(resultSize,joinInfo[4]);
-   if ((p1==o2)&&(!p1c)&&(!o2c))
-      resultSize=min(resultSize,joinInfo[5]);
-   if ((o1==s2)&&(!o1c)&&(!s2c))
-      resultSize=min(resultSize,joinInfo[6]);
-   if ((o1==p2)&&(!o1c)&&(!p2c))
-      resultSize=min(resultSize,joinInfo[7]);
-   if ((o1==o2)&&(!o1c)&&(!o2c))
-      resultSize=min(resultSize,joinInfo[8]);
+   double resultSize=crossCard;
+   if ((s1==s2)&&(!s1c)&&(!s2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[0]));
+      if (p1c&&o1c) resultSize=min(resultSize,card2);
+      if (p2c&&o2c) resultSize=min(resultSize,card1);
+   }
+   if ((s1==p2)&&(!s1c)&&(!p2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[1]));
+      if (p1c&&o1c) resultSize=min(resultSize,card2);
+      if (s2c&&o2c) resultSize=min(resultSize,card1);
+   }
+   if ((s1==o2)&&(!s1c)&&(!o2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[2]));
+      if (p1c&&o1c) resultSize=min(resultSize,card2);
+      if (s2c&&p2c) resultSize=min(resultSize,card1);
+   }
+   if ((p1==s2)&&(!p1c)&&(!s2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[3]));
+      if (s1c&&o1c) resultSize=min(resultSize,card2);
+      if (p2c&&o2c) resultSize=min(resultSize,card1);
+   }
+   if ((p1==p2)&&(!p1c)&&(!p2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[4]));
+      if (s1c&&o1c) resultSize=min(resultSize,card2);
+      if (s2c&&o2c) resultSize=min(resultSize,card1);
+   }
+   if ((p1==o2)&&(!p1c)&&(!o2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[5]));
+      if (s1c&&o1c) resultSize=min(resultSize,card2);
+      if (s2c&&p2c) resultSize=min(resultSize,card1);
+   }
+   if ((o1==s2)&&(!o1c)&&(!s2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[6]));
+      if (s1c&&p1c) resultSize=min(resultSize,card2);
+      if (p2c&&o2c) resultSize=min(resultSize,card1);
+   }
+   if ((o1==p2)&&(!o1c)&&(!p2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[7]));
+      if (s1c&&p1c) resultSize=min(resultSize,card2);
+      if (s2c&&o2c) resultSize=min(resultSize,card1);
+   }
+   if ((o1==o2)&&(!o1c)&&(!o2c)) {
+      resultSize=min(resultSize,static_cast<double>(joinInfo[8]));
+      if (s1c&&p1c) resultSize=min(resultSize,card2);
+      if (s2c&&p2c) resultSize=min(resultSize,card1);
+   }
 
    // Derive selectivity
-   return static_cast<double>(resultSize)/static_cast<double>(crossCard);
+   return resultSize/crossCard;
 }
 //---------------------------------------------------------------------------
