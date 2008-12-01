@@ -48,21 +48,46 @@ void PlanGen::addPlan(Problem* problem,Plan* plan)
    // Add a plan to a subproblem
 {
    // Check for dominance
-   Plan* last=0;
-   for (Plan* iter=problem->plans,*next;iter;iter=next) {
-      next=iter->next;
-      if (iter->ordering==plan->ordering) {
+   if (~plan->ordering) {
+      Plan* last=0;
+      for (Plan* iter=problem->plans,*next;iter;iter=next) {
+         next=iter->next;
+         if (iter->ordering==plan->ordering) {
+            // Dominated by existing plan?
+            if (iter->costs<=plan->costs) {
+               plans.free(plan);
+               return;
+            }
+            // No, remove the existing plan
+            if (last)
+               last->next=iter->next; else
+               problem->plans=iter->next;
+            plans.free(iter);
+         } else if ((!~iter->ordering)&&(iter->costs>=plan->costs)) {
+            // Dominated by new plan
+            if (last)
+               last->next=iter->next; else
+               problem->plans=iter->next;
+            plans.free(iter);
+         } else last=iter;
+      }
+   } else {
+      Plan* last=0;
+      for (Plan* iter=problem->plans,*next;iter;iter=next) {
+         next=iter->next;
          // Dominated by existing plan?
          if (iter->costs<=plan->costs) {
             plans.free(plan);
             return;
          }
-         // No, remove the existing plan
-         if (last)
-            last->next=iter->next; else
-            problem->plans=iter->next;
-         plans.free(iter);
-      } else last=iter;
+         // Dominates existing plan?
+         if (iter->ordering==plan->ordering) {
+            if (last)
+               last->next=iter->next; else
+               problem->plans=iter->next;
+            plans.free(iter);
+         } else last=iter;
+      }
    }
 
    // Add the plan to the problem set
