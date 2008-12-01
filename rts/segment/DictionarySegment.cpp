@@ -143,3 +143,12 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    return true;
 }
 //---------------------------------------------------------------------------
+string DictionarySegment::mapId(unsigned id)
+   // Lookup a string for a given id
+{
+   const char* start,*stop;
+   if (lookupById(id,start,stop))
+      return string(start,stop); else
+      return string();
+}
+//---------------------------------------------------------------------------
