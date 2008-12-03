@@ -1,0 +1,6 @@
+src_tools_statisticstest:=			\
+	tools/statisticstest/statisticstest.cpp
+
+$(PREFIX)statisticstest$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_statisticstest:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+
