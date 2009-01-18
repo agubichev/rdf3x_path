@@ -57,12 +57,14 @@ bool MemoryMappedFile::open(const char* name)
    #ifdef CONFIG_WINDOWS
       HANDLE file=CreateFile(name,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);
       if (file==INVALID_HANDLE_VALUE) return false;
-      DWORD size=GetFileSize(file,0);
-      HANDLE mapping=CreateFileMapping(file,0,PAGE_READONLY,0,size,0);
+      DWORD sizeHigh=0;
+      DWORD size=GetFileSize(file,&sizeHigh);
+      SIZE_T fullSize=(static_cast<SIZE_T>(sizeHigh)<<(8*sizeof(DWORD)))|static_cast<SIZE_T>(size);
+      HANDLE mapping=CreateFileMapping(file,0,PAGE_READONLY,sizeHigh,size,0);
       if (mapping==INVALID_HANDLE_VALUE) { CloseHandle(file); return false; }
-      begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ,0,0,size));
+      begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ,0,0,fullSize));
       if (!begin) { CloseHandle(mapping); CloseHandle(file); return false; }
-      end=begin+size;
+      end=begin+fullSize;
    #else
       int file=::open(name,O_RDONLY);
       if (file<0) return false;
