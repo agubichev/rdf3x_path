@@ -1,7 +1,8 @@
 src_infra_osdep:=				\
+	infra/osdep/Event.cpp			\
+	infra/osdep/GrowableMappedFile.cpp	\
 	infra/osdep/MemoryMappedFile.cpp	\
-	infra/osdep/Timestamp.cpp		\
-	infra/osdep/Thread.cpp			\
 	infra/osdep/Mutex.cpp			\
-	infra/osdep/Event.cpp
+	infra/osdep/Thread.cpp			\
+	infra/osdep/Timestamp.cpp		\
 

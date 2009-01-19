@@ -19,4 +19,5 @@ class Thread
    /// Activate the next thread
    static void yield();
 };
+//---------------------------------------------------------------------------
 #endif
