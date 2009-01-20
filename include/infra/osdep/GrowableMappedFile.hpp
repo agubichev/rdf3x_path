@@ -15,7 +15,7 @@
 /// mapped into multiple chunks.
 class GrowableMappedFile
 {
-   private:
+   public:
    /// Typedef for offsets and sizes
    typedef unsigned long ofs_t;
 
@@ -38,6 +38,8 @@ class GrowableMappedFile
    bool create(const char* name);
    /// Close
    void close();
+   /// Flush the file
+   bool flush();
 
    /// Grow the underlying file physically
    bool growPhysically(ofs_t increment);

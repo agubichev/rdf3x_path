@@ -155,6 +155,24 @@ void GrowableMappedFile::close()
    }
 }
 //----------------------------------------------------------------------------
+bool GrowableMappedFile::flush()
+   // Flush the file
+{
+   if (!data) return false;
+
+#ifdef CONFIG_WINDOWS
+   for (vector<pair<HANDLE,char*> >::const_iterator iter=data->mappings.begin(),limit=data->mappings.end();iter!=limit;++iter)
+      if (!FlushViewOfFile((*iter).second,0))
+         return false;
+   return FlushFileBuffers(data->file);
+#else
+   for (vector<pair<char*,char*> >::const_iterator iter=data->mappings.begin(),limit=data->mappings.end();iter!=limit;++iter)
+      if (msync((*iter).first,(*iter).second-(*iter).first,MS_SYNC)!=0)
+         return false;
+   return fdatasync(data->file)==0;
+#endif
+}
+//----------------------------------------------------------------------------
 bool GrowableMappedFile::growPhysically(ofs_t increment)
    // Grow the underlying file physically
 {
