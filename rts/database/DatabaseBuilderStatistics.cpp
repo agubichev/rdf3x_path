@@ -65,6 +65,9 @@ static ReorderedTriple buildTriple(const FactsSegment::Scan& scan)
 static unsigned findJoins(Database& db,Database::DataOrder order,vector<pair<unsigned,unsigned> >& counts)
    // Find the number of join partners
 {
+   if (counts.empty())
+      return 0;
+
    unsigned result=0;
    unsigned start=(*counts.begin()).first;
 
