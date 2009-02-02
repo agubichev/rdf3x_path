@@ -395,7 +395,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
             group.unions.insert(group.unions.end(),newGroup.unions.begin(),newGroup.unions.end());
          }
          lexer.unget(token);
-      } else if ((token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
+      } else if ((token==SPARQLLexer::IRI)||(token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
          // Distinguish filter conditions
          if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("filter"))) {
             map<string,unsigned> localVars;
