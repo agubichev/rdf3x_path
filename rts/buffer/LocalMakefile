@@ -1,3 +1,4 @@
-src_rts_buffer:=	\
+src_rts_buffer:=			\
+	rts/buffer/BufferFrame.cpp	\
 	rts/buffer/BufferManager.cpp
 
