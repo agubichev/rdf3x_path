@@ -77,7 +77,7 @@ void AggregatedFactsSegment::prefetchRange(unsigned start1,unsigned start2,unsig
       BufferReference ref;
       if (!lookup(start1,start2,ref))
          startPage=tableStart+pages-1; else
-         startPage=getPageId(ref);
+         startPage=ref.pageNo();
    }
 
    // Find the stop page
@@ -90,7 +90,7 @@ void AggregatedFactsSegment::prefetchRange(unsigned start1,unsigned start2,unsig
       BufferReference ref;
       if (!lookup(stop1,stop2,ref))
          stopPage=tableStart+pages-1; else
-         stopPage=getPageId(ref);
+         stopPage=ref.pageNo();
    }
 
    // And prefetch

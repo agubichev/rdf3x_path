@@ -25,19 +25,13 @@ Segment::~Segment()
 BufferRequest Segment::readShared(unsigned page) const
    // Read a specific page
 {
-   return BufferRequest(bufferManager,partition,page,true);
+   return BufferRequest(bufferManager,partition,page);
 }
 //---------------------------------------------------------------------------
-BufferRequest Segment::readExclusive(unsigned page)
+BufferRequestExclusive Segment::readExclusive(unsigned page)
    // Read a specific page
 {
-   return BufferRequest(bufferManager,partition,page,false);
-}
-//---------------------------------------------------------------------------
-unsigned Segment::getPageId(const BufferReference& ref)
-   /// Get the page ID
-{
-   return ref.pageNo();
+   return BufferRequestExclusive(bufferManager,partition,page);
 }
 //---------------------------------------------------------------------------
 void Segment::prefetchPages(unsigned start,unsigned stop)

@@ -12,7 +12,7 @@
 //---------------------------------------------------------------------------
 class BufferManager;
 class BufferRequest;
-class BufferReference;
+class BufferRequestExclusive;
 class Partition;
 //---------------------------------------------------------------------------
 /// Base class for all segments
@@ -31,9 +31,7 @@ class Segment
    /// Read a specific page
    BufferRequest readShared(unsigned page) const;
    /// Read a specific page
-   BufferRequest readExclusive(unsigned page);
-   /// Get the page ID
-   unsigned getPageId(const BufferReference& ref);
+   BufferRequestExclusive readExclusive(unsigned page);
    /// Prefetch a range of patches
    void prefetchPages(unsigned start,unsigned stop);
 

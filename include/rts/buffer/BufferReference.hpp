@@ -23,11 +23,37 @@ struct BufferRequest
    Partition& partition;
    /// The requested page
    unsigned page;
-   /// Shared access?
-   bool shared;
 
    /// Constructor
-   BufferRequest(BufferManager& bufferManager,Partition& partition,unsigned page,bool shared) : bufferManager(bufferManager),partition(partition),page(page),shared(shared) {}
+   BufferRequest(BufferManager& bufferManager,Partition& partition,unsigned page) : bufferManager(bufferManager),partition(partition),page(page) {}
+};
+//---------------------------------------------------------------------------
+/// A request to exclusively access a buffer page. Used by segments to "return" references.
+struct BufferRequestExclusive
+{
+   /// The buffer manager
+   BufferManager& bufferManager;
+   /// The partition
+   Partition& partition;
+   /// The requested page
+   unsigned page;
+
+   /// Constructor
+   BufferRequestExclusive(BufferManager& bufferManager,Partition& partition,unsigned page) : bufferManager(bufferManager),partition(partition),page(page) {}
+};
+//---------------------------------------------------------------------------
+/// A request to modify a buffer page. Used by segments to "return" references.
+struct BufferRequestModified
+{
+   /// The buffer manager
+   BufferManager& bufferManager;
+   /// The partition
+   Partition& partition;
+   /// The requested page
+   unsigned page;
+
+   /// Constructor
+   BufferRequestModified(BufferManager& bufferManager,Partition& partition,unsigned page) : bufferManager(bufferManager),partition(partition),page(page) {}
 };
 //---------------------------------------------------------------------------
 /// A reference to a page in the database buffer.
@@ -42,14 +68,11 @@ class BufferReference
 
    private:
    /// The buffer frame
-   BufferFrame* frame;
+   const BufferFrame* frame;
 
    /// No copying of references
    BufferReference(const BufferReference&);
    void operator=(const BufferReference&);
-
-   /// The buffer manager can change a reference
-   friend class BufferManager;
 
    public:
    /// Constructor
@@ -66,6 +89,74 @@ class BufferReference
 
    /// Access the page
    const void* getPage() const;
+   /// Get the page number
+   unsigned pageNo() const;
+};
+//---------------------------------------------------------------------------
+class BufferReferenceModified;
+//---------------------------------------------------------------------------
+/// A reference to an exclusively locked page in the database buffer.
+/// The page remains accessible during the lifetime of the BufferReference object.
+class BufferReferenceExclusive
+{
+   private:
+   /// The buffer frame
+   const BufferFrame* frame;
+
+   /// No copying of references
+   BufferReferenceExclusive(const BufferReferenceExclusive&);
+   void operator=(const BufferReferenceExclusive&);
+
+   friend class BufferReferenceModified;
+
+   public:
+   /// Constructor
+   BufferReferenceExclusive();
+   /// Constructor from a request
+   BufferReferenceExclusive(const BufferRequestExclusive& request);
+   /// Destructor
+   ~BufferReferenceExclusive();
+
+   /// Remap the reference to a different page
+   BufferReferenceExclusive& operator=(const BufferRequestExclusive& request);
+   /// Reset the reference
+   void reset();
+
+   /// Access the page
+   const void* getPage() const;
+   /// Get the page number
+   unsigned pageNo() const;
+};
+//---------------------------------------------------------------------------
+/// A reference to an exclusively locked and modified page in the database buffer.
+/// The page remains accessible during the lifetime of the BufferReference object.
+class BufferReferenceModified
+{
+   private:
+   /// The buffer frame
+   BufferFrame* frame;
+
+   /// No copying of references
+   BufferReferenceModified(const BufferReferenceModified&);
+   void operator=(const BufferReferenceModified&);
+
+   public:
+   /// Constructor
+   BufferReferenceModified();
+   /// Constructor from a request
+   BufferReferenceModified(const BufferRequestModified& request);
+   /// Destructor. unfix _must_ be called before the destructor!
+   ~BufferReferenceModified();
+
+   /// Remap the reference to a different page
+   BufferReferenceModified& operator=(const BufferRequestModified& request);
+   /// Modify an already exclusively locked page. Transfers ownership of the page!
+   void modify(BufferReferenceExclusive& ref);
+   /// Unfix without logging. Logging is done by Transaction::unfix
+   void unfixWithoutRecovery();
+
+   /// Access the page
+   void* getPage() const;
    /// Get the page number
    unsigned pageNo() const;
 };

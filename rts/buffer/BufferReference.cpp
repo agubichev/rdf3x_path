@@ -1,5 +1,6 @@
 #include "rts/buffer/BufferReference.hpp"
 #include "rts/buffer/BufferManager.hpp"
+#include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -34,14 +35,7 @@ BufferReference& BufferReference::operator=(const BufferRequest& request)
 {
    reset();
 
-   if (request.shared) {
-      // XXX avoid the const_cast by splitting BufferReference
-      frame=const_cast<BufferFrame*>(request.bufferManager.readPageShared(request.partition,request.page));
-   } else {
-      // XXX avoid the const_cast by splitting BufferReference
-      frame=const_cast<BufferFrame*>(request.bufferManager.readPageExclusive(request.partition,request.page));
-   }
-
+   frame=request.bufferManager.readPageShared(request.partition,request.page);
    return *this;
 }
 //---------------------------------------------------------------------------
@@ -61,6 +55,124 @@ const void* BufferReference::getPage() const
 }
 //---------------------------------------------------------------------------
 unsigned BufferReference::pageNo() const
+   // Get the page number
+{
+   return frame->getPageNo();
+}
+//---------------------------------------------------------------------------
+BufferReferenceExclusive::BufferReferenceExclusive()
+   : frame(0)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+BufferReferenceExclusive::BufferReferenceExclusive(const BufferRequestExclusive& request)
+   : frame(0)
+   // Constructor from a request
+{
+   operator=(request);
+}
+//---------------------------------------------------------------------------
+BufferReferenceExclusive::~BufferReferenceExclusive()
+   // Destructor
+{
+   reset();
+}
+//---------------------------------------------------------------------------
+BufferReferenceExclusive& BufferReferenceExclusive::operator=(const BufferRequestExclusive& request)
+   // Remap the reference to a different page
+{
+   reset();
+
+   frame=request.bufferManager.readPageExclusive(request.partition,request.page);
+   return *this;
+}
+//---------------------------------------------------------------------------
+void BufferReferenceExclusive::reset()
+   // Reset the reference
+{
+   if (frame) {
+      frame->getBufferManager()->unfixPage(frame);
+      frame=0;
+   }
+}
+//---------------------------------------------------------------------------
+const void* BufferReferenceExclusive::getPage() const
+   // Access the page
+{
+   return frame->pageData();
+}
+//---------------------------------------------------------------------------
+unsigned BufferReferenceExclusive::pageNo() const
+   // Get the page number
+{
+   return frame->getPageNo();
+}
+//---------------------------------------------------------------------------
+BufferReferenceModified::BufferReferenceModified()
+   : frame(0)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+BufferReferenceModified::BufferReferenceModified(const BufferRequestModified& request)
+   : frame(0)
+   // Constructor from a request
+{
+   operator=(request);
+}
+//---------------------------------------------------------------------------
+BufferReferenceModified::~BufferReferenceModified()
+   // Destructor
+{
+   // The page _must_ be unfixed before the constructor is called!
+   assert(!frame);
+}
+//---------------------------------------------------------------------------
+BufferReferenceModified& BufferReferenceModified::operator=(const BufferRequestModified& request)
+   // Remap the reference to a different page
+{
+   // The page _must_ be unfixed before assigned a new page!
+   assert(!frame);
+
+   frame=request.bufferManager.readPageExclusive(request.partition,request.page)->update();
+   return *this;
+}
+//---------------------------------------------------------------------------
+void BufferReferenceModified::modify(BufferReferenceExclusive& ref)
+   // Modify an already exclusively locked page. Transfers ownership of the page!
+{
+   // The page _must_ be unfixed before assigned a new page!
+   assert(!frame);
+
+   // Empty reference?
+   if (!ref.frame)
+      return;
+
+   // Transfer ownership
+   frame=ref.frame->update();
+   ref.frame=0;
+}
+//---------------------------------------------------------------------------
+void BufferReferenceModified::unfixWithoutRecovery()
+   // Unfix without logging. Logging is done by Transaction::unfix
+{
+   // Empty reference?
+   if (!frame)
+      return;
+
+   // Unfix it
+   frame->getBufferManager()->unfixDirtyPageWithoutRecovery(frame);
+   frame=0;
+}
+//---------------------------------------------------------------------------
+void* BufferReferenceModified::getPage() const
+   // Access the page
+{
+   return frame->pageData();
+}
+//---------------------------------------------------------------------------
+unsigned BufferReferenceModified::pageNo() const
    // Get the page number
 {
    return frame->getPageNo();

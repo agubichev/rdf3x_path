@@ -62,7 +62,7 @@ bool Database::open(const char* fileName)
    partition=new FilePartition();
    if (partition->open(fileName)) {
       // Read the directory page
-      BufferReference directory(BufferRequest(*bufferManager,*partition,0,false));
+      BufferReference directory(BufferRequest(*bufferManager,*partition,0));
       const unsigned char* page=static_cast<const unsigned char*>(directory.getPage());
 
       // Check the header
