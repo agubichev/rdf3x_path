@@ -50,7 +50,7 @@ struct SortByValue2 { bool operator()(const ReorderedTriple& a,const ReorderedTr
 struct SortByValue3 { bool operator()(const ReorderedTriple& a,const ReorderedTriple& b) const { return a.value3<b.value3; } };
 //---------------------------------------------------------------------------
 /// Number of buckets per page
-static const unsigned bucketsPerPage = (BufferManager::pageSize-4) / sizeof(Bucket);
+static const unsigned bucketsPerPage = (BufferReference::pageSize-4) / sizeof(Bucket);
 //---------------------------------------------------------------------------
 static ReorderedTriple buildTriple(const FactsSegment::Scan& scan)
    // Extract the current triple
@@ -308,7 +308,7 @@ static void buildStatisticsPage(Database& db,Database::DataOrder order,unsigned 
    }
 
    // Padding
-   for (unsigned char* limit=page+BufferManager::pageSize;writer<limit;++writer)
+   for (unsigned char* limit=page+BufferReference::pageSize;writer<limit;++writer)
       *writer=0;
 }
 //---------------------------------------------------------------------------

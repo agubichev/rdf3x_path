@@ -1,5 +1,4 @@
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
-#include "rts/buffer/BufferManager.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -17,8 +16,8 @@ static const unsigned headerSize = 4;
 static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot); }
 static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot+4); }
 //---------------------------------------------------------------------------
-FullyAggregatedFactsSegment::FullyAggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1)
-   : Segment(bufferManager),tableStart(tableStart),indexRoot(indexRoot),
+FullyAggregatedFactsSegment::FullyAggregatedFactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1)
+   : Segment(bufferManager,partition),tableStart(tableStart),indexRoot(indexRoot),
      pages(pages),groups1(groups1)
    // Constructor
 {
@@ -155,7 +154,7 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
 
    // Decompress the first triple
    const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
-   const unsigned char* reader=page+headerSize,*limit=page+BufferManager::pageSize;
+   const unsigned char* reader=page+headerSize,*limit=page+BufferReference::pageSize;
    unsigned value1=readUint32Aligned(reader); reader+=4;
    unsigned count=readUint32Aligned(reader); reader+=4;
    Triple* writer=triples;

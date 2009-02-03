@@ -1,5 +1,5 @@
 #include "rts/segment/DictionarySegment.hpp"
-#include "rts/buffer/BufferManager.hpp"
+#include "rts/buffer/BufferReference.hpp"
 #include "infra/util/Hash.hpp"
 #include <cstring>
 //---------------------------------------------------------------------------
@@ -20,12 +20,12 @@ static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { 
 static inline unsigned readLeafHash(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+8+8*slot); }
 static inline unsigned readLeafPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+8+8*slot+4); }
 //---------------------------------------------------------------------------
-DictionarySegment::DictionarySegment(BufferManager& bufferManager,unsigned tableStart,unsigned mappingStart,unsigned indexRoot)
-   : Segment(bufferManager),tableStart(tableStart),mappingStart(mappingStart),indexRoot(indexRoot)
+DictionarySegment::DictionarySegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned mappingStart,unsigned indexRoot)
+   : Segment(bufferManager,partition),tableStart(tableStart),mappingStart(mappingStart),indexRoot(indexRoot)
    // Constructor
 {
    // Prefetch the predicates, they will most likely be needed
-   bufferManager.prefetchPages(mappingStart,mappingStart+5);
+   // XXX bufferManager.prefetchPages(partition,mappingStart,mappingStart+5);
 }
 //---------------------------------------------------------------------------
 bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,unsigned hash,unsigned& id)
@@ -36,7 +36,7 @@ bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,unsigned
    unsigned count=1000+readUint32Aligned(page+4),pos=8;
 
    for (unsigned index=0;index<count;index++) {
-      if (pos+12>BufferManager::pageSize)
+      if (pos+12>BufferReference::pageSize)
          break;
       unsigned len=readUint32(page+pos+8);
       if ((readUint32(page+pos+4)==hash)&&(len==text.length())) {
@@ -122,7 +122,7 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    // Lookup a string for a given id
 {
    // Lookup the direct mapping entry
-   const unsigned entriesPerPage = BufferManager::pageSize/8;
+   const unsigned entriesPerPage = BufferReference::pageSize/8;
    BufferReference ref(readShared(mappingStart+(id/entriesPerPage)));
    unsigned slot=id%entriesPerPage;
    unsigned pageNo=readUint32(static_cast<const unsigned char*>(ref.getPage())+8*slot);

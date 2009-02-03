@@ -27,7 +27,7 @@ class PathStatisticsSegment : public Segment
 
    public:
    /// Constructor
-   PathStatisticsSegment(BufferManager& bufferManager,unsigned statisticsPage);
+   PathStatisticsSegment(BufferManager& bufferManager,Partition& partition,unsigned statisticsPage);
 
    /// Lookup frequency (if known)
    bool lookup(const std::vector<unsigned>& path,unsigned& count);

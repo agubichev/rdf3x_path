@@ -10,120 +10,156 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-#include "infra/osdep/MemoryMappedFile.hpp"
+#include "rts/partition/Partition.hpp"
+#include "infra/osdep/Mutex.hpp"
+#include "infra/osdep/Event.hpp"
+#include "infra/osdep/Latch.hpp"
+#include <map>
 //---------------------------------------------------------------------------
 class BufferManager;
+class Partition;
+class LogManager;
 //---------------------------------------------------------------------------
-/// A request to access a buffer page. Used by segments to "return" references.
-struct BufferRequest
-{
-   /// The buffer manager
-   BufferManager& bufferManager;
-   /// The requested page
-   unsigned page;
-   /// Shared access?
-   bool shared;
-
-   /// Constructor
-   BufferRequest(BufferManager& bufferManager,unsigned page,bool shared) : bufferManager(bufferManager),page(page),shared(shared) {}
-};
-//---------------------------------------------------------------------------
-/// A reference to a page in the database buffer.
-/// The page remains accessible during the lifetime of the BufferReference object.
-class BufferReference
+/// A buffer frame. References some part of the database
+class BufferFrame
 {
    private:
-   /// The page reference
-   const void* page;
+   /// Possible states
+   enum State { Empty, Read, Write, WriteDirty };
 
-   /// No copying of references
-   BufferReference(const BufferReference&);
-   void operator=(const BufferReference&);
+   /// The buffer manager
+   BufferManager* buffer;
+   /// The lack
+   Latch latch;
+   /// Does someone currently try to lock the frame?
+   unsigned intentionLock;
+   /// The associated data
+   void* data;
+   /// The partition
+   Partition* partition;
+   /// Page info used by the partition
+   Partition::PageInfo pageInfo;
+   /// The page
+   unsigned pageNo;
+   /// The log sequence number
+   uint64_t lsn;
+   /// The state
+   State state;
+   /// The next released frame
+   BufferFrame* next;
 
-   /// The buffer manager can change a reference
+   /// Grant the buffer manager access
    friend class BufferManager;
+   /// The transaction has to change the LSN
+   friend class Transaction;
+
+   BufferFrame(const BufferFrame&);
+   void operator=(const BufferFrame&);
 
    public:
    /// Constructor
-   BufferReference() : page(0) {}
-   /// Constructor from a request
-   inline BufferReference(const BufferRequest& request);
-   /// Note: Currently there is no destructor as all pages are accessible all the time. This might change!
+   BufferFrame();
 
-   /// Remap the reference to a different page
-   inline BufferReference& operator=(const BufferRequest& request);
-   /// Reset the reference
-   void reset() { page=0; }
+   /// The associated buffer manager
+   BufferManager* getBufferManager() const { return buffer; }
+   /// The page data
+   const void* pageData() const { return data; }
+   /// The page data
+   void* pageData() { return data; }
+   /// The page number
+   unsigned getPageNo() const { return pageNo; }
+   /// The paritition
+   Partition* getPartition() const { return partition; }
+   /// Mark as modified
+   BufferFrame* update() const;
 
-   /// Access the page
-   const void* getPage() const { return page; }
+   /// The LSN
+   uint64_t getLSN() const { return lsn; }
 };
 //---------------------------------------------------------------------------
 /// A database buffer backed by a file
 class BufferManager
 {
-   public:
-   /// The size of a page
-   static const unsigned pageSize = 16384;
-   /// A page buffer
-   struct PageBuffer { char data[pageSize]; };
 
    private:
-   /// The file
-   MemoryMappedFile file;
+   /// A page ID
+   struct PageID {
+      /// The partition
+      Partition* partition;
+      /// The page
+      unsigned pageNo;
+
+      /// Constructor
+      PageID(Partition* partition,unsigned pageNo) : partition(partition),pageNo(pageNo) {}
+
+      /// Compare
+      bool operator==(const PageID& i) const { return (partition==i.partition)&&(pageNo==i.pageNo); }
+      /// Compare
+      bool operator<(const PageID& i) const { return (partition<i.partition)||((partition==i.partition)&&(pageNo<i.pageNo)); }
+   };
+
+   /// Maximum number of pages in buffer (hint)
+   const unsigned bufferSize;
+   /// Limit when starting to write back (hint)
+   const unsigned dirtLimit;
+
+   /// Lock. Should be held as shortly as possible
+   Mutex mutex;
+   /// The frame directory
+   std::map<PageID,BufferFrame*> directory;
+   /// All released buffer frames
+   BufferFrame* releasedFrames;
+   /// Number of dirty pages (estimate)
+   unsigned dirtCounter;
+   /// Notification for the writer thread
+   Event flusherNotify;
+   /// Notification when writing is done
+   Event flusherDone;
+   /// Notification when the writer thread stopped
+   Event flusherDeadNotify;
+   /// Flags to control the writer
+   bool flusherDie,flusherDead;
+   /// The log file (if any)
+   LogManager* logManager;
+   /// Enable checkpoinds
+   bool checkpointsEnabled;
+   /// Pages since the last checkpoint
+   unsigned pagesSinceLastCheckpoint;
+   /// Simulate a crash? Only for testing purposes!
+   bool doCrash;
+
+   /// Find or create a buffer frame
+   BufferFrame* findBufferFrame(Partition* partition,unsigned pageNo,bool exclusive);
+
+   /// Write dirty pages
+   bool doFlush();
+   /// Start the writer
+   static void startFlusher(void* ptr);
 
    BufferManager(const BufferManager&);
    void operator=(const BufferManager&);
 
    public:
    /// Constructor
-   BufferManager();
+   BufferManager(unsigned bufferSizeHintInBytes);
    /// BufferManager
    ~BufferManager();
 
-   /// Open the file
-   bool open(const char* fileName);
-   /// Shutdown the buffer and close the file
-   void close();
-
-   /// The number of pages
-   unsigned getPageCount() const { return (file.getEnd()-file.getBegin())/pageSize; }
-   /// Access a page
-   void readShared(BufferReference& ref,unsigned page) { ref.page=reinterpret_cast<const PageBuffer*>(file.getBegin())+page; }
-   /// Access a page
-   void readExclusive(BufferReference& ref,unsigned page) { ref.page=reinterpret_cast<const PageBuffer*>(file.getBegin())+page; }
    /// Prefetch a number of pages
-   void prefetchPages(unsigned start,unsigned stop);
+   void prefetchPages(Partition& partition,unsigned start,unsigned stop);
 
-   /// Get the ID of a reference
-   unsigned getPageId(const BufferReference& ref) const { return static_cast<const PageBuffer*>(ref.page)-reinterpret_cast<const PageBuffer*>(file.getBegin()); }
+   /// Prepare a page for writing without reading it. Page is exclusive but not modifed
+   BufferFrame* buildPage(Partition& partition,unsigned pageNo);
+   /// Read a page. Page is shared and not modified
+   const BufferFrame* readPageShared(Partition& partition,unsigned pageNo);
+   /// Read a page. Page is exclusive and not modifed
+   const BufferFrame* readPageExclusive(Partition& partition,unsigned pageNo);
+   /// Read a page. Page is exclusive and modified
+   BufferFrame* writePageExclusive(Partition& partition,unsigned pageNo);
+   // Release an (unmodified) page
+   void unfixPage(const BufferFrame* cframe);
+   /// Release a dirty page without recovery information. Recovery is handled by Transaction::unfixDirtyPage
+   void unfixDirtyPageWithoutRecovery(BufferFrame* frame);
 };
 //---------------------------------------------------------------------------
-BufferReference::BufferReference(const BufferRequest& request)
-   : page(0)
-   // Constructor from a request
-{
-#ifdef SUPPORT_READWRITE
-   if (request.shared)
-      request.bufferManager.readShared(*this,request.page); else
-      request.bufferManager.readExclusive(*this,request.page);
-#else
-   request.bufferManager.readShared(*this,request.page);
 #endif
-}
-//---------------------------------------------------------------------------
-BufferReference& BufferReference::operator=(const BufferRequest& request)
-   // Remap the reference to a different page
-{
-#ifdef SUPPORT_READWRITE
-   if (request.shared)
-      request.bufferManager.readShared(*this,request.page); else
-      request.bufferManager.readExclusive(*this,request.page);
-#else
-   request.bufferManager.readShared(*this,request.page);
-#endif
-   return *this;
-}
-//---------------------------------------------------------------------------
-#endif
-

@@ -1,5 +1,5 @@
 #include "rts/partition/FilePartition.hpp"
-#include "rts/buffer/BufferManager.hpp"
+#include "rts/buffer/BufferReference.hpp"
 #include <cassert>
 #include <cstring>
 //---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ using namespace std;
 /// Auxiliary data buffer for updates
 struct FilePartition::AuxBuffer {
    /// The copied page
-   char page[BufferManager::pageSize];
+   char page[BufferReference::pageSize];
    /// The next buffer
    AuxBuffer* next;
 };
@@ -67,7 +67,7 @@ bool FilePartition::open(const char* name)
 
    // Remember the mapping if any
    if (begin!=end) {
-      size=mappedSize=(end-begin)/BufferManager::pageSize;
+      size=mappedSize=(end-begin)/BufferReference::pageSize;
       mappings[0]=begin;
    } else size=mappedSize=0;
 
@@ -111,7 +111,7 @@ const void* FilePartition::readPage(unsigned pageNo,PageInfo& info)
       // Do we have it mapped?
       if (pageNo<mappedSize) {
          map<unsigned,void*>::const_iterator iter=mappings.upper_bound(pageNo); --iter;
-         BufferManager::PageBuffer* mapPtr=static_cast<BufferManager::PageBuffer*>((*iter).second);
+         BufferReference::PageBuffer* mapPtr=static_cast<BufferReference::PageBuffer*>((*iter).second);
          unsigned ofs=pageNo-(*iter).first;
          info.ptr=mapPtr+ofs;
          info.aux=0;
@@ -123,9 +123,9 @@ const void* FilePartition::readPage(unsigned pageNo,PageInfo& info)
       // Is it worthwhile to increase the mapping?
       if ((size-mappedSize)>=mappingThreshold) {
          char* begin,*end;
-         if (!file.growMapping(static_cast<GrowableMappedFile::ofs_t>(size-mappedSize)*BufferManager::pageSize,begin,end))
+         if (!file.growMapping(static_cast<GrowableMappedFile::ofs_t>(size-mappedSize)*BufferReference::pageSize,begin,end))
             assert(false);
-         BufferManager::PageBuffer* mapPtr=reinterpret_cast<BufferManager::PageBuffer*>(begin);
+         BufferReference::PageBuffer* mapPtr=reinterpret_cast<BufferReference::PageBuffer*>(begin);
          unsigned ofs=pageNo-mappedSize;
          mappings[mappedSize]=begin;
          mappedSize=size;
@@ -144,7 +144,7 @@ const void* FilePartition::readPage(unsigned pageNo,PageInfo& info)
       info.auxInfo=0;
    }
    // Perform the read explicitly
-   if (!file.read(static_cast<GrowableMappedFile::ofs_t>(pageNo)*BufferManager::pageSize,buffer->page,BufferManager::pageSize))
+   if (!file.read(static_cast<GrowableMappedFile::ofs_t>(pageNo)*BufferReference::pageSize,buffer->page,BufferReference::pageSize))
       assert(false);
    return info.ptr;
 }
@@ -196,7 +196,7 @@ void* FilePartition::writeReadPage(PageInfo& info)
    if (!info.aux) {
       AuxBuffer* buffer;
       { auto_lock lock(mutex); buffer=allocAuxBuffer(); }
-      memcpy(buffer->page,info.ptr,BufferManager::pageSize);
+      memcpy(buffer->page,info.ptr,BufferReference::pageSize);
       info.ptr=buffer->page;
       info.aux=buffer;
    }
@@ -213,7 +213,7 @@ bool FilePartition::flushWrittenPage(PageInfo& info)
       // Do we have it mapped?
       if (info.pageNo<mappedSize) {
          map<unsigned,void*>::const_iterator iter=mappings.upper_bound(info.pageNo); --iter;
-         BufferManager::PageBuffer* mapPtr=static_cast<BufferManager::PageBuffer*>((*iter).second);
+         BufferReference::PageBuffer* mapPtr=static_cast<BufferReference::PageBuffer*>((*iter).second);
          unsigned ofs=info.pageNo-(*iter).first;
          target=mapPtr+ofs;
       }
@@ -221,9 +221,9 @@ bool FilePartition::flushWrittenPage(PageInfo& info)
 
    // Store
    if (target) {
-      memcpy(target,info.ptr,BufferManager::pageSize);
+      memcpy(target,info.ptr,BufferReference::pageSize);
    } else {
-      if (!file.write(static_cast<GrowableMappedFile::ofs_t>(info.pageNo)*BufferManager::pageSize,info.ptr,BufferManager::pageSize))
+      if (!file.write(static_cast<GrowableMappedFile::ofs_t>(info.pageNo)*BufferReference::pageSize,info.ptr,BufferReference::pageSize))
          return false;
    }
 

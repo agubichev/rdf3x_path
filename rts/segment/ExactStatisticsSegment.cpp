@@ -17,8 +17,8 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-ExactStatisticsSegment::ExactStatisticsSegment(BufferManager& bufferManager,Database& db,unsigned c2ps,unsigned c2po,unsigned c2so,unsigned c1s,unsigned c1p,unsigned c1o,unsigned long long c0ss,unsigned long long c0sp,unsigned long long c0so,unsigned long long c0ps,unsigned long long c0pp,unsigned long long c0po,unsigned long long c0os,unsigned long long c0op,unsigned long long c0oo)
-   : Segment(bufferManager),db(db),c2ps(c2ps),c2po(c2po),c2so(c2so),c1s(c1s),c1p(c1p),c1o(c1o),c0ss(c0ss),c0sp(c0sp),c0so(c0so),c0ps(c0ps),c0pp(c0pp),c0po(c0po),c0os(c0os),c0op(c0op),c0oo(c0oo)
+ExactStatisticsSegment::ExactStatisticsSegment(BufferManager& bufferManager,Partition& partition,Database& db,unsigned c2ps,unsigned c2po,unsigned c2so,unsigned c1s,unsigned c1p,unsigned c1o,unsigned long long c0ss,unsigned long long c0sp,unsigned long long c0so,unsigned long long c0ps,unsigned long long c0pp,unsigned long long c0po,unsigned long long c0os,unsigned long long c0op,unsigned long long c0oo)
+   : Segment(bufferManager,partition),db(db),c2ps(c2ps),c2po(c2po),c2so(c2so),c1s(c1s),c1p(c1p),c1o(c1o),c0ss(c0ss),c0sp(c0sp),c0so(c0so),c0ps(c0ps),c0pp(c0pp),c0po(c0po),c0os(c0os),c0op(c0op),c0oo(c0oo)
    // Constructor
 {
    totalCardinality=db.getFacts(Database::Order_Subject_Predicate_Object).getCardinality();
@@ -135,7 +135,7 @@ bool ExactStatisticsSegment::getJoinInfo2(unsigned root,unsigned value1,unsigned
 
    // Decompress the leaf page
    const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
-   unsigned char buffer[10*BufferManager::pageSize];
+   unsigned char buffer[10*BufferReference::pageSize];
    unsigned compressedLen=Segment::readUint32(page+4);
    fastlz_decompress(page+8,compressedLen,buffer,sizeof(buffer));
 
@@ -227,7 +227,7 @@ bool ExactStatisticsSegment::getJoinInfo1(unsigned root,unsigned value1,unsigned
 
    // Decompress the leaf page
    const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
-   unsigned char buffer[10*BufferManager::pageSize];
+   unsigned char buffer[10*BufferReference::pageSize];
    unsigned compressedLen=Segment::readUint32(page+4);
    fastlz_decompress(page+8,compressedLen,buffer,sizeof(buffer));
 

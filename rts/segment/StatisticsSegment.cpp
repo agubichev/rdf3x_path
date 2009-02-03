@@ -1,5 +1,5 @@
 #include "rts/segment/StatisticsSegment.hpp"
-#include "rts/buffer/BufferManager.hpp"
+#include "rts/buffer/BufferReference.hpp"
 #include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -11,8 +11,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-StatisticsSegment::StatisticsSegment(BufferManager& bufferManager,unsigned statisticsPage)
-   : Segment(bufferManager),statisticsPage(statisticsPage)
+StatisticsSegment::StatisticsSegment(BufferManager& bufferManager,Partition& partition,unsigned statisticsPage)
+   : Segment(bufferManager,partition),statisticsPage(statisticsPage)
    // Constructor
 {
 }

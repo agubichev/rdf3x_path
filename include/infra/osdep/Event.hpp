@@ -12,11 +12,7 @@
 //---------------------------------------------------------------------------
 class Mutex;
 //---------------------------------------------------------------------------
-/// Ergeignis
-/**
-  * Die Klasse ermöglicht es auf Ergenisse zu warten, vergleichbar mit den
-  * condition variables bei pthreads.
-  */
+/// Wait primitive
 class Event
 {
    private:

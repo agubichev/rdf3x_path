@@ -4,6 +4,7 @@
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/FullyAggregatedIndexScan.hpp"
+#include "infra/osdep/MemoryMappedFile.hpp"
 #include "infra/util/fastlz.hpp"
 #include <iostream>
 #include <cassert>
@@ -25,12 +26,12 @@ namespace {
 static void writePage(fstream& out,unsigned page,const void* data)
    // Write a page to the file
 {
-   unsigned long long ofs=static_cast<unsigned long long>(page)*static_cast<unsigned long long>(BufferManager::pageSize);
+   unsigned long long ofs=static_cast<unsigned long long>(page)*static_cast<unsigned long long>(BufferReference::pageSize);
    if (static_cast<unsigned long long>(out.tellp())!=ofs) {
       cout << "internal error: tried to write page " << page << " (ofs " << ofs << ") at position " << out.tellp() << endl;
       throw;
    }
-   out.write(static_cast<const char*>(data),BufferManager::pageSize);
+   out.write(static_cast<const char*>(data),BufferReference::pageSize);
 }
 //---------------------------------------------------------------------------
 /// Output for two-constant statistics
@@ -92,7 +93,7 @@ bool Dumper2::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
       return false;
 
    // Temp space
-   static const unsigned maxSize=10*BufferManager::pageSize;
+   static const unsigned maxSize=10*BufferReference::pageSize;
    unsigned char buffer1[maxSize+32];
    unsigned char buffer2[maxSize+(maxSize/15)];
 
@@ -129,7 +130,7 @@ bool Dumper2::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
 
    // Compress them
    unsigned len=fastlz_compress(buffer1,writer-buffer1,buffer2);
-   if (len>=(BufferManager::pageSize-8))
+   if (len>=(BufferReference::pageSize-8))
       return false;
 
    // And write the page
@@ -142,7 +143,7 @@ bool Dumper2::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
    pageBuffer[6]=(len>>8)&0xFF;
    pageBuffer[7]=(len>>0)&0xFF;
    memcpy(pageBuffer+8,buffer2,len);
-   memset(pageBuffer+8+len,0,BufferManager::pageSize-(8+len));
+   memset(pageBuffer+8+len,0,BufferReference::pageSize-(8+len));
 
    return true;
 }
@@ -151,7 +152,7 @@ void Dumper2::writeSome(bool potentiallyLast)
    /// Write some entries
 {
    // Find the maximum fill size
-   unsigned char pageBuffer[2*BufferManager::pageSize];
+   unsigned char pageBuffer[2*BufferReference::pageSize];
    unsigned l=0,r=count,best=1;
    while (l<r) {
       unsigned m=(l+r)/2;
@@ -246,7 +247,7 @@ bool Dumper1::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
       return false;
 
    // Temp space
-   static const unsigned maxSize=10*BufferManager::pageSize;
+   static const unsigned maxSize=10*BufferReference::pageSize;
    unsigned char buffer1[maxSize+32];
    unsigned char buffer2[maxSize+(maxSize/15)];
 
@@ -285,7 +286,7 @@ bool Dumper1::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
 
    // Compress them
    unsigned len=fastlz_compress(buffer1,writer-buffer1,buffer2);
-   if (len>=(BufferManager::pageSize-8))
+   if (len>=(BufferReference::pageSize-8))
       return false;
 
    // And write the page
@@ -298,7 +299,7 @@ bool Dumper1::writeEntries(unsigned count,unsigned char* pageBuffer,unsigned nex
    pageBuffer[6]=(len>>8)&0xFF;
    pageBuffer[7]=(len>>0)&0xFF;
    memcpy(pageBuffer+8,buffer2,len);
-   memset(pageBuffer+8+len,0,BufferManager::pageSize-(8+len));
+   memset(pageBuffer+8+len,0,BufferReference::pageSize-(8+len));
 
    return true;
 }
@@ -307,7 +308,7 @@ void Dumper1::writeSome(bool potentiallyLast)
    /// Write some entries
 {
    // Find the maximum fill size
-   unsigned char pageBuffer[2*BufferManager::pageSize];
+   unsigned char pageBuffer[2*BufferReference::pageSize];
    unsigned l=0,r=count,best=1;
    while (l<r) {
       unsigned m=(l+r)/2;
@@ -463,17 +464,17 @@ static unsigned computeExact2Inner(fstream& out,const vector<pair<pair<unsigned,
    // Create inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
-   unsigned char buffer[BufferManager::pageSize];
+   unsigned char buffer[BufferReference::pageSize];
    unsigned bufferPos=headerSize,bufferCount=0;
 
    for (vector<pair<pair<unsigned,unsigned>,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
       // Do we have to start a new page?
-      if ((bufferPos+12)>BufferManager::pageSize) {
+      if ((bufferPos+12)>BufferReference::pageSize) {
          writeUint32(buffer,0xFFFFFFFF);
          writeUint32(buffer+4,page+1);
          writeUint32(buffer+8,bufferCount);
          writeUint32(buffer+12,0);
-         for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
             buffer[index]=0;
          writePage(out,page,buffer);
          boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>((*(iter-1)).first,page));
@@ -491,7 +492,7 @@ static unsigned computeExact2Inner(fstream& out,const vector<pair<pair<unsigned,
    writeUint32(buffer+4,0);
    writeUint32(buffer+8,bufferCount);
    writeUint32(buffer+12,0);
-   for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
    boundaries.push_back(pair<pair<unsigned,unsigned>,unsigned>(data.back().first,page));
@@ -573,17 +574,17 @@ static unsigned computeExact1Inner(fstream& out,const vector<pair<unsigned,unsig
    // Create inner nodes
 {
    const unsigned headerSize = 16; // marker+next+count+padding
-   unsigned char buffer[BufferManager::pageSize];
+   unsigned char buffer[BufferReference::pageSize];
    unsigned bufferPos=headerSize,bufferCount=0;
 
    for (vector<pair<unsigned,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
       // Do we have to start a new page?
-      if ((bufferPos+8)>BufferManager::pageSize) {
+      if ((bufferPos+8)>BufferReference::pageSize) {
          writeUint32(buffer,0xFFFFFFFF);
          writeUint32(buffer+4,page+1);
          writeUint32(buffer+8,bufferCount);
          writeUint32(buffer+12,0);
-         for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
             buffer[index]=0;
          writePage(out,page,buffer);
          boundaries.push_back(pair<unsigned,unsigned>((*(iter-1)).first,page));
@@ -600,7 +601,7 @@ static unsigned computeExact1Inner(fstream& out,const vector<pair<unsigned,unsig
    writeUint32(buffer+4,0);
    writeUint32(buffer+8,bufferCount);
    writeUint32(buffer+12,0);
-   for (unsigned index=bufferPos;index<BufferManager::pageSize;index++)
+   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
       buffer[index]=0;
    writePage(out,page,buffer);
    boundaries.push_back(pair<unsigned,unsigned>(data.back().first,page));
@@ -692,9 +693,9 @@ void DatabaseBuilder::computeExactStatistics(const char* tmpFile)
    unsigned long long exact0OO=computeExact0(countMap,2,2);
 
    // Update the directory page
-   unsigned char directory[BufferManager::pageSize];
+   unsigned char directory[BufferReference::pageSize];
    out.seekp(0,ios_base::beg);
-   out.read(reinterpret_cast<char*>(directory),BufferManager::pageSize);
+   out.read(reinterpret_cast<char*>(directory),BufferReference::pageSize);
    unsigned char* base=directory+292;
    writeUint32(base,exactPS);
    writeUint32(base+4,exactPO);

@@ -1,5 +1,5 @@
 #include "rts/database/Database.hpp"
-#include "rts/buffer/BufferManager.hpp"
+#include "rts/buffer/BufferReference.hpp"
 #define private public
 #include "rts/segment/PathStatisticsSegment.hpp"
 #undef private
@@ -382,11 +382,17 @@ int main(int argc,char* argv[])
       cout << "unable to open " << argv[1] << endl;
       return 1;
    }
+   // Compute the total size
+   unsigned totalPages;
+   {
+      ifstream in(argv[1]);
+      in.seekg(0,ios_base::end);
+      totalPages=in.tellg()/BufferReference::pageSize;
+   }
 
    // Find the start of the exact statistics
    unsigned statisticsStart=db.getPathStatistics(true).statisticsPage+1;
-   unsigned totalPages=db.getPathStatistics(true).bufferManager.getPageCount();
-   unsigned long long statisticsBytes=static_cast<unsigned long long>(totalPages-statisticsStart)*BufferManager::pageSize;
+   unsigned long long statisticsBytes=static_cast<unsigned long long>(totalPages-statisticsStart)*BufferReference::pageSize;
 
    cout << "using " << (totalPages-statisticsStart) << " pages out of " << totalPages << " for statistics (" << (100.0*(totalPages-statisticsStart)/totalPages) << "%)" << endl;
    cout << "this consumes " << (static_cast<double>(statisticsBytes*10/1024/1024/1024)/10.0) << " GB of space" << endl;

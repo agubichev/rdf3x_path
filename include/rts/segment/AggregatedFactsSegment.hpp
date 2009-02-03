@@ -11,7 +11,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include "rts/segment/Segment.hpp"
-#include "rts/buffer/BufferManager.hpp"
+#include "rts/buffer/BufferReference.hpp"
 //---------------------------------------------------------------------------
 /// A compressed and aggregated facts table stored in a clustered B-Tree
 class AggregatedFactsSegment : public Segment
@@ -32,7 +32,7 @@ class AggregatedFactsSegment : public Segment
 
    public:
    /// Constructor
-   AggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2);
+   AggregatedFactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2);
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }
@@ -61,7 +61,7 @@ class AggregatedFactsSegment : public Segment
 
       private:
       /// The maximum number of entries per page
-      static const unsigned maxCount = BufferManager::pageSize;
+      static const unsigned maxCount = BufferReference::pageSize;
       /// A triple
       struct Triple {
          unsigned value1,value2,count;

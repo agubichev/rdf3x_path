@@ -1,4 +1,4 @@
-#include "rts/buffer/BufferFrame.hpp"
+#include "rts/transaction/LogManager.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -9,9 +9,16 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-BufferFrame::BufferFrame()
-   : buffer(0),intentionLock(0),data(0),partition(0),pageNo(0),lsn(0),state(Empty)
-   // Constructor
+void LogManager::initiateCheckpoint()
+   // Initiate a checkpoint. Must be called by the buffer manager!
 {
+   // XXX not implemented
 }
 //---------------------------------------------------------------------------
+void LogManager::force(uint64_t /*lsn*/)
+   // Force the log to a certain point
+{
+   // XXX not implemented
+}
+//---------------------------------------------------------------------------
+

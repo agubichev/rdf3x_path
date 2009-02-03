@@ -13,6 +13,7 @@
 class BufferManager;
 class BufferRequest;
 class BufferReference;
+class Partition;
 //---------------------------------------------------------------------------
 /// Base class for all segments
 class Segment
@@ -20,10 +21,12 @@ class Segment
    private:
    /// The buffer manager
    BufferManager& bufferManager;
+   /// The containing partition
+   Partition& partition;
 
    protected:
    /// Constructor
-   explicit Segment(BufferManager& bufferManager);
+   explicit Segment(BufferManager& bufferManager,Partition& partition);
 
    /// Read a specific page
    BufferRequest readShared(unsigned page) const;

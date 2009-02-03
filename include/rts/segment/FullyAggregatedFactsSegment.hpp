@@ -11,7 +11,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include "rts/segment/Segment.hpp"
-#include "rts/buffer/BufferManager.hpp"
+#include "rts/buffer/BufferReference.hpp"
 //---------------------------------------------------------------------------
 /// Fully aggregated facts, i.e. counts for single values
 class FullyAggregatedFactsSegment : public Segment
@@ -32,7 +32,7 @@ class FullyAggregatedFactsSegment : public Segment
 
    public:
    /// Constructor
-   FullyAggregatedFactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1);
+   FullyAggregatedFactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1);
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }
@@ -56,7 +56,7 @@ class FullyAggregatedFactsSegment : public Segment
 
       private:
       /// The maximum number of entries per page
-      static const unsigned maxCount = BufferManager::pageSize;
+      static const unsigned maxCount = BufferReference::pageSize;
       /// A (aggregated) triple
       struct Triple {
          unsigned value1,count;

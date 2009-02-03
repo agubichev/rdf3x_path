@@ -1,5 +1,4 @@
 #include "rts/segment/FactsSegment.hpp"
-#include "rts/buffer/BufferManager.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -26,8 +25,8 @@ static inline bool greater(unsigned a1,unsigned a2,unsigned a3,unsigned b1,unsig
                       ((a2==b2)&&(a3>b3))));
 }
 //---------------------------------------------------------------------------
-FactsSegment::FactsSegment(BufferManager& bufferManager,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality)
-   : Segment(bufferManager),tableStart(tableStart),indexRoot(indexRoot),
+FactsSegment::FactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality)
+   : Segment(bufferManager,partition),tableStart(tableStart),indexRoot(indexRoot),
      pages(pages),groups1(groups1),groups2(groups2),cardinality(cardinality)
    // Constructor
 {
@@ -166,7 +165,7 @@ bool FactsSegment::Scan::readNextPage()
 
    // Decompress the first triple
    const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
-   const unsigned char* reader=page+headerSize,*limit=page+BufferManager::pageSize;
+   const unsigned char* reader=page+headerSize,*limit=page+BufferReference::pageSize;
    unsigned value1=readUint32Aligned(reader); reader+=4;
    unsigned value2=readUint32Aligned(reader); reader+=4;
    unsigned value3=readUint32Aligned(reader); reader+=4;

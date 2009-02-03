@@ -14,6 +14,7 @@ class BufferManager;
 class FactsSegment;
 class AggregatedFactsSegment;
 class FullyAggregatedFactsSegment;
+class FilePartition;
 class DictionarySegment;
 class ExactStatisticsSegment;
 class StatisticsSegment;
@@ -30,6 +31,8 @@ class Database
    };
 
    private:
+   /// The underlying file
+   FilePartition* partition;
    /// The database buffer
    BufferManager* bufferManager;
    /// The fact segments
