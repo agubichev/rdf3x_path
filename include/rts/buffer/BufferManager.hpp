@@ -136,6 +136,8 @@ class BufferManager
    /// Start the writer
    static void startFlusher(void* ptr);
 
+   friend class BufferFrame;
+
    BufferManager(const BufferManager&);
    void operator=(const BufferManager&);
 

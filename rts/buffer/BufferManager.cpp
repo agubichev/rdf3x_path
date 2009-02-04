@@ -23,6 +23,27 @@ BufferFrame::BufferFrame()
 {
 }
 //---------------------------------------------------------------------------
+BufferFrame* BufferFrame::update() const
+   // Prepare for updates
+{
+   BufferFrame* result=const_cast<BufferFrame*>(this);
+   // Mark as dirty if needed
+   if (state!=WriteDirty) {
+      result->buffer->mutex.lock();
+      if (result->state==Read) {
+         result->data=partition->writeReadPage(result->pageInfo);
+         result->state=BufferFrame::Write;
+      }
+      result->state=WriteDirty;
+      // Trigger the writer if necessary
+      if ((++(result->buffer->dirtCounter))>result->buffer->dirtLimit) {
+         result->buffer->flusherNotify.notify(result->buffer->mutex);
+      }
+      result->buffer->mutex.unlock();
+   }
+   return result;
+}
+//---------------------------------------------------------------------------
 BufferManager::BufferManager(unsigned bufferSizeHintInBytes)
    : bufferSize(bufferSizeHintInBytes/BufferReference::pageSize),dirtLimit(3*bufferSize/4),releasedFrames(0),
      logManager(0),checkpointsEnabled(false)
