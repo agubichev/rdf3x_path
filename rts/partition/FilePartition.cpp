@@ -253,3 +253,25 @@ bool FilePartition::flush()
    return file.flush();
 }
 //----------------------------------------------------------------------------
+bool FilePartition::grow(unsigned minIncrease,unsigned& start,unsigned& len)
+   // Grow the partition.
+{
+   auto_lock lock(mutex);
+   
+   // Compute a reasonable increase
+   unsigned increase=size/8;
+   if (increase<minIncrease)
+      increase=minIncrease;
+
+   // Try to grow the underlying file
+   if (!file.growPhysically(static_cast<GrowableMappedFile::ofs_t>(increase)*BufferReference::pageSize))
+      return false;
+
+   // Report success
+   start=size;
+   len=increase;
+   size+=increase;
+
+   return true;
+}
+//----------------------------------------------------------------------------

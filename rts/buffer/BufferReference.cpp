@@ -39,6 +39,14 @@ BufferReference& BufferReference::operator=(const BufferRequest& request)
    return *this;
 }
 //---------------------------------------------------------------------------
+void BufferReference::swap(BufferReference& other)
+   // Swap two reference
+{
+   const BufferFrame* f=frame;
+   frame=other.frame;
+   other.frame=f;
+}
+//---------------------------------------------------------------------------
 void BufferReference::reset()
    // Reset the reference
 {
@@ -54,7 +62,7 @@ const void* BufferReference::getPage() const
    return frame->pageData();
 }
 //---------------------------------------------------------------------------
-unsigned BufferReference::pageNo() const
+unsigned BufferReference::getPageNo() const
    // Get the page number
 {
    return frame->getPageNo();
@@ -88,6 +96,14 @@ BufferReferenceExclusive& BufferReferenceExclusive::operator=(const BufferReques
    return *this;
 }
 //---------------------------------------------------------------------------
+void BufferReferenceExclusive::swap(BufferReferenceExclusive& other)
+   // Swap two reference
+{
+   const BufferFrame* f=frame;
+   frame=other.frame;
+   other.frame=f;
+}
+//---------------------------------------------------------------------------
 void BufferReferenceExclusive::reset()
    // Reset the reference
 {
@@ -103,7 +119,7 @@ const void* BufferReferenceExclusive::getPage() const
    return frame->pageData();
 }
 //---------------------------------------------------------------------------
-unsigned BufferReferenceExclusive::pageNo() const
+unsigned BufferReferenceExclusive::getPageNo() const
    // Get the page number
 {
    return frame->getPageNo();
@@ -172,7 +188,7 @@ void* BufferReferenceModified::getPage() const
    return frame->pageData();
 }
 //---------------------------------------------------------------------------
-unsigned BufferReferenceModified::pageNo() const
+unsigned BufferReferenceModified::getPageNo() const
    // Get the page number
 {
    return frame->getPageNo();

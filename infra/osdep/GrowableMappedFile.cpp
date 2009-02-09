@@ -177,7 +177,7 @@ bool GrowableMappedFile::growPhysically(ofs_t increment)
    // Grow the underlying file physically
 {
 #ifdef CONFIG_WINDOWS
-   // We have to write the datam anually. SetEndOfFle is not guaranteed to zero
+   // We have to write the data manually. SetEndOfFle is not guaranteed to zero
    // the content, and we _want_ physical allocation.
    const unsigned bufferSize = 16*1024*1024;
    char* buffer=new char[bufferSize];

@@ -48,6 +48,8 @@ class Partition
    virtual void finishWrittenPage(PageInfo& info) = 0;
    /// Flush the parition
    virtual bool flush() = 0;
+   /// Grow the partition.
+   virtual bool grow(unsigned minIncrease,unsigned& start,unsigned& len) = 0;
 };
 //----------------------------------------------------------------------------
 #endif

@@ -1,6 +1,8 @@
 #ifndef H_rts_segment_Segment
 #define H_rts_segment_Segment
 //---------------------------------------------------------------------------
+#include <stdint.h>
+//---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
 //
@@ -13,16 +15,25 @@
 class BufferManager;
 class BufferRequest;
 class BufferRequestExclusive;
+class BufferRequestModified;
 class Partition;
+class SpaceInventorySegment;
 //---------------------------------------------------------------------------
 /// Base class for all segments
 class Segment
 {
+   public:
+   /// Known segment types
+   enum Type { SpaceInventorySegment };
+
    private:
    /// The buffer manager
    BufferManager& bufferManager;
    /// The containing partition
    Partition& partition;
+
+   // Must access the underlying partition to grow it
+   friend class SpaceInventorySegment;
 
    protected:
    /// Constructor
@@ -32,6 +43,8 @@ class Segment
    BufferRequest readShared(unsigned page) const;
    /// Read a specific page
    BufferRequestExclusive readExclusive(unsigned page);
+   /// Read a specific page
+   BufferRequestModified modifyExclusive(unsigned page);
    /// Prefetch a range of patches
    void prefetchPages(unsigned start,unsigned stop);
 
@@ -42,10 +55,18 @@ class Segment
    /// Destructor
    virtual ~Segment();
 
+   /// Convert to host order. This assumes little endinan-order! (needs a define for big endian)
+   static inline unsigned toHost(unsigned value) { return flipByteOrder(value); }
+   /// Convert to big endian. This assumes little endinan-order! (needs a define for big endian)
+   static inline unsigned toBE(unsigned value) { return flipByteOrder(value); }
    /// Helper function. Reads a 32bit big-endian value
    static inline unsigned readUint32(const unsigned char* data) { return (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3]; }
-   /// Helper function. Reads a 32bit big-endian value that is guaranteed to be aligned. This assumes little-endian order! (needs a define for big-endian)
-   static inline unsigned readUint32Aligned(const unsigned char* data) { return flipByteOrder(*reinterpret_cast<const unsigned*>(data)); }
+   /// Helper function. Reads a 32bit big-endian value that is guaranteed to be aligned
+   static inline unsigned readUint32Aligned(const unsigned char* data) { return toHost(*reinterpret_cast<const uint32_t*>(data)); }
+   /// Helper function. Write a 32bit big-endian value
+   static void writeUint32(unsigned char* data,unsigned value);
+   /// Helper function. Writes a 32bit big-endian value that is guaranteed to be aligned
+   static inline void writeUint32Aligned(unsigned char* data,unsigned value) { *reinterpret_cast<uint32_t*>(data)=toBE(value); }
 };
 //---------------------------------------------------------------------------
 #endif

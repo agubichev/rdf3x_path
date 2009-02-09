@@ -71,6 +71,8 @@ class FilePartition : public Partition
    void finishWrittenPage(PageInfo& info);
    /// Flush the parition
    bool flush();
+   /// Grow the partition.
+   bool grow(unsigned minIncrease,unsigned& start,unsigned& len);
 };
 //----------------------------------------------------------------------------
 #endif

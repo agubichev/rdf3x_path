@@ -34,9 +34,24 @@ BufferRequestExclusive Segment::readExclusive(unsigned page)
    return BufferRequestExclusive(bufferManager,partition,page);
 }
 //---------------------------------------------------------------------------
+BufferRequestModified Segment::modifyExclusive(unsigned page)
+   // Read a specific page
+{
+   return BufferRequestModified(bufferManager,partition,page);
+}
+//---------------------------------------------------------------------------
 void Segment::prefetchPages(unsigned start,unsigned stop)
    // Prefetch a range of patches
 {
    bufferManager.prefetchPages(partition,start,stop);
+}
+//---------------------------------------------------------------------------
+void Segment::writeUint32(unsigned char* data,unsigned value)
+   // Helper function. Write a 32bit big-endian value
+{
+   data[0]=static_cast<unsigned char>(value>>24);
+   data[1]=static_cast<unsigned char>(value>>16);
+   data[2]=static_cast<unsigned char>(value>>8);
+   data[3]=static_cast<unsigned char>(value>>0);
 }
 //---------------------------------------------------------------------------

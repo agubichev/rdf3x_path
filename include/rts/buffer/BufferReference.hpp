@@ -84,13 +84,15 @@ class BufferReference
 
    /// Remap the reference to a different page
    BufferReference& operator=(const BufferRequest& request);
+   /// Swap two reference
+   void swap(BufferReference& other);
    /// Reset the reference
    void reset();
 
    /// Access the page
    const void* getPage() const;
    /// Get the page number
-   unsigned pageNo() const;
+   unsigned getPageNo() const;
 };
 //---------------------------------------------------------------------------
 class BufferReferenceModified;
@@ -119,13 +121,15 @@ class BufferReferenceExclusive
 
    /// Remap the reference to a different page
    BufferReferenceExclusive& operator=(const BufferRequestExclusive& request);
+   /// Swap two reference
+   void swap(BufferReferenceExclusive& other);
    /// Reset the reference
    void reset();
 
    /// Access the page
    const void* getPage() const;
    /// Get the page number
-   unsigned pageNo() const;
+   unsigned getPageNo() const;
 };
 //---------------------------------------------------------------------------
 /// A reference to an exclusively locked and modified page in the database buffer.
@@ -158,7 +162,7 @@ class BufferReferenceModified
    /// Access the page
    void* getPage() const;
    /// Get the page number
-   unsigned pageNo() const;
+   unsigned getPageNo() const;
 };
 //---------------------------------------------------------------------------
 #endif
