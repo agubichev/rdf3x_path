@@ -5,6 +5,7 @@ src_rts_segment:=					\
 	rts/segment/ExactStatisticsSegment.cpp		\
 	rts/segment/FactsSegment.cpp			\
 	rts/segment/FullyAggregatedFactsSegment.cpp	\
+	rts/segment/SegmentInventorySegment.cpp		\
 	rts/segment/StatisticsSegment.cpp		\
 	rts/segment/SpaceInventorySegment.cpp		\
 	rts/segment/PathStatisticsSegment.cpp

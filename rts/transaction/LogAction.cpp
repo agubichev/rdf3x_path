@@ -94,9 +94,11 @@ LogAction::~LogAction()
 void LogAction::apply(BufferReferenceModified& page) const
    // Apply the operation to a page and unfix the page afterwards
 {
+   // XXX implement the logging case, too
+   // log _before_ applying the change! Might reference the old data
+
    redo(page.getPage());
    page.unfixWithoutRecovery();
-   // XXX implement the logging case, too
 }
 //---------------------------------------------------------------------------
 void LogActionGlue::registerAction(unsigned segmentId,unsigned actionId,LogAction* singleton)

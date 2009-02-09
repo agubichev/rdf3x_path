@@ -24,7 +24,7 @@ class Segment
 {
    public:
    /// Known segment types
-   enum Type { SpaceInventorySegment };
+   enum Type { Unused,SpaceInventorySegment, SegmentInventorySegment };
 
    private:
    /// The buffer manager
