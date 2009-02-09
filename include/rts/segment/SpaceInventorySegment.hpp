@@ -55,6 +55,9 @@ class SpaceInventorySegment : public Segment
    /// Get the extend of a segment
    bool getExtentLocked(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent);
 
+   /// Must initialize the segments
+   friend class DatabasePartition;
+
    public:
    /// Constructor
    SpaceInventorySegment(DatabasePartition& partition);

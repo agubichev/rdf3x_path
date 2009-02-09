@@ -88,18 +88,20 @@ SegmentInventorySegment::~SegmentInventorySegment()
 {
 }
 //---------------------------------------------------------------------------
-unsigned SegmentInventorySegment::addSegment(Segment::Type type)
+unsigned SegmentInventorySegment::addSegment(Segment::Type type,unsigned tag)
    // Add a segment
 {
    BufferReferenceModified rootPage;
    rootPage=modifyExclusive(root);
-   InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
+   const InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
 
    // Scan for a free slot
    for (unsigned index=0;index<InventoryPage::maxEntries;index++)
       if (!inv->getType(index)) {
-
-         UpdateInventory(index,0,0,type).apply(rootPage);
+	 unsigned char newEntry[InventoryPage::entrySize]={0};
+	 writeUint32Aligned(newEntry,type);
+	 writeUint32Aligned(newEntry+4,tag);
+         InitializeEntry(index,LogData(inv->getEntryPtr(index),InventoryPage::entrySize),LogData(newEntry,InventoryPage::entrySize)).apply(rootPage);
          return index;
       }
 

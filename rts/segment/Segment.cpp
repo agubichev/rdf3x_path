@@ -13,7 +13,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 Segment::Segment(DatabasePartition& partition)
-   : partition(partition)
+   : partition(partition),id(~0u)
    // Constructor
 {
 }

@@ -1,6 +1,8 @@
 #ifndef H_rts_database_DatabasePartition
 #define H_rts_database_DatabasePartition
 //---------------------------------------------------------------------------
+#include <vector>
+//---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
 //
@@ -15,16 +17,23 @@ class BufferRequest;
 class BufferRequestExclusive;
 class BufferRequestModified;
 class Partition;
+class Segment;
 class SpaceInventorySegment;
 //---------------------------------------------------------------------------
 /// Manager for all segments contained in one partition
 class DatabasePartition
 {
+   public:
+   /// Tags to mark special segments
+   enum Tag { Tag_Generic = 0, Tag_SpaceInventory, Tag_SegmentInventory, Tag_Schema };
+   
    private:
    /// The buffer manager
    BufferManager& bufferManager;
    /// The partition
    Partition& partition;
+   /// All segments
+   std::vector<Segment*> segments;
 
    /// The space inventory must be able to grow the underlying partition
    friend class SpaceInventorySegment;
@@ -34,6 +43,11 @@ class DatabasePartition
    DatabasePartition(BufferManager& buffer,Partition& partition);
    /// Destructor
    ~DatabasePartition();
+
+   /// Initialize a new partition with a space inventory and a segment inventory
+   void create();
+   /// Open an existing partition, reconstruct segments as required
+   void open();
 
    /// Read a specific page
    BufferRequest readShared(unsigned page) const;

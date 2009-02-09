@@ -275,3 +275,9 @@ bool FilePartition::grow(unsigned minIncrease,unsigned& start,unsigned& len)
    return true;
 }
 //----------------------------------------------------------------------------
+unsigned FilePartition::getSize() const
+   // The the partition size in pages
+{
+   return size;
+}
+//----------------------------------------------------------------------------

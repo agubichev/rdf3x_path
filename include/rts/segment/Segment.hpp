@@ -29,7 +29,11 @@ class Segment
    private:
    /// The containing database partition
    DatabasePartition& partition;
+   /// The id within the partition
+   unsigned id;
 
+   // Must manipulate the id to place segments
+   friend class DatabasePartition;
    // Must access the underlying partition to grow it
    friend class SpaceInventorySegment;
 

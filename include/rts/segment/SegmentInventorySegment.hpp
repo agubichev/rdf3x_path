@@ -26,6 +26,8 @@ class SegmentInventorySegment : public Segment
    /// The position of the root. Intentionally hard coded, there is only one segment inventory per partition.
    static const unsigned root = 3;
 
+   friend class DatabasePartition;
+
    public:
    /// Constructor
    SegmentInventorySegment(DatabasePartition& partition);
@@ -33,7 +35,7 @@ class SegmentInventorySegment : public Segment
    ~SegmentInventorySegment();
 
    /// Add a segment, gives the new ID
-   unsigned addSegment(Segment::Type type);
+   unsigned addSegment(Segment::Type type,unsigned tag=0);
    /// Drop a segment
    void dropSegment(unsigned id);
 
