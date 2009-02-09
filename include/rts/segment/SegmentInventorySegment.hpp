@@ -28,7 +28,7 @@ class SegmentInventorySegment : public Segment
 
    public:
    /// Constructor
-   SegmentInventorySegment(BufferManager& buffer,Partition& partition);
+   SegmentInventorySegment(DatabasePartition& partition);
    /// Destructor
    ~SegmentInventorySegment();
 
@@ -51,7 +51,7 @@ class SegmentInventorySegment : public Segment
    void setCustom(unsigned id,unsigned slot,unsigned value);
 
    /// Open a partition
-   static void openPartition(BufferManager& buffer,Partition& partition,std::vector<Segment::Type>& segments);
+   static void openPartition(DatabasePartition& partition,std::vector<Segment::Type>& segments);
 };
 //---------------------------------------------------------------------------
 #endif

@@ -103,21 +103,6 @@ BufferManager::~BufferManager()
    mutex.unlock();
 }
 //---------------------------------------------------------------------------
-void BufferManager::prefetchPages(Partition& partition,unsigned start,unsigned stop)
-   // Prefetch a number of pages
-{
-   // Sanitize the input
-   if (!&partition) return;
-   if (start>stop)
-      std::swap(start,stop);
-//   if (start>=getPageCount())
-//      return;
-//   if (stop>=getPageCount())
-//      stop=getPageCount()-1;
-
-   // Prefetch it. XXX
-}
-//---------------------------------------------------------------------------
 BufferFrame* BufferManager::findBufferFrame(Partition* partition,unsigned pageNo,bool exclusive)
    // Find or create a buffer frame
 {

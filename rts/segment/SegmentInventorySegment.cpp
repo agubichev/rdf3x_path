@@ -1,5 +1,6 @@
 #include "rts/segment/SegmentInventorySegment.hpp"
 #include "rts/buffer/BufferReference.hpp"
+#include "rts/database/DatabasePartition.hpp"
 #include "rts/transaction/LogAction.hpp"
 #include <cassert>
 #include <cstring>
@@ -76,8 +77,8 @@ void UpdateFreeBlock::undo(void* page) const { Segment::writeUint32Aligned(Inven
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
-SegmentInventorySegment::SegmentInventorySegment(BufferManager& buffer,Partition& partition)
-   : Segment(buffer,partition)
+SegmentInventorySegment::SegmentInventorySegment(DatabasePartition& partition)
+   : Segment(partition)
    // Constructor
 {
 }
@@ -169,11 +170,11 @@ void SegmentInventorySegment::setCustom(unsigned id,unsigned slot,unsigned value
    UpdateInventory(id,slot+4,inv->getValue(id,slot+4),value).apply(rootPage);
 }
 //---------------------------------------------------------------------------
-void SegmentInventorySegment::openPartition(BufferManager& bufferManager,Partition& partition,std::vector<Segment::Type>& segments)
+void SegmentInventorySegment::openPartition(DatabasePartition& partition,std::vector<Segment::Type>& segments)
    // Open a partition
 {
    BufferReference rootPage;
-   rootPage=BufferRequest(bufferManager,partition,root);
+   rootPage=partition.readShared(root);
    const InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
    for (unsigned index=0;index<InventoryPage::maxEntries;index++) {
       if (!inv->getType(index)) continue;

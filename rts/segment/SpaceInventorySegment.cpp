@@ -1,5 +1,6 @@
 #include "rts/segment/SpaceInventorySegment.hpp"
 #include "rts/buffer/BufferReference.hpp"
+#include "rts/database/DatabasePartition.hpp"
 #include "rts/partition/Partition.hpp"
 #include "rts/transaction/LogAction.hpp"
 #include <cassert>
@@ -69,7 +70,7 @@ class InnerNode {
    /// Is the page full?
    bool isFull() const { return getCount()==maxEntries; }
    /// Get a pointer to an entry
-   const void* getEntryPtr(unsigned index) const { return ptr()+headerSize+(entrySize*index); }   
+   const void* getEntryPtr(unsigned index) const { return ptr()+headerSize+(entrySize*index); }
    /// Get the right-most child
    unsigned getRightmost() const { return Segment::readUint32Aligned(ptr()+16); }
    /// Get the segment id of an entry
@@ -226,7 +227,7 @@ class LeafNode {
    /// Get the from part of an entry
    unsigned getFrom(unsigned index) const { return Segment::readUint32Aligned(ptr()+headerSize+(entrySize*index)+4); }
    /// Get the to part of an entry
-   unsigned getTo(unsigned index) const { return Segment::readUint32Aligned(ptr()+headerSize+(entrySize*index)+8); }   
+   unsigned getTo(unsigned index) const { return Segment::readUint32Aligned(ptr()+headerSize+(entrySize*index)+8); }
 
    /// Find the approriate position for an interval
    unsigned find(unsigned segmentId,unsigned from,unsigned to) const;
@@ -264,7 +265,7 @@ void LeafNode::format(unsigned next,unsigned count,const void* content,unsigned 
    Segment::writeUint32(ptr()+8,next);
    Segment::writeUint32(ptr()+12,count);
    Segment::writeUint32(ptr()+16,~static_cast<uint32_t>(0)); // leaf marker
-   memcpy(ptr()+headerSize,content,contentLen);   
+   memcpy(ptr()+headerSize,content,contentLen);
 }
 //---------------------------------------------------------------------------
 void LeafNode::insertInterval(unsigned pos,unsigned segmentId,unsigned from,unsigned to)
@@ -285,7 +286,7 @@ void LeafNode::deleteInterval(unsigned pos)
    unsigned char* slot=ptr()+headerSize+(entrySize*pos);
    unsigned count=getCount();
    memmove(slot,slot+entrySize,(count-pos-1)*entrySize);
-   setCount(count-1);   
+   setCount(count-1);
 }
 //---------------------------------------------------------------------------
 void LeafNode::updateBounds(unsigned pos,unsigned from,unsigned to)
@@ -331,7 +332,7 @@ class FreePage {
    const unsigned char* ptr() const { return reinterpret_cast<const unsigned char*>(this); }
    /// Data pointer
    unsigned char* ptr() { return reinterpret_cast<unsigned char*>(this); }
-      
+
    /// Set the next pointer
    void setNext(unsigned next) { Segment::writeUint32(ptr()+8,next); }
    /// Set the range
@@ -358,8 +359,8 @@ void UpdateFreePage::undo(void* page) const { FreePage::interpret(page)->setNext
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
-SpaceInventorySegment::SpaceInventorySegment(BufferManager& buffer,Partition& partition)
-   : Segment(buffer,partition)
+SpaceInventorySegment::SpaceInventorySegment(DatabasePartition& partition)
+   : Segment(partition)
    // Constructor
 {
 }
@@ -410,7 +411,7 @@ void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
 
       // No free pages, increase the partition
       unsigned start,len;
-      if (!partition.grow(1,start,len)) {
+      if (!partition.partition.grow(1,start,len)) {
 	 assert(false&&"unable to grow underlying partition, error handling not implemented yet"); // XXX
       }
 
@@ -487,7 +488,7 @@ void SpaceInventorySegment::splitInner(BufferReferenceExclusive& parent,BufferRe
       InsertInnerInterval(pos,separator[0],separator[1],separator[2],separator[3],rightId).apply(current);
    }
 }
-//---------------------------------------------------------------------------   
+//---------------------------------------------------------------------------
 void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferReferenceExclusive& page)
    // Split a leaf node
 {
@@ -509,11 +510,11 @@ void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferRef
       separator[3]=leftId;
       unsigned next=leaf->getNext();
 
-      // Copy the content            
+      // Copy the content
       BuildLeafNode(right.getPageNo(),leftCount,LogData(leaf->getEntryPtr(0),LeafNode::entrySize*leftCount)).apply(left);
       BuildLeafNode(0,rightCount,LogData(leaf->getEntryPtr(leftCount),LeafNode::entrySize*rightCount)).apply(right);
 
-      
+
       // And convert the page
       BufferReferenceModified current;
       current.modify(page);
@@ -533,12 +534,12 @@ void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferRef
       separator[1]=Segment::toBE(leaf->getFrom(leftCount-1));
       separator[2]=Segment::toBE(leaf->getTo(leftCount-1));
       separator[3]=leftId;
-      
+
       // Copy the content
       BuildLeafNode(leaf->getNext(),rightCount,LogData(leaf->getEntryPtr(leftCount),LeafNode::entrySize*rightCount)).apply(right);
       ShrinkLeafNode(leaf->getNext(),leaf->getCount(),rightId,leftCount).apply(left);
-      
-      // And insert into the parent      
+
+      // And insert into the parent
       BufferReferenceModified current;
       current.modify(parent);
       unsigned pos=InnerNode::interpret(page.getPage())->find(separator[0],separator[1],separator[2]);
@@ -708,7 +709,7 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
       if (InnerNode::interpret(rootPage.getPage())->getNext()>extent[slot].first) {
 	 // Update the root
 	 BufferReferenceModified root;
-	 root.modify(rootPage);	 
+	 root.modify(rootPage);
 	 UpdateInnerNext(freeIterator,extent[slot].first).apply(root);
 
          // Set the links
@@ -725,7 +726,7 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
 	 UpdateFreePage(freePage->getNext(),freePage->getRange(),freeIterator,extent[slot].second).apply(current);
 	 ++slot;
       }
-      
+
       // Merge with the free list
       rootPage.reset();
       while (slot<extent.size()) {

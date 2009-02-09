@@ -16,7 +16,7 @@ class BufferManager;
 class BufferRequest;
 class BufferRequestExclusive;
 class BufferRequestModified;
-class Partition;
+class DatabasePartition;
 class SpaceInventorySegment;
 //---------------------------------------------------------------------------
 /// Base class for all segments
@@ -27,17 +27,15 @@ class Segment
    enum Type { Unused,SpaceInventorySegment, SegmentInventorySegment };
 
    private:
-   /// The buffer manager
-   BufferManager& bufferManager;
-   /// The containing partition
-   Partition& partition;
+   /// The containing database partition
+   DatabasePartition& partition;
 
    // Must access the underlying partition to grow it
    friend class SpaceInventorySegment;
 
    protected:
    /// Constructor
-   explicit Segment(BufferManager& bufferManager,Partition& partition);
+   explicit Segment(DatabasePartition& partition);
 
    /// Read a specific page
    BufferRequest readShared(unsigned page) const;
@@ -45,8 +43,6 @@ class Segment
    BufferRequestExclusive readExclusive(unsigned page);
    /// Read a specific page
    BufferRequestModified modifyExclusive(unsigned page);
-   /// Prefetch a range of patches
-   void prefetchPages(unsigned start,unsigned stop);
 
    /// Change the byte order
    static inline unsigned flipByteOrder(unsigned value) { return (value<<24)|((value&0xFF00)<<8)|((value&0xFF0000)>>8)|(value>>24); }

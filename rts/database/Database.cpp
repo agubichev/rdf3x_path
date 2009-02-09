@@ -1,5 +1,6 @@
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferManager.hpp"
+#include "rts/database/DatabasePartition.hpp"
 #include "rts/partition/FilePartition.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/DictionarySegment.hpp"
@@ -22,7 +23,7 @@
 static const unsigned bufferSize = 16*1024*1024;
 //---------------------------------------------------------------------------
 Database::Database()
-   : partition(0),bufferManager(0),dictionary(0),exactStatistics(0)
+   : file(0),bufferManager(0),partition(0),dictionary(0),exactStatistics(0)
    // Constructor
 {
    for (unsigned index=0;index<6;index++) {
@@ -59,10 +60,11 @@ bool Database::open(const char* fileName)
 
    // Try to open the database
    bufferManager=new BufferManager(bufferSize);
-   partition=new FilePartition();
-   if (partition->open(fileName)) {
+   file=new FilePartition();
+   partition=new DatabasePartition(*bufferManager,*file);
+   if (file->open(fileName)) {
       // Read the directory page
-      BufferReference directory(BufferRequest(*bufferManager,*partition,0));
+      BufferReference directory(BufferRequest(*bufferManager,*file,0));
       const unsigned char* page=static_cast<const unsigned char*>(directory.getPage());
 
       // Check the header
@@ -104,16 +106,16 @@ bool Database::open(const char* fileName)
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
-            facts[index]=new FactsSegment(*bufferManager,*partition,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
-            aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,*partition,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
-            statistics[index]=new StatisticsSegment(*bufferManager,*partition,statisticsPages[index]);
+            facts[index]=new FactsSegment(*partition,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
+            aggregatedFacts[index]=new AggregatedFactsSegment(*partition,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
+            statistics[index]=new StatisticsSegment(*partition,statisticsPages[index]);
          }
          for (unsigned index=0;index<3;index++)
-            fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*bufferManager,*partition,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
+            fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*partition,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
          for (unsigned index=0;index<2;index++)
-            pathStatistics[index]=new PathStatisticsSegment(*bufferManager,*partition,pathStatisticsPages[index]);
-         exactStatistics=new ExactStatisticsSegment(*bufferManager,*partition,*this,exactStatisticsPages[0],exactStatisticsPages[1],exactStatisticsPages[2],exactStatisticsPages[3],exactStatisticsPages[4],exactStatisticsPages[5],exactStatisticsJoinCounts[0],exactStatisticsJoinCounts[1],exactStatisticsJoinCounts[2],exactStatisticsJoinCounts[3],exactStatisticsJoinCounts[4],exactStatisticsJoinCounts[5],exactStatisticsJoinCounts[6],exactStatisticsJoinCounts[7],exactStatisticsJoinCounts[8]);
-         dictionary=new DictionarySegment(*bufferManager,*partition,stringStart,stringMapping,stringIndex);
+            pathStatistics[index]=new PathStatisticsSegment(*partition,pathStatisticsPages[index]);
+         exactStatistics=new ExactStatisticsSegment(*partition,*this,exactStatisticsPages[0],exactStatisticsPages[1],exactStatisticsPages[2],exactStatisticsPages[3],exactStatisticsPages[4],exactStatisticsPages[5],exactStatisticsJoinCounts[0],exactStatisticsJoinCounts[1],exactStatisticsJoinCounts[2],exactStatisticsJoinCounts[3],exactStatisticsJoinCounts[4],exactStatisticsJoinCounts[5],exactStatisticsJoinCounts[6],exactStatisticsJoinCounts[7],exactStatisticsJoinCounts[8]);
+         dictionary=new DictionarySegment(*partition,stringStart,stringMapping,stringIndex);
 
          return true;
       }
@@ -148,10 +150,12 @@ void Database::close()
    exactStatistics=0;
    delete dictionary;
    dictionary=0;
-   delete bufferManager;
-   bufferManager=0;
    delete partition;
    partition=0;
+   delete bufferManager;
+   bufferManager=0;
+   delete file;
+   file=0;
 }
 //---------------------------------------------------------------------------
 FactsSegment& Database::getFacts(DataOrder order)

@@ -20,8 +20,8 @@ static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { 
 static inline unsigned readLeafHash(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+8+8*slot); }
 static inline unsigned readLeafPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+8+8*slot+4); }
 //---------------------------------------------------------------------------
-DictionarySegment::DictionarySegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned mappingStart,unsigned indexRoot)
-   : Segment(bufferManager,partition),tableStart(tableStart),mappingStart(mappingStart),indexRoot(indexRoot)
+DictionarySegment::DictionarySegment(DatabasePartition& partition,unsigned tableStart,unsigned mappingStart,unsigned indexRoot)
+   : Segment(partition),tableStart(tableStart),mappingStart(mappingStart),indexRoot(indexRoot)
    // Constructor
 {
    // Prefetch the predicates, they will most likely be needed

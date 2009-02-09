@@ -1,7 +1,5 @@
-#include "rts/segment/Segment.hpp"
-#include "rts/buffer/BufferManager.hpp"
-#include "rts/buffer/BufferReference.hpp"
 #include "rts/database/DatabasePartition.hpp"
+#include "rts/buffer/BufferReference.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -12,41 +10,32 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-Segment::Segment(DatabasePartition& partition)
-   : partition(partition)
+DatabasePartition::DatabasePartition(BufferManager& bufferManager,Partition& partition)
+   : bufferManager(bufferManager),partition(partition)
    // Constructor
 {
 }
 //---------------------------------------------------------------------------
-Segment::~Segment()
+DatabasePartition::~DatabasePartition()
    // Destructor
 {
 }
 //---------------------------------------------------------------------------
-BufferRequest Segment::readShared(unsigned page) const
+BufferRequest DatabasePartition::readShared(unsigned page) const
    // Read a specific page
 {
-   return partition.readShared(page);
+   return BufferRequest(bufferManager,partition,page);
 }
 //---------------------------------------------------------------------------
-BufferRequestExclusive Segment::readExclusive(unsigned page)
+BufferRequestExclusive DatabasePartition::readExclusive(unsigned page)
    // Read a specific page
 {
-   return partition.readExclusive(page);
+   return BufferRequestExclusive(bufferManager,partition,page);
 }
 //---------------------------------------------------------------------------
-BufferRequestModified Segment::modifyExclusive(unsigned page)
+BufferRequestModified DatabasePartition::modifyExclusive(unsigned page)
    // Read a specific page
 {
-   return partition.modifyExclusive(page);
-}
-//---------------------------------------------------------------------------
-void Segment::writeUint32(unsigned char* data,unsigned value)
-   // Helper function. Write a 32bit big-endian value
-{
-   data[0]=static_cast<unsigned char>(value>>24);
-   data[1]=static_cast<unsigned char>(value>>16);
-   data[2]=static_cast<unsigned char>(value>>8);
-   data[3]=static_cast<unsigned char>(value>>0);
+   return BufferRequestModified(bufferManager,partition,page);
 }
 //---------------------------------------------------------------------------

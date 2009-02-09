@@ -35,7 +35,7 @@ class SpaceInventorySegment : public Segment
    /// The position of the root. Intentionally hard coded, there is only one space inventory per partition.
    /// Note: the "next" pointer of the root is start of the free list!
    static const unsigned root = 2;
-   
+
    /// The mutex
    Mutex mutex;
 
@@ -57,7 +57,7 @@ class SpaceInventorySegment : public Segment
 
    public:
    /// Constructor
-   SpaceInventorySegment(BufferManager& buffer,Partition& partition);
+   SpaceInventorySegment(DatabasePartition& partition);
    /// Destructor
    ~SpaceInventorySegment();
 

@@ -15,6 +15,7 @@ class FactsSegment;
 class AggregatedFactsSegment;
 class FullyAggregatedFactsSegment;
 class FilePartition;
+class DatabasePartition;
 class DictionarySegment;
 class ExactStatisticsSegment;
 class StatisticsSegment;
@@ -32,9 +33,11 @@ class Database
 
    private:
    /// The underlying file
-   FilePartition* partition;
+   FilePartition* file;
    /// The database buffer
    BufferManager* bufferManager;
+   /// The partition
+   DatabasePartition* partition;
    /// The fact segments
    FactsSegment* facts[6];
    /// The aggregated fact segments
