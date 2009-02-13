@@ -15,4 +15,5 @@ src_rts_operator:=					\
 	rts/operator/Scheduler.cpp			\
 	rts/operator/Selection.cpp			\
 	rts/operator/SingletonScan.cpp			\
+	rts/operator/TupleCounter.cpp			\
 	rts/operator/Union.cpp

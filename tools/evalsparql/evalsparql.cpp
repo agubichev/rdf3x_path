@@ -87,6 +87,9 @@ static void evalQuery(Database& db,const string& query,bool silent)
    Timestamp stop;
    cout << "Execution time: " << (stop-start) << " ms" << endl;
 
+   if (getenv("SHOWCARD"))
+      operatorTree->print(db.getDictionary());
+
    delete operatorTree;
 }
 //---------------------------------------------------------------------------
