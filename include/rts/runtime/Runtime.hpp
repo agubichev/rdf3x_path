@@ -49,6 +49,8 @@ class Runtime
    Database& getDatabase() const { return db; }
    /// Set the number of registers
    void allocateRegisters(unsigned count);
+   /// Get the number of registers
+   unsigned getRegisterCount() const { return registers.size(); }
    /// Access a specific register
    Register* getRegister(unsigned slot) { return &(registers[slot]); }
    /// Set the number of domain descriptions
