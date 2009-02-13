@@ -10,6 +10,9 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+unsigned TupleCounter::totalEstimated = 0;
+unsigned TupleCounter::totalObserved = 0;
+//---------------------------------------------------------------------------
 TupleCounter::TupleCounter(Operator* input,unsigned estimated)
    : input(input),estimated(estimated),observed(0)
    // Constructor
@@ -41,6 +44,9 @@ unsigned TupleCounter::next()
 void TupleCounter::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
+   totalEstimated+=estimated;
+   totalObserved+=observed;
+
    indent(level);
    std::cout << "# estimated cardinality: " << estimated << " observed cardinality: " << observed << std::endl;
    input->print(dict,level);

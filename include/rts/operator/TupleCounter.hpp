@@ -17,6 +17,12 @@ class Register;
 /// A counting operator to debug cardinality estimates
 class TupleCounter : public Operator
 {
+   public:
+   /// Sum of estimated cardinalities
+   static unsigned totalEstimated;
+   /// Sum of observed cardinalities
+   static unsigned totalObserved;
+
    private:
    /// The input
    Operator* input;
