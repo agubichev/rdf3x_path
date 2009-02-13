@@ -54,22 +54,25 @@ GrowableMappedFile::~GrowableMappedFile()
    close();
 }
 //----------------------------------------------------------------------------
-bool GrowableMappedFile::open(const char* name,char*& begin,char*& end)
+bool GrowableMappedFile::open(const char* name,char*& begin,char*& end,bool readOnly)
    // Open
 {
    if (!name) return false;
    close();
 
    #ifdef CONFIG_WINDOWS
-      HANDLE file=CreateFile(name,GENERIC_READ|GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);
+      HANDLE file;
+      if (readOnly)
+         file=CreateFile(name,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0); else
+         file=CreateFile(name,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_EXCLUSIVE,0,OPEN_EXISTING,0,0);
       if (file==INVALID_HANDLE_VALUE) return false;
       DWORD sizeHigh=0;
       DWORD size=GetFileSize(file,&sizeHigh);
       SIZE_T fullSize=(static_cast<SIZE_T>(sizeHigh)<<(8*sizeof(DWORD)))|static_cast<SIZE_T>(size);
       if (fullSize) {
-         HANDLE mapping=CreateFileMapping(file,0,PAGE_READWRITE,sizeHigh,size,0);
+         HANDLE mapping=CreateFileMapping(file,0,readOnly?PAGE_READ:PAGE_READWRITE,sizeHigh,size,0);
          if (mapping==INVALID_HANDLE_VALUE) { CloseHandle(file); return false; }
-         begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ|FILE_MAP_WRITE,0,0,fullSize));
+         begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ|(readOnly?0:FILE_MAP_WRITE),0,0,fullSize));
          if (!begin) { CloseHandle(mapping); CloseHandle(file); return false; }
          end=begin+fullSize;
 
@@ -83,12 +86,12 @@ bool GrowableMappedFile::open(const char* name,char*& begin,char*& end)
       }
       data->size=fullSize;
    #else
-      int file=::open(name,O_RDWR);
+      int file=::open(name,readOnly?O_RDONLY:O_RDWR);
       if (file<0) return false;
       size_t size=lseek(file,0,SEEK_END);
       if (!(~size)) { ::close(file); return false; }
       if (size) {
-         void* mapping=mmap(0,size,PROT_READ|PROT_WRITE,MAP_SHARED,file,0);
+         void* mapping=mmap(0,size,PROT_READ|(readOnly?0:PROT_WRITE),MAP_SHARED,file,0);
          if (!mapping) { ::close(file); return false; }
          begin=static_cast<char*>(mapping);
          end=begin+size;
@@ -117,7 +120,7 @@ bool GrowableMappedFile::create(const char* name)
    close();
 
    #ifdef CONFIG_WINDOWS
-      HANDLE file=CreateFile(name,GENERIC_READ|GENERIC_READ,FILE_SHARE_READ,0,CREATE_ALWAYS,0,0);
+      HANDLE file=CreateFile(name,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_EXCLUSIVE,0,CREATE_ALWAYS,0,0);
       if (file==INVALID_HANDLE_VALUE) return false;
    #else
       int file=::open(name,O_RDWR|O_CREAT|O_TRUNC,00640);

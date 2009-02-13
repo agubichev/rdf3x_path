@@ -52,7 +52,7 @@ static unsigned long long readUint64(const unsigned char* data)
    return result;
 }
 //---------------------------------------------------------------------------
-bool Database::open(const char* fileName)
+bool Database::open(const char* fileName,bool readOnly)
    // Open a database
 {
    close();
@@ -60,7 +60,7 @@ bool Database::open(const char* fileName)
    // Try to open the database
    bufferManager=new BufferManager(bufferSize);
    partition=new FilePartition();
-   if (partition->open(fileName)) {
+   if (partition->open(fileName,readOnly)) {
       // Read the directory page
       BufferReference directory(BufferRequest(*bufferManager,*partition,0));
       const unsigned char* page=static_cast<const unsigned char*>(directory.getPage());

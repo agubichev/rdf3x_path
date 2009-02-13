@@ -55,14 +55,14 @@ void FilePartition::freeAuxBuffer(AuxBuffer* buffer)
    auxBuffers=buffer;
 }
 //----------------------------------------------------------------------------
-bool FilePartition::open(const char* name)
+bool FilePartition::open(const char* name,bool readOnly)
    // Open an existing partition
 {
    close();
 
    // Try to open the file
    char* begin,*end;
-   if (!file.open(name,begin,end))
+   if (!file.open(name,begin,end,readOnly))
       return false;
 
    // Remember the mapping if any

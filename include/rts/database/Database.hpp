@@ -60,7 +60,7 @@ class Database
    ~Database();
 
    /// Open a database
-   bool open(const char* fileName);
+   bool open(const char* fileName,bool readOnly=false);
    /// Close the current database
    void close();
 

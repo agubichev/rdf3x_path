@@ -103,7 +103,7 @@ int main(int argc,char* argv[])
 
    // Open the database
    Database db;
-   if (!db.open(argv[1])) {
+   if (!db.open(argv[1],true)) {
       cout << "unable to open database " << argv[1] << endl;
       return 1;
    }
