@@ -773,7 +773,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                               p->opArg=*iter;
                               p->left=leftPlan;
                               p->right=rightPlan;
-                              p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                              if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                               p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
                               p->ordering=leftPlan->ordering;
                               addPlan(problem,p);
@@ -788,7 +788,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
@@ -798,7 +798,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=rightPlan;
                         p->right=leftPlan;
-                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity;
+                        if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(rightPlan->cardinality,leftPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
@@ -809,7 +809,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-                        p->cardinality=leftPlan->cardinality*rightPlan->cardinality;
+                        if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
                         p->ordering=leftPlan->ordering;
                         addPlan(problem,p);
