@@ -159,19 +159,14 @@ bool AggregatedFactsSegment::Scan::find(unsigned value1,unsigned value2)
       if (greater(m->value1,m->value2,value1,value2)) {
          r=m;
       } else if (greater(value1,value2,m->value1,m->value2)) {
-         if (((m+1)<r)&&(!greater(m[1].value1,m[1].value2,value1,value2))) {
-            l=m+1;
-         } else {
-            pos=l;
-            return true;
-         }
+         l=m+1;
       } else {
          pos=m;
          return true;
       }
    }
-   pos=posLimit;
-   return false;
+   pos=l;
+   return pos<posLimit;
 }
 //---------------------------------------------------------------------------
 static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }

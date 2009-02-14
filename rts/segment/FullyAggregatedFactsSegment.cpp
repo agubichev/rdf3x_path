@@ -120,19 +120,14 @@ bool FullyAggregatedFactsSegment::Scan::find(unsigned value1)
       if (m->value1>value1) {
          r=m;
       } else if (value1>m->value1) {
-         if (((m+1)<r)&&(!(m[1].value1>value1))) {
-            l=m+1;
-         } else {
-            pos=l;
-            return true;
-         }
+         l=m+1;
       } else {
          pos=m;
          return true;
       }
    }
-   pos=posLimit;
-   return false;
+   pos=l;
+   return pos<posLimit;
 }
 //---------------------------------------------------------------------------
 static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }
