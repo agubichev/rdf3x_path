@@ -9,6 +9,7 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/Scheduler.hpp"
+#include "rts/operator/TupleCounter.hpp"
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -87,6 +88,12 @@ static void evalQuery(Database& db,const string& query,bool silent)
    Timestamp stop;
    cout << "Execution time: " << (stop-start) << " ms" << endl;
 
+   if (getenv("SHOWCARD")) {
+      TupleCounter::totalEstimated=0; TupleCounter::totalObserved=0;
+      operatorTree->print(db.getDictionary());
+      cout << "# sum estimated: " << TupleCounter::totalEstimated << " sum observed: " << TupleCounter::totalObserved << endl;
+   }
+
    delete operatorTree;
 }
 //---------------------------------------------------------------------------
@@ -103,7 +110,7 @@ int main(int argc,char* argv[])
 
    // Open the database
    Database db;
-   if (!db.open(argv[1])) {
+   if (!db.open(argv[1],true)) {
       cout << "unable to open database " << argv[1] << endl;
       return 1;
    }

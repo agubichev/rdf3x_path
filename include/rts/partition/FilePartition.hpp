@@ -49,7 +49,7 @@ class FilePartition : public Partition
    ~FilePartition();
 
    /// Open an existing partition
-   bool open(const char* name);
+   bool open(const char* name,bool readOnly);
    /// Create a new partition
    bool create(const char* name);
    /// Close the partition

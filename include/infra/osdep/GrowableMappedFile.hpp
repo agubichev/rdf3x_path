@@ -33,7 +33,7 @@ class GrowableMappedFile
    ~GrowableMappedFile();
 
    /// Open
-   bool open(const char* name,char*& begin,char*& end);
+   bool open(const char* name,char*& begin,char*& end,bool readOnly);
    /// Create a new file
    bool create(const char* name);
    /// Close
