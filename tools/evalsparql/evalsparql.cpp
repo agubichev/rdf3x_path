@@ -80,6 +80,9 @@ static void evalQuery(Database& db,const string& query,bool silent)
 
    if (getenv("SHOWPLAN"))
       operatorTree->print(db.getDictionary());
+   vector<unsigned> regValues;
+   for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
+      regValues.push_back(runtime.getRegister(index)->value);
 
    // And execute it
    Scheduler scheduler;
@@ -89,6 +92,8 @@ static void evalQuery(Database& db,const string& query,bool silent)
    cout << "Execution time: " << (stop-start) << " ms" << endl;
 
    if (getenv("SHOWCARD")) {
+      for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
+         runtime.getRegister(index)->value=regValues[index];
       TupleCounter::totalEstimated=0; TupleCounter::totalObserved=0;
       operatorTree->print(db.getDictionary());
       cout << "# sum estimated: " << TupleCounter::totalEstimated << " sum observed: " << TupleCounter::totalObserved << endl;
