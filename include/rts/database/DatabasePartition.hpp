@@ -25,7 +25,10 @@ class DatabasePartition
 {
    public:
    /// Tags to mark special segments
-   enum Tag { Tag_Generic = 0, Tag_SpaceInventory, Tag_SegmentInventory, Tag_Schema };
+   enum Tag {
+      Tag_Generic = 0, Tag_SpaceInventory, Tag_SegmentInventory, Tag_Schema,
+      // These are somewhat ad-hoc, but useful until we get a real schema segment
+   };
    
    private:
    /// The buffer manager

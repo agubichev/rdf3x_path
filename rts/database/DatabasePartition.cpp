@@ -38,7 +38,7 @@ void DatabasePartition::create()
    if (partition.getSize()<(SegmentInventorySegment::root+1)) {
       unsigned start,len;
       if (!partition.grow((SegmentInventorySegment::root+1)-partition.getSize(),start,len))
-	 assert(false&&"increasing the parition failed");
+	 assert(false&&"increasing the partition failed");
    }
 
    // Create a space inventory

@@ -9,6 +9,7 @@
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
 #include "rts/segment/PathStatisticsSegment.hpp"
+#include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -41,6 +42,62 @@ Database::~Database()
    // Destructor
 {
    close();
+}
+//---------------------------------------------------------------------------
+static void writeUint64(unsigned char* writer,uint64_t value)
+   // Write a 64bit integer value
+{
+   writer[0]=static_cast<unsigned char>(value>>56);
+   writer[1]=static_cast<unsigned char>(value>>48);
+   writer[2]=static_cast<unsigned char>(value>>40);
+   writer[3]=static_cast<unsigned char>(value>>32);
+   writer[4]=static_cast<unsigned char>(value>>24);
+   writer[5]=static_cast<unsigned char>(value>>16);
+   writer[6]=static_cast<unsigned char>(value>>8);
+   writer[7]=static_cast<unsigned char>(value>>0);
+}
+//---------------------------------------------------------------------------
+bool Database::create(const char* fileName)
+   // Create a new database
+{
+   // Try to create the partition
+   file=new FilePartition();
+   if (!file->create(fileName))
+      return false;
+   unsigned start,len;
+   if (!file->grow(4,start,len))
+      return false;
+   assert((start==0)&&(len==4));
+   bufferManager=new BufferManager(bufferSize);
+   partition=new DatabasePartition(*bufferManager,*file);
+
+   // Create the inventory segments
+   partition->create();
+
+   // Format the root page
+   {
+      Partition::PageInfo pageInfo;
+      unsigned char* page=static_cast<unsigned char*>(file->buildPage(0,pageInfo));
+
+      // Magic
+      page[0]='R'; page[1]='D'; page[2]='F'; page[3]=0;
+      page[4]=0;   page[5]=0;   page[6]=0;   page[7]=2;
+
+      // Root SN
+      rootSN=1;
+      writeUint64(page+8,rootSN);
+      writeUint64(page+BufferReference::pageSize-8,rootSN);
+
+      // Start LSN
+      startLSN=0;
+      writeUint64(page+16,startLSN);
+
+      file->flushWrittenPage(pageInfo);
+      file->finishWrittenPage(pageInfo);
+   }
+   file->flush();
+
+   return true;
 }
 //---------------------------------------------------------------------------
 static unsigned readUint32(const unsigned char* data) { return (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3]; }
