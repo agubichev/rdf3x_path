@@ -20,7 +20,7 @@ class SegmentInventorySegment : public Segment
    /// The segment id
    static const Segment::Type ID = Segment::SegmentInventorySegment;
    /// Possible actions
-   enum Action { Action_InitializeEntry,Action_UpdateInventory,Action_UpdateFreeBlock };
+   enum Action { Action_InitializeEntry,Action_UpdateInventory,Action_UpdateFreeBlock,Action_UpdateFreePageList };
 
    private:
    /// The position of the root. Intentionally hard coded, there is only one segment inventory per partition.
@@ -47,9 +47,13 @@ class SegmentInventorySegment : public Segment
    void getFreeBlock(unsigned id,unsigned& start,unsigned& len) const;
    /// Set the unallocated free block
    void setFreeBlock(unsigned id,unsigned start,unsigned len);
-   /// Get a custom entry. Valid slots 0-11
+   /// Get the first freed page
+   unsigned getFreeList(unsigned id) const;
+   /// Set the first freed page
+   void setFreeList(unsigned id,unsigned page);
+   /// Get a custom entry. Valid slots 0-10
    unsigned getCustom(unsigned  id,unsigned slot) const;
-   /// Set a custom entry. Valid slots 0-11
+   /// Set a custom entry. Valid slots 0-10
    void setCustom(unsigned id,unsigned slot,unsigned value);
 
    /// Open a partition

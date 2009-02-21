@@ -2,6 +2,9 @@
 #include "rts/buffer/BufferManager.hpp"
 #include "rts/buffer/BufferReference.hpp"
 #include "rts/database/DatabasePartition.hpp"
+#include "rts/segment/SegmentInventorySegment.hpp"
+#include "rts/segment/SpaceInventorySegment.hpp"
+#include "rts/transaction/LogAction.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -12,15 +15,32 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+LOGACTION2(SegmentInventorySegment,UpdateFreePageList,uint32_t,oldValue,uint32_t,newValue)
+//---------------------------------------------------------------------------
+void UpdateFreePageList::redo(void* page) const { Segment::writeUint32(static_cast<unsigned char*>(page)+8,newValue); }
+void UpdateFreePageList::undo(void* page) const { Segment::writeUint32(static_cast<unsigned char*>(page)+8,newValue); }
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
 Segment::Segment(DatabasePartition& partition)
-   : partition(partition),id(~0u)
+   : partition(partition),id(~0u),freeBlockStart(0),freeBlockLen(0),freeList(0)
    // Constructor
 {
+
 }
 //---------------------------------------------------------------------------
 Segment::~Segment()
    // Destructor
 {
+}
+//---------------------------------------------------------------------------
+void Segment::refreshInfo()
+   // Refresh the stored info
+{
+   partition.getSegmentInventory()->getFreeBlock(id,freeBlockStart,freeBlockLen);
+   partition.getSegmentInventory()->getFreeList(id);
 }
 //---------------------------------------------------------------------------
 BufferRequest Segment::readShared(unsigned page) const
@@ -39,6 +59,43 @@ BufferRequestModified Segment::modifyExclusive(unsigned page)
    // Read a specific page
 {
    return partition.modifyExclusive(page);
+}
+//---------------------------------------------------------------------------
+bool Segment::allocPage(BufferReferenceModified& page)
+   // Allocate a new page
+{
+   // Any known free pages?
+   if (freeList) {
+      page=partition.modifyExclusive(freeList);
+      freeList=readUint32(static_cast<unsigned char*>(page.getPage())+8);
+      partition.getSegmentInventory()->getFreeList(id);
+      return true;
+   }
+
+   // Do we have to allocate a new chunk?
+   if (!freeBlockLen) {
+      unsigned start,len;
+      if (!partition.getSpaceInventory()->growSegment(id,1,start,len))
+         return false;
+      freeBlockStart=start;
+      freeBlockLen=len;
+   }
+
+   // Use the free block
+   page=partition.modifyExclusive(freeBlockStart);
+   freeBlockStart++; freeBlockLen--;
+   partition.getSegmentInventory()->setFreeBlock(id,freeBlockStart,freeBlockLen);
+   return true;
+}
+//---------------------------------------------------------------------------
+void Segment::freePage(BufferReferenceModified& page)
+   // Free a previously allocated page
+{
+   // Update the link
+   unsigned pageNo=page.getPageNo();
+   UpdateFreePageList(readUint32(static_cast<unsigned char*>(page.getPage())+8),freeList).apply(page);
+   partition.getSegmentInventory()->setFreeList(id,pageNo);
+   freeList=pageNo;
 }
 //---------------------------------------------------------------------------
 void Segment::writeUint32(unsigned char* data,unsigned value)

@@ -152,24 +152,40 @@ void SegmentInventorySegment::setFreeBlock(unsigned id,unsigned start,unsigned l
    UpdateFreeBlock(id,inv->getValue(id,2),inv->getValue(id,3),start,len).apply(rootPage);
 }
 //---------------------------------------------------------------------------
-unsigned SegmentInventorySegment::getCustom(unsigned  id,unsigned slot) const
-   // Get a custom entry. Valid slots 0-11
+unsigned SegmentInventorySegment::getFreeList(unsigned id) const
+   // Get the first freed page
 {
-   assert(slot<=11);
+   BufferReference rootPage(readShared(root));
+   const InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
+   return inv->getValue(id,4);
+}
+//---------------------------------------------------------------------------
+void SegmentInventorySegment::setFreeList(unsigned id,unsigned value)
+   // Set the first freed page
+{
+   BufferReferenceModified rootPage(modifyExclusive(root));
+   InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
+   UpdateInventory(id,4,inv->getValue(id,4),value).apply(rootPage);
+}
+//---------------------------------------------------------------------------
+unsigned SegmentInventorySegment::getCustom(unsigned  id,unsigned slot) const
+   // Get a custom entry. Valid slots 0-10
+{
+   assert(slot<=10);
 
    BufferReference rootPage(readShared(root));
    const InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
-   return inv->getValue(id,slot+4);
+   return inv->getValue(id,slot+5);
 }
 //---------------------------------------------------------------------------
 void SegmentInventorySegment::setCustom(unsigned id,unsigned slot,unsigned value)
-   // Set a custom entry. Valid slots 0-11
+   // Set a custom entry. Valid slots 0-10
 {
-   assert(slot<=11);
+   assert(slot<=10);
 
    BufferReferenceModified rootPage(modifyExclusive(root));
    InventoryPage* inv=InventoryPage::interpret(rootPage.getPage());
-   UpdateInventory(id,slot+4,inv->getValue(id,slot+4),value).apply(rootPage);
+   UpdateInventory(id,slot+5,inv->getValue(id,slot+5),value).apply(rootPage);
 }
 //---------------------------------------------------------------------------
 void SegmentInventorySegment::openPartition(DatabasePartition& partition,std::vector<Segment::Type>& segments)

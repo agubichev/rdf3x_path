@@ -16,6 +16,7 @@ class BufferManager;
 class BufferRequest;
 class BufferRequestExclusive;
 class BufferRequestModified;
+class BufferReferenceModified;
 class DatabasePartition;
 class SpaceInventorySegment;
 //---------------------------------------------------------------------------
@@ -31,6 +32,10 @@ class Segment
    DatabasePartition& partition;
    /// The id within the partition
    unsigned id;
+   /// The current free chunk, if any
+   unsigned freeBlockStart,freeBlockLen;
+   /// The next freed page, id any
+   unsigned freeList;
 
    // Must manipulate the id to place segments
    friend class DatabasePartition;
@@ -41,12 +46,20 @@ class Segment
    /// Constructor
    explicit Segment(DatabasePartition& partition);
 
+   /// Refresh segment info stored in the partition
+   virtual void refreshInfo();
+
    /// Read a specific page
    BufferRequest readShared(unsigned page) const;
    /// Read a specific page
    BufferRequestExclusive readExclusive(unsigned page);
    /// Read a specific page
    BufferRequestModified modifyExclusive(unsigned page);
+
+   /// Allocate a new page
+   bool allocPage(BufferReferenceModified& page);
+   /// Free a previously allocated page
+   void freePage(BufferReferenceModified& page);
 
    /// Change the byte order
    static inline unsigned flipByteOrder(unsigned value) { return (value<<24)|((value&0xFF00)<<8)|((value&0xFF0000)>>8)|(value>>24); }

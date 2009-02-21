@@ -350,6 +350,10 @@ class FreePage {
    static const FreePage* interpret(const void* data) { return static_cast<const FreePage*>(data); }
    /// Get as inner page
    static FreePage* interpret(void* data) { return static_cast<FreePage*>(data); }
+   /// Get as inner page
+   static const FreePage* interpret(BufferReference& ref) { return interpret(ref.getPage()); }
+   /// Get as inner page
+   static FreePage* interpret(BufferReferenceModified& ref) { return interpret(ref.getPage()); }
 };
 //---------------------------------------------------------------------------
 LOGACTION4(SpaceInventorySegment,UpdateFreePage,uint32_t,oldNext,uint32_t,oldRange,uint32_t,newNext,uint32_t,newRange)
@@ -833,10 +837,122 @@ bool SpaceInventorySegment::getExtentLocked(unsigned segmentId,std::vector<std::
    }
 }
 //---------------------------------------------------------------------------
-bool SpaceInventorySegment::getExtent(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent)
+bool SpaceInventorySegment::getExtent(unsigned segmentId,vector<pair<unsigned,unsigned> >& extent)
    // Get the extend of a segment
 {
    auto_lock lock(mutex);
    return getExtentLocked(segmentId,extent);
+}
+//---------------------------------------------------------------------------
+bool SpaceInventorySegment::growSegment(unsigned segmentId,unsigned minIncrease,unsigned& start,unsigned& len)
+   // Grow a segment
+{
+   auto_lock lock(mutex);
+
+   // Compute the current size
+   unsigned currentLen=0;
+   {
+      vector<pair<unsigned,unsigned> > extent;
+      getExtentLocked(segmentId,extent);
+      for (vector<pair<unsigned,unsigned> >::const_iterator iter=extent.begin(),limit=extent.end();iter!=limit;++iter)
+         currentLen+=(*iter).second;
+   }
+
+   // Sanity check to avoid performance degradation
+   if (minIncrease<(currentLen/100))
+      minIncrease=currentLen/100;
+
+   // Compute a desired increase
+   unsigned desiredIncrease=currentLen/8;
+   if (desiredIncrease<minIncrease)
+      desiredIncrease=minIncrease;
+
+   // Find the best free slot
+   unsigned last=0,lastSize=0,lastLast=0,current;
+   unsigned bestMin=0,bestMinPrev=0,bestMinSize=~0u;
+   unsigned bestPref=0,bestPrefPrev=0,bestPrefSize=~0u;
+   { BufferReference page(readShared(root)); current=InnerNode::interpret(page.getPage())->getNext(); }
+   while (current) {
+      BufferReference page(readShared(current));
+
+      // Fits?
+      unsigned size=FreePage::interpret(page)->getRange();
+      if (size>=minIncrease) {
+         if (size<bestMinSize) {
+            bestMin=current;
+            bestMinPrev=last;
+            bestMinSize=size;
+         }
+      }
+      if (size>=desiredIncrease) {
+         if (size<bestPrefSize) {
+            bestPref=current;
+            bestPrefPrev=last;
+            bestPrefSize=size;
+         }
+      }
+
+      // Go to the next page
+      lastLast=last; last=current; lastSize=size;
+      current=FreePage::interpret(page)->getNext();
+   }
+
+   // No chunk of the desired size found? Then fall back to the minimum size
+   if (!bestPref) {
+      bestPref=bestMin;
+      bestPrefPrev=bestMinPrev;
+      bestPrefSize=bestMinSize;
+   }
+
+   // Got a suitable position?
+   unsigned chunkStart,chunkSize,chunkNext;
+   if (bestPref) {
+      BufferReference chunk(readShared(bestPref));
+      chunkStart=bestPref;
+      chunkSize=FreePage::interpret(chunk.getPage())->getRange();
+      chunkNext=FreePage::interpret(chunk.getPage())->getNext();
+      last=bestPrefPrev;
+   } else {
+      // No, grow the partition
+      if (!partition.partition.grow(desiredIncrease,chunkStart,chunkSize))
+         return false;
+      // Merge with the last free chunk if appropriate
+      if ((last+lastSize)==chunkStart) {
+         chunkSize+=lastSize;
+         chunkStart=last;
+         last=lastLast;
+      }
+      chunkNext=0;
+   }
+
+   // Choose a suitable size, avoid small tails if it seems reasonable
+   unsigned size;
+   if (chunkSize<(2*desiredIncrease)) {
+      size=chunkSize;
+   } else {
+     size=desiredIncrease;
+   }
+   start=chunkStart; len=size;
+
+   // Break the chunk if necessary
+   if (size<chunkSize) {
+      BufferReferenceModified chunkTail(modifyExclusive(chunkStart+size));
+      UpdateFreePage(FreePage::interpret(chunkTail)->getNext(),FreePage::interpret(chunkTail)->getRange(),chunkNext,chunkSize-size).apply(chunkTail);
+      chunkNext=chunkStart+size;
+   }
+
+   // Update the chain
+   if (last) {
+      BufferReferenceModified listPage(modifyExclusive(last));
+      UpdateFreePage(FreePage::interpret(listPage)->getNext(),FreePage::interpret(listPage)->getRange(),chunkNext,FreePage::interpret(listPage)->getRange()).apply(listPage);
+   } else {
+      BufferReferenceModified rootPage(modifyExclusive(root));
+      UpdateInnerNext(InnerNode::interpret(rootPage.getPage())->getNext(),chunkNext).apply(rootPage);
+   }
+
+   // And remember the new chunk
+   insertInterval(segmentId,chunkStart,size);
+
+   return true;
 }
 //---------------------------------------------------------------------------

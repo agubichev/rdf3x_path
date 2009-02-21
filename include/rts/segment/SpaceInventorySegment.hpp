@@ -68,6 +68,8 @@ class SpaceInventorySegment : public Segment
    bool dropSegment(unsigned segmentId);
    /// Get the extend of a segment
    bool getExtent(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent);
+   /// Grow a segment
+   bool growSegment(unsigned id,unsigned minIncrease,unsigned& start,unsigned& len);
 };
 //---------------------------------------------------------------------------
 #endif

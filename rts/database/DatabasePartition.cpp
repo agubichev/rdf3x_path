@@ -33,7 +33,7 @@ void DatabasePartition::create()
    // Initialize a new partition with a space inventory and a segment inventory
 {
    assert(segments.empty());
-   
+
    // Ensure a sufficient partition size
    if (partition.getSize()<(SegmentInventorySegment::root+1)) {
       unsigned start,len;
@@ -78,6 +78,10 @@ void DatabasePartition::open()
       seg->id=id++;
       segments.push_back(seg);
    }
+
+   // Refresh the stored info
+   for (vector<Segment*>::const_iterator iter=segments.begin(),limit=segments.end();iter!=limit;++iter)
+      (*iter)->refreshInfo();
 }
 //---------------------------------------------------------------------------
 BufferRequest DatabasePartition::readShared(unsigned page) const
@@ -96,5 +100,17 @@ BufferRequestModified DatabasePartition::modifyExclusive(unsigned page)
    // Read a specific page
 {
    return BufferRequestModified(bufferManager,partition,page);
+}
+//---------------------------------------------------------------------------
+SpaceInventorySegment* DatabasePartition::getSpaceInventory()
+   // Get the space inventory
+{
+   return static_cast<SpaceInventorySegment*>(segments[1]);
+}
+//---------------------------------------------------------------------------
+SegmentInventorySegment* DatabasePartition::getSegmentInventory()
+   // Get the segment inventory
+{
+   return static_cast<SegmentInventorySegment*>(segments[1]);
 }
 //---------------------------------------------------------------------------

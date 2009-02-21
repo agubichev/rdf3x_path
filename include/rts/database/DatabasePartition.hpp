@@ -18,6 +18,7 @@ class BufferRequestExclusive;
 class BufferRequestModified;
 class Partition;
 class Segment;
+class SegmentInventorySegment;
 class SpaceInventorySegment;
 //---------------------------------------------------------------------------
 /// Manager for all segments contained in one partition
@@ -29,7 +30,7 @@ class DatabasePartition
       Tag_Generic = 0, Tag_SpaceInventory, Tag_SegmentInventory, Tag_Schema,
       // These are somewhat ad-hoc, but useful until we get a real schema segment
    };
-   
+
    private:
    /// The buffer manager
    BufferManager& bufferManager;
@@ -58,6 +59,11 @@ class DatabasePartition
    BufferRequestExclusive readExclusive(unsigned page);
    /// Read a specific page
    BufferRequestModified modifyExclusive(unsigned page);
+
+   /// Get the space inventory
+   SpaceInventorySegment* getSpaceInventory();
+   /// Get the segment inventory
+   SegmentInventorySegment* getSegmentInventory();
 };
 //---------------------------------------------------------------------------
 #endif
