@@ -44,6 +44,7 @@ struct GrowableMappedFile::Data
 };
 //----------------------------------------------------------------------------
 GrowableMappedFile::GrowableMappedFile()
+   : data(0)
    // Constructor
 {
 }
@@ -125,8 +126,6 @@ bool GrowableMappedFile::create(const char* name)
    #else
       int file=::open(name,O_RDWR|O_CREAT|O_TRUNC,00640);
       if (file<0) return false;
-
-      data=new Data();
    #endif
 
    // We created an empty file, no initial mapping
