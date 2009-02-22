@@ -10,8 +10,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-PathStatisticsSegment::PathStatisticsSegment(BufferManager& bufferManager,Partition& partition,unsigned statisticsPage)
-   : Segment(bufferManager,partition),statisticsPage(statisticsPage)
+PathStatisticsSegment::PathStatisticsSegment(DatabasePartition& partition,unsigned statisticsPage)
+   : Segment(partition),statisticsPage(statisticsPage)
    // Constructor
 {
 }

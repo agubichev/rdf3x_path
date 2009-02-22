@@ -1,6 +1,8 @@
 #ifndef H_rts_database_Database
 #define H_rts_database_Database
 //---------------------------------------------------------------------------
+#include <stdint.h>
+//---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
 //
@@ -15,6 +17,7 @@ class FactsSegment;
 class AggregatedFactsSegment;
 class FullyAggregatedFactsSegment;
 class FilePartition;
+class DatabasePartition;
 class DictionarySegment;
 class ExactStatisticsSegment;
 class StatisticsSegment;
@@ -32,9 +35,15 @@ class Database
 
    private:
    /// The underlying file
-   FilePartition* partition;
+   FilePartition* file;
    /// The database buffer
    BufferManager* bufferManager;
+   /// The partition
+   DatabasePartition* partition;
+   /// SN of the root page
+   uint64_t rootSN;
+   /// LSN offset of the current log
+   uint64_t startLSN;
    /// The fact segments
    FactsSegment* facts[6];
    /// The aggregated fact segments
@@ -59,6 +68,8 @@ class Database
    /// Destructor
    ~Database();
 
+   /// Create a new database
+   bool create(const char* fileName);
    /// Open a database
    bool open(const char* fileName,bool readOnly=false);
    /// Close the current database

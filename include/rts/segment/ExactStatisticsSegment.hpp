@@ -39,7 +39,7 @@ class ExactStatisticsSegment : public Segment
 
    public:
    /// Constructor
-   ExactStatisticsSegment(BufferManager& bufferManager,Partition& partition,Database& db,unsigned c2ps,unsigned c2po,unsigned c2so,unsigned c1s,unsigned c1p,unsigned c1o,unsigned long long c0ss,unsigned long long c0sp,unsigned long long c0so,unsigned long long c0ps,unsigned long long c0pp,unsigned long long c0po,unsigned long long c0os,unsigned long long c0op,unsigned long long c0oo);
+   ExactStatisticsSegment(DatabasePartition& partition,Database& db,unsigned c2ps,unsigned c2po,unsigned c2so,unsigned c1s,unsigned c1p,unsigned c1o,unsigned long long c0ss,unsigned long long c0sp,unsigned long long c0so,unsigned long long c0ps,unsigned long long c0pp,unsigned long long c0po,unsigned long long c0os,unsigned long long c0op,unsigned long long c0oo);
 
    /// Compute the cardinality of a single pattern
    unsigned getCardinality(unsigned subjectConstant,unsigned predicateConstant,unsigned objectConstant) const;

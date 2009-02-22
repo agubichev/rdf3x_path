@@ -147,9 +147,6 @@ class BufferManager
    /// BufferManager
    ~BufferManager();
 
-   /// Prefetch a number of pages
-   void prefetchPages(Partition& partition,unsigned start,unsigned stop);
-
    /// Prepare a page for writing without reading it. Page is exclusive but not modifed
    BufferFrame* buildPage(Partition& partition,unsigned pageNo);
    /// Read a page. Page is shared and not modified

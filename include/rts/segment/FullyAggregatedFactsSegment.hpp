@@ -32,7 +32,7 @@ class FullyAggregatedFactsSegment : public Segment
 
    public:
    /// Constructor
-   FullyAggregatedFactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1);
+   FullyAggregatedFactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1);
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }

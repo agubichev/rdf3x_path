@@ -32,7 +32,7 @@ class AggregatedFactsSegment : public Segment
 
    public:
    /// Constructor
-   AggregatedFactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2);
+   AggregatedFactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2);
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }
@@ -40,9 +40,6 @@ class AggregatedFactsSegment : public Segment
    unsigned getLevel1Groups() const { return groups1; }
    /// Get the number of level 2 groups
    unsigned getLevel2Groups() const { return groups2; }
-
-   /// Prefetch a range in the segment
-   void prefetchRange(unsigned start1,unsigned start2,unsigned stop1,unsigned stop2);
 
    /// A scan over the facts segment
    class Scan {

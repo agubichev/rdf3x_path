@@ -73,6 +73,8 @@ class FilePartition : public Partition
    bool flush();
    /// Grow the partition.
    bool grow(unsigned minIncrease,unsigned& start,unsigned& len);
+   /// The the partition size in pages
+   unsigned getSize() const;
 };
 //----------------------------------------------------------------------------
 #endif

@@ -29,7 +29,7 @@ class DictionarySegment : public Segment
 
    public:
    /// Constructor
-   DictionarySegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned mappingStart,unsigned indexRoot);
+   DictionarySegment(DatabasePartition& partition,unsigned tableStart,unsigned mappingStart,unsigned indexRoot);
 
    /// Lookup an id for a given string
    bool lookup(const std::string& text,unsigned& id);

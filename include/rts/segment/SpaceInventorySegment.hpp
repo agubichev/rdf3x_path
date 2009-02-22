@@ -35,7 +35,7 @@ class SpaceInventorySegment : public Segment
    /// The position of the root. Intentionally hard coded, there is only one space inventory per partition.
    /// Note: the "next" pointer of the root is start of the free list!
    static const unsigned root = 2;
-   
+
    /// The mutex
    Mutex mutex;
 
@@ -55,9 +55,12 @@ class SpaceInventorySegment : public Segment
    /// Get the extend of a segment
    bool getExtentLocked(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent);
 
+   /// Must initialize the segments
+   friend class DatabasePartition;
+
    public:
    /// Constructor
-   SpaceInventorySegment(BufferManager& buffer,Partition& partition);
+   SpaceInventorySegment(DatabasePartition& partition);
    /// Destructor
    ~SpaceInventorySegment();
 
@@ -65,6 +68,8 @@ class SpaceInventorySegment : public Segment
    bool dropSegment(unsigned segmentId);
    /// Get the extend of a segment
    bool getExtent(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent);
+   /// Grow a segment
+   bool growSegment(unsigned id,unsigned minIncrease,unsigned& start,unsigned& len);
 };
 //---------------------------------------------------------------------------
 #endif

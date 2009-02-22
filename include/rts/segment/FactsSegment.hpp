@@ -32,7 +32,7 @@ class FactsSegment : public Segment
 
    public:
    /// Constructor
-   FactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality);
+   FactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality);
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }

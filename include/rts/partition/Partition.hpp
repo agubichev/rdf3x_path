@@ -50,6 +50,8 @@ class Partition
    virtual bool flush() = 0;
    /// Grow the partition.
    virtual bool grow(unsigned minIncrease,unsigned& start,unsigned& len) = 0;
+   /// The the partition size in pages
+   virtual unsigned getSize() const = 0;
 };
 //----------------------------------------------------------------------------
 #endif

@@ -16,8 +16,8 @@ static const unsigned headerSize = 4;
 static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot); }
 static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot+4); }
 //---------------------------------------------------------------------------
-FullyAggregatedFactsSegment::FullyAggregatedFactsSegment(BufferManager& bufferManager,Partition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1)
-   : Segment(bufferManager,partition),tableStart(tableStart),indexRoot(indexRoot),
+FullyAggregatedFactsSegment::FullyAggregatedFactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1)
+   : Segment(partition),tableStart(tableStart),indexRoot(indexRoot),
      pages(pages),groups1(groups1)
    // Constructor
 {

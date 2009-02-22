@@ -39,7 +39,7 @@ class StatisticsSegment : public Segment
 
    public:
    /// Constructor
-   StatisticsSegment(BufferManager& bufferManager,Partition& partition,unsigned statisticsPage);
+   StatisticsSegment(DatabasePartition& partition,unsigned statisticsPage);
 
    /// Derive a bucket
    void lookup(Bucket& result);

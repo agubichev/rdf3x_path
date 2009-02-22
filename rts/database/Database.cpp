@@ -1,5 +1,6 @@
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferManager.hpp"
+#include "rts/database/DatabasePartition.hpp"
 #include "rts/partition/FilePartition.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/DictionarySegment.hpp"
@@ -8,6 +9,7 @@
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/StatisticsSegment.hpp"
 #include "rts/segment/PathStatisticsSegment.hpp"
+#include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -22,7 +24,7 @@
 static const unsigned bufferSize = 16*1024*1024;
 //---------------------------------------------------------------------------
 Database::Database()
-   : partition(0),bufferManager(0),dictionary(0),exactStatistics(0)
+   : file(0),bufferManager(0),partition(0),dictionary(0),exactStatistics(0)
    // Constructor
 {
    for (unsigned index=0;index<6;index++) {
@@ -42,6 +44,62 @@ Database::~Database()
    close();
 }
 //---------------------------------------------------------------------------
+static void writeUint64(unsigned char* writer,uint64_t value)
+   // Write a 64bit integer value
+{
+   writer[0]=static_cast<unsigned char>(value>>56);
+   writer[1]=static_cast<unsigned char>(value>>48);
+   writer[2]=static_cast<unsigned char>(value>>40);
+   writer[3]=static_cast<unsigned char>(value>>32);
+   writer[4]=static_cast<unsigned char>(value>>24);
+   writer[5]=static_cast<unsigned char>(value>>16);
+   writer[6]=static_cast<unsigned char>(value>>8);
+   writer[7]=static_cast<unsigned char>(value>>0);
+}
+//---------------------------------------------------------------------------
+bool Database::create(const char* fileName)
+   // Create a new database
+{
+   // Try to create the partition
+   file=new FilePartition();
+   if (!file->create(fileName))
+      return false;
+   unsigned start,len;
+   if (!file->grow(4,start,len))
+      return false;
+   assert((start==0)&&(len==4));
+   bufferManager=new BufferManager(bufferSize);
+   partition=new DatabasePartition(*bufferManager,*file);
+
+   // Create the inventory segments
+   partition->create();
+
+   // Format the root page
+   {
+      Partition::PageInfo pageInfo;
+      unsigned char* page=static_cast<unsigned char*>(file->buildPage(0,pageInfo));
+
+      // Magic
+      page[0]='R'; page[1]='D'; page[2]='F'; page[3]=0;
+      page[4]=0;   page[5]=0;   page[6]=0;   page[7]=2;
+
+      // Root SN
+      rootSN=1;
+      writeUint64(page+8,rootSN);
+      writeUint64(page+BufferReference::pageSize-8,rootSN);
+
+      // Start LSN
+      startLSN=0;
+      writeUint64(page+16,startLSN);
+
+      file->flushWrittenPage(pageInfo);
+      file->finishWrittenPage(pageInfo);
+   }
+   file->flush();
+
+   return true;
+}
+//---------------------------------------------------------------------------
 static unsigned readUint32(const unsigned char* data) { return (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3]; }
 //---------------------------------------------------------------------------
 static unsigned long long readUint64(const unsigned char* data)
@@ -59,10 +117,11 @@ bool Database::open(const char* fileName,bool readOnly)
 
    // Try to open the database
    bufferManager=new BufferManager(bufferSize);
-   partition=new FilePartition();
-   if (partition->open(fileName,readOnly)) {
+   file=new FilePartition();
+   partition=new DatabasePartition(*bufferManager,*file);
+   if (file->open(fileName,readOnly)) {
       // Read the directory page
-      BufferReference directory(BufferRequest(*bufferManager,*partition,0));
+      BufferReference directory(BufferRequest(*bufferManager,*file,0));
       const unsigned char* page=static_cast<const unsigned char*>(directory.getPage());
 
       // Check the header
@@ -104,16 +163,16 @@ bool Database::open(const char* fileName,bool readOnly)
 
          // Construct the segments
          for (unsigned index=0;index<6;index++) {
-            facts[index]=new FactsSegment(*bufferManager,*partition,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
-            aggregatedFacts[index]=new AggregatedFactsSegment(*bufferManager,*partition,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
-            statistics[index]=new StatisticsSegment(*bufferManager,*partition,statisticsPages[index]);
+            facts[index]=new FactsSegment(*partition,factStarts[index],factIndices[index],pageCounts[index],groups1[index],groups2[index],cardinalities[index]);
+            aggregatedFacts[index]=new AggregatedFactsSegment(*partition,aggregatedFactStarts[index],aggregatedFactIndices[index],aggregatedPageCounts[index],groups1[index],groups2[index]);
+            statistics[index]=new StatisticsSegment(*partition,statisticsPages[index]);
          }
          for (unsigned index=0;index<3;index++)
-            fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*bufferManager,*partition,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
+            fullyAggregatedFacts[index]=new FullyAggregatedFactsSegment(*partition,fullyAggregatedFactStarts[index],fullyAggregatedFactIndices[index],fullyAggregatedFactIndices[index]-fullyAggregatedFactStarts[index],groups1[index*2]);
          for (unsigned index=0;index<2;index++)
-            pathStatistics[index]=new PathStatisticsSegment(*bufferManager,*partition,pathStatisticsPages[index]);
-         exactStatistics=new ExactStatisticsSegment(*bufferManager,*partition,*this,exactStatisticsPages[0],exactStatisticsPages[1],exactStatisticsPages[2],exactStatisticsPages[3],exactStatisticsPages[4],exactStatisticsPages[5],exactStatisticsJoinCounts[0],exactStatisticsJoinCounts[1],exactStatisticsJoinCounts[2],exactStatisticsJoinCounts[3],exactStatisticsJoinCounts[4],exactStatisticsJoinCounts[5],exactStatisticsJoinCounts[6],exactStatisticsJoinCounts[7],exactStatisticsJoinCounts[8]);
-         dictionary=new DictionarySegment(*bufferManager,*partition,stringStart,stringMapping,stringIndex);
+            pathStatistics[index]=new PathStatisticsSegment(*partition,pathStatisticsPages[index]);
+         exactStatistics=new ExactStatisticsSegment(*partition,*this,exactStatisticsPages[0],exactStatisticsPages[1],exactStatisticsPages[2],exactStatisticsPages[3],exactStatisticsPages[4],exactStatisticsPages[5],exactStatisticsJoinCounts[0],exactStatisticsJoinCounts[1],exactStatisticsJoinCounts[2],exactStatisticsJoinCounts[3],exactStatisticsJoinCounts[4],exactStatisticsJoinCounts[5],exactStatisticsJoinCounts[6],exactStatisticsJoinCounts[7],exactStatisticsJoinCounts[8]);
+         dictionary=new DictionarySegment(*partition,stringStart,stringMapping,stringIndex);
 
          return true;
       }
@@ -148,10 +207,12 @@ void Database::close()
    exactStatistics=0;
    delete dictionary;
    dictionary=0;
-   delete bufferManager;
-   bufferManager=0;
    delete partition;
    partition=0;
+   delete bufferManager;
+   bufferManager=0;
+   delete file;
+   file=0;
 }
 //---------------------------------------------------------------------------
 FactsSegment& Database::getFacts(DataOrder order)
