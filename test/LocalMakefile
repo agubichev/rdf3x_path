@@ -1,0 +1,6 @@
+src_test:=			\
+	test/rdf3xtest.cpp
+
+$(PREFIX)rdf3xtest$(EXEEXT): $(addprefix $(PREFIX),$(src_test:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)) $(src_gtest:.cpp=$(OBJEXT)))
+	$(buildexe)
+

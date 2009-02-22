@@ -19,6 +19,7 @@ include infra/LocalMakefile
 include makeutil/LocalMakefile
 include rts/LocalMakefile
 include gtest/LocalMakefile
+include test/LocalMakefile
 
 ifeq ($(LINEEDITOR),1)
 src_lineeditor:=lineeditor/LineInput.cpp lineeditor/LineEditor.cpp lineeditor/Terminal.cpp lineeditor/Display.cpp lineeditor/Buffer.cpp
@@ -41,7 +42,7 @@ endif
 #############################################################################
 # Compiling
 
-compile=$(CXX) -c $(TARGET)$(call nativefile,$@) $(CXXFLAGS) $(IFLAGS) $(call nativefile,$<)
+compile=$(CXX) -c $(TARGET)$(call nativefile,$@) $(CXXFLAGS) $(CXXFLAGS-$(firstword $(subst /, ,$<))) $(IFLAGS) $(IFLAGS-$(firstword $(subst /, ,$<))) $(call nativefile,$<)
 
 $(PREFIX)%$(OBJEXT): %.cpp $(PREFIX)makeutil/getdep$(EXEEXT)
 	$(checkdir)
