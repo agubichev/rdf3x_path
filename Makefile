@@ -18,6 +18,7 @@ include cts/LocalMakefile
 include infra/LocalMakefile
 include makeutil/LocalMakefile
 include rts/LocalMakefile
+include gtest/LocalMakefile
 
 ifeq ($(LINEEDITOR),1)
 src_lineeditor:=lineeditor/LineInput.cpp lineeditor/LineEditor.cpp lineeditor/Terminal.cpp lineeditor/Display.cpp lineeditor/Buffer.cpp
