@@ -18,10 +18,11 @@ int main(int argc,char* argv[])
    if ((argc==2)&&(string(argv[1])=="--help")) {
       cout << "usage: " << argv[0] << " [option(s)]" << endl
            << "Recognized options:" << endl
-           << "--gtest_list_tests      list all tests without running" << endl
-           << "--gtest_filter=WildExpr run only selected tests" << endl
-           << "--gtest_print_time      show timing" << endl
-           << "--gtest_repeat=X        repeat tests X times" << endl;
+           << "--gtest_list_tests       list all tests without running" << endl
+           << "--gtest_filter=WildExpr  run only selected tests" << endl
+           << "--gtest_print_time       show timing" << endl
+           << "--gtest_repeat=X         repeat tests X times" << endl
+           << "--gtest_break_on_failure break into the debugger on errors" << endl;
       return 1;
    }
 
