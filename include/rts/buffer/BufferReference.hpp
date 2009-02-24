@@ -82,6 +82,9 @@ class BufferReference
    /// Destructor
    ~BufferReference();
 
+   /// Null reference?
+   bool operator!() const { return !frame; }
+
    /// Remap the reference to a different page
    BufferReference& operator=(const BufferRequest& request);
    /// Swap two reference
@@ -119,6 +122,9 @@ class BufferReferenceExclusive
    /// Destructor
    ~BufferReferenceExclusive();
 
+   /// Null reference?
+   bool operator!() const { return !frame; }
+
    /// Remap the reference to a different page
    BufferReferenceExclusive& operator=(const BufferRequestExclusive& request);
    /// Swap two reference
@@ -152,8 +158,13 @@ class BufferReferenceModified
    /// Destructor. unfix _must_ be called before the destructor!
    ~BufferReferenceModified();
 
+   /// Null reference?
+   bool operator!() const { return !frame; }
+
    /// Remap the reference to a different page
    BufferReferenceModified& operator=(const BufferRequestModified& request);
+   /// Swap two reference
+   void swap(BufferReferenceModified& other);
    /// Modify an already exclusively locked page. Transfers ownership of the page!
    void modify(BufferReferenceExclusive& ref);
    /// Unfix without logging. Logging is done by Transaction::unfix

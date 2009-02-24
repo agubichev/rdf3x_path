@@ -155,6 +155,14 @@ BufferReferenceModified& BufferReferenceModified::operator=(const BufferRequestM
    return *this;
 }
 //---------------------------------------------------------------------------
+void BufferReferenceModified::swap(BufferReferenceModified& other)
+   // Swap two reference
+{
+   BufferFrame* f=frame;
+   frame=other.frame;
+   other.frame=f;
+}
+//---------------------------------------------------------------------------
 void BufferReferenceModified::modify(BufferReferenceExclusive& ref)
    // Modify an already exclusively locked page. Transfers ownership of the page!
 {
