@@ -49,6 +49,7 @@ void DatabasePartition::create()
    // Create a space inventory
    SpaceInventorySegment* spaceInv=new SpaceInventorySegment(*this);
    spaceInv->id=0;
+   spaceInv->formatRoot();
    spaceInv->insertInterval(0,SpaceInventorySegment::root,SpaceInventorySegment::root);
    segments.push_back(pair<Segment*,unsigned>(spaceInv,Tag_SpaceInventory));
 

@@ -380,6 +380,13 @@ Segment::Type SpaceInventorySegment::getType() const
    return Segment::Type_SpaceInventory;
 }
 //---------------------------------------------------------------------------
+void SpaceInventorySegment::formatRoot()
+   // Format the root when creating a new partition
+{
+   BufferReferenceModified rootPage(modifyExclusive(root));
+   BuildLeafNode(0,0,LogData(0,0)).apply(rootPage);
+}
+//---------------------------------------------------------------------------
 void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
    // Allocate a new page
 {
