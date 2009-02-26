@@ -149,7 +149,7 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    unsigned dirPage,dirSlot;
    if (id<entriesOnFirstPage) {
       dirPage=mappingStart;
-      dirSlot=id;
+      dirSlot=id+1;
    } else {
       dirPage=mappingStart+1+((id-entriesOnFirstPage)/entriesPerPage);
       dirSlot=(id-entriesOnFirstPage)%entriesPerPage;
