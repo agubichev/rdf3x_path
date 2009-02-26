@@ -961,6 +961,7 @@ static void computeExact1Inner(ExactStatisticsSegment& seg,const vector<pair<uns
       buffer[index]=0;
    chainer.store(&seg,buffer);
    boundaries.push_back(pair<unsigned,unsigned>(data.back().first,chainer.getPageNo()));
+   chainer.finish();
 }
 //---------------------------------------------------------------------------
 static unsigned computeExact1(DatabasePartition& part,ExactStatisticsSegment& seg,Database::DataOrder order1,Database::DataOrder order2,const char* countMap)
