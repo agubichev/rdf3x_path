@@ -255,13 +255,14 @@ void FullyAggregatedFactsSegment::loadFullyAggregatedFacts(void* reader_)
    packFullyAggregatedLeaves(&reader,&boundaries);
 
    // Only one leaf node? Special case this
-   vector<DatabaseBuilder::Triple> newBoundaries;
    if (boundaries.size()==1) {
+      vector<DatabaseBuilder::Triple> newBoundaries;
       packFullyAggregatedInner(&boundaries,&newBoundaries);
       swap(boundaries,newBoundaries);
    } else {
       // Write the inner nodes
       while (boundaries.size()>1) {
+         vector<DatabaseBuilder::Triple> newBoundaries;
          packFullyAggregatedInner(&boundaries,&newBoundaries);
          swap(boundaries,newBoundaries);
       }

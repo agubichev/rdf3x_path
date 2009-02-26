@@ -284,13 +284,14 @@ void FactsSegment::loadFullFacts(void* reader_)
    packLeaves(&reader,&boundaries);
 
    // Only one leaf node? Special case this
-   vector<pair<DatabaseBuilder::Triple,unsigned> > newBoundaries;
    if (boundaries.size()==1) {
+      vector<pair<DatabaseBuilder::Triple,unsigned> > newBoundaries;
       packInner(&boundaries,&newBoundaries);
       swap(boundaries,newBoundaries);
    } else {
       // Write the inner nodes
       while (boundaries.size()>1) {
+         vector<pair<DatabaseBuilder::Triple,unsigned> > newBoundaries;
          packInner(&boundaries,&newBoundaries);
          swap(boundaries,newBoundaries);
       }

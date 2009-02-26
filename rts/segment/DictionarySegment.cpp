@@ -441,13 +441,14 @@ void DictionarySegment::loadStringHashes(void* reader_)
    writeStringLeaves(&reader,&boundaries);
 
    // Only one leaf node? Special case this
-   vector<pair<unsigned,unsigned> > newBoundaries;
    if (boundaries.size()==1) {
+      vector<pair<unsigned,unsigned> > newBoundaries;
       writeStringInner(&boundaries,&newBoundaries);
       swap(boundaries,newBoundaries);
    } else {
       // Write the inner nodes
       while (boundaries.size()>1) {
+         vector<pair<unsigned,unsigned> > newBoundaries;
          writeStringInner(&boundaries,&newBoundaries);
          swap(boundaries,newBoundaries);
       }
