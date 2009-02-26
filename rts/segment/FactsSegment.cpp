@@ -394,7 +394,7 @@ bool FactsSegment::Scan::readNextPage()
    // Alread read the first page? Then read the next one
    if (pos-1) {
       const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
-      unsigned nextPage=readUint32Aligned(page);
+      unsigned nextPage=readUint32Aligned(page+8);
       if (!nextPage)
          return false;
       current=seg->readShared(nextPage);
