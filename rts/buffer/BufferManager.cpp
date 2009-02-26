@@ -46,7 +46,7 @@ BufferFrame* BufferFrame::update() const
 //---------------------------------------------------------------------------
 BufferManager::BufferManager(unsigned bufferSizeHintInBytes)
    : bufferSize(bufferSizeHintInBytes/BufferReference::pageSize),dirtLimit(3*bufferSize/4),releasedFrames(0),
-     logManager(0),checkpointsEnabled(false)
+     dirtCounter(0),logManager(0),checkpointsEnabled(false),pagesSinceLastCheckpoint(0),doCrash(false)
    // Constructor
 {
    // Start the writer thread
