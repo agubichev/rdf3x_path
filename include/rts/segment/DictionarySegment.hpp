@@ -13,23 +13,45 @@
 #include "rts/segment/Segment.hpp"
 #include <string>
 //---------------------------------------------------------------------------
+class DatabaseBuilder;
+//---------------------------------------------------------------------------
 /// A dictionary mapping strings to ids and backwards
 class DictionarySegment : public Segment
 {
    private:
    /// The start of the raw string table
    unsigned tableStart;
+   /// The next id after the existing ones
+   unsigned nextId;
    /// The start of the mapping table (id->page)
    unsigned mappingStart;
    /// The root of the index b-tree
    unsigned indexRoot;
 
+   /// Refresh segment info stored in the partition
+   void refreshInfo();
    /// Lookup an id for a given string on a certain page in the raw string table
    bool lookupOnPage(unsigned pageNo,const std::string& text,unsigned hash,unsigned& id);
 
+   /// Load the raw strings (must be in id order)
+   void loadStrings(void* reader);
+   /// Load the string mappings (must be in id order)
+   void loadStringMappings(void* reader);
+   /// Write the leaf nodes of the string index
+   void writeStringLeaves(void* reader,void* boundaries);
+   /// Write inner nodes
+   void writeStringInner(const void* data,void* boundaries);
+   /// Write the string index
+   void loadStringHashes(void* reader);
+
+   friend class DatabaseBuilder;
+
    public:
    /// Constructor
-   DictionarySegment(DatabasePartition& partition,unsigned tableStart,unsigned mappingStart,unsigned indexRoot);
+   DictionarySegment(DatabasePartition& partition);
+
+   /// Get the type
+   Type getType() const;
 
    /// Lookup an id for a given string
    bool lookup(const std::string& text,unsigned& id);

@@ -17,6 +17,7 @@ class BufferRequest;
 class BufferRequestExclusive;
 class BufferRequestModified;
 class BufferReferenceModified;
+class DatabaseBuilder;
 class DatabasePartition;
 class SpaceInventorySegment;
 //---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ class Segment
 {
    public:
    /// Known segment types
-   enum Type { Unused,SpaceInventorySegment, SegmentInventorySegment };
+   enum Type { Unused, Type_SpaceInventory, Type_SegmentInventory, Type_Facts, Type_AggregatedFacts, Type_FullyAggregatedFacts, Type_Dictionary, Type_ExactStatistics };
 
    private:
    /// The containing database partition
@@ -41,6 +42,8 @@ class Segment
    friend class DatabasePartition;
    // Must access the underlying partition to grow it
    friend class SpaceInventorySegment;
+   // Must allocate pages for segments
+   friend class DatabaseBuilder;
 
    protected:
    /// Constructor
@@ -48,6 +51,12 @@ class Segment
 
    /// Refresh segment info stored in the partition
    virtual void refreshInfo();
+   /// Get segment info
+   unsigned getSegmentData(unsigned slot);
+   /// Set segment info
+   void setSegmentData(unsigned slot,unsigned value);
+   /// Get the partition
+   DatabasePartition& getPartition() const { return partition; }
 
    /// Read a specific page
    BufferRequest readShared(unsigned page) const;
@@ -68,6 +77,9 @@ class Segment
    /// Destructor
    virtual ~Segment();
 
+   /// Get the type
+   virtual Type getType() const = 0;
+
    /// Convert to host order. This assumes little endinan-order! (needs a define for big endian)
    static inline unsigned toHost(unsigned value) { return flipByteOrder(value); }
    /// Convert to big endian. This assumes little endinan-order! (needs a define for big endian)
@@ -76,6 +88,8 @@ class Segment
    static inline unsigned readUint32(const unsigned char* data) { return (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3]; }
    /// Helper function. Reads a 32bit big-endian value that is guaranteed to be aligned
    static inline unsigned readUint32Aligned(const unsigned char* data) { return toHost(*reinterpret_cast<const uint32_t*>(data)); }
+   // Helper function. Read a 64bit big-endian value
+   static unsigned long long readUint64(const unsigned char* data);
    /// Helper function. Write a 32bit big-endian value
    static void writeUint32(unsigned char* data,unsigned value);
    /// Helper function. Writes a 32bit big-endian value that is guaranteed to be aligned

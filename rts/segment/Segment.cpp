@@ -43,6 +43,18 @@ void Segment::refreshInfo()
    partition.getSegmentInventory()->getFreeList(id);
 }
 //---------------------------------------------------------------------------
+unsigned Segment::getSegmentData(unsigned slot)
+   // Get segment info
+{
+   return partition.getSegmentInventory()->getCustom(id,slot);
+}
+//---------------------------------------------------------------------------
+void Segment::setSegmentData(unsigned slot,unsigned value)
+   // Set segment info
+{
+   partition.getSegmentInventory()->setCustom(id,slot,value);
+}
+//---------------------------------------------------------------------------
 BufferRequest Segment::readShared(unsigned page) const
    // Read a specific page
 {
@@ -105,5 +117,14 @@ void Segment::writeUint32(unsigned char* data,unsigned value)
    data[1]=static_cast<unsigned char>(value>>16);
    data[2]=static_cast<unsigned char>(value>>8);
    data[3]=static_cast<unsigned char>(value>>0);
+}
+//---------------------------------------------------------------------------
+unsigned long long Segment::readUint64(const unsigned char* data)
+   // Helper function. Read a 64bit big-endian value
+{
+   unsigned long long result=0;
+   for (unsigned index=0;index<8;index++)
+      result=(result<<8)|static_cast<unsigned long long>(data[7-index]);
+   return result;
 }
 //---------------------------------------------------------------------------

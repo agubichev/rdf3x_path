@@ -23,7 +23,7 @@ class SpaceInventorySegment : public Segment
 {
    public:
    /// The segment id
-   static const Segment::Type ID = Segment::SpaceInventorySegment;
+   static const Segment::Type ID = Segment::Type_SpaceInventory;
    /// Possible actions
    enum Action {
       Action_BuildInnerNode,Action_ShrinkInnerNode,Action_InsertInnerInterval,Action_UpdateInnerNext,
@@ -63,6 +63,9 @@ class SpaceInventorySegment : public Segment
    SpaceInventorySegment(DatabasePartition& partition);
    /// Destructor
    ~SpaceInventorySegment();
+
+   /// Get the type
+   Type getType() const;
 
    /// Completely drop a segment
    bool dropSegment(unsigned segmentId);

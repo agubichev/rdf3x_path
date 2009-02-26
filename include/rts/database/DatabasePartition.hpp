@@ -29,6 +29,10 @@ class DatabasePartition
    enum Tag {
       Tag_Generic = 0, Tag_SpaceInventory, Tag_SegmentInventory, Tag_Schema,
       // These are somewhat ad-hoc, but useful until we get a real schema segment
+      Tag_SPO,Tag_Tag_SOP,Tag_OPS,Tag_OSP,Tag_PSO,Tag_POS,
+      Tag_SP,Tag_SO,Tag_OP,Tag_OS,Tag_PS,Tag_PO,
+      Tag_S,Tag_O,Tag_P,
+      Tag_Dictionary,Tag_ExactStatistics
    };
 
    private:
@@ -37,7 +41,7 @@ class DatabasePartition
    /// The partition
    Partition& partition;
    /// All segments
-   std::vector<Segment*> segments;
+   std::vector<std::pair<Segment*,unsigned> > segments;
 
    /// The space inventory must be able to grow the underlying partition
    friend class SpaceInventorySegment;
@@ -64,6 +68,13 @@ class DatabasePartition
    SpaceInventorySegment* getSpaceInventory();
    /// Get the segment inventory
    SegmentInventorySegment* getSegmentInventory();
+
+   /// Add a segment
+   void addSegment(Segment* seg,unsigned tag=0);
+   /// Lookup the first segment with this tag
+   Segment* lookupSegmentBase(unsigned tag);
+   /// Lookup the first segment with this tag
+   template <class T> T* lookupSegment(unsigned tag) { return dynamic_cast<T*>(lookupSegmentBase(tag)); }
 };
 //---------------------------------------------------------------------------
 #endif

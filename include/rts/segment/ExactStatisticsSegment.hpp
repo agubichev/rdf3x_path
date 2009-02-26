@@ -12,24 +12,35 @@
 //---------------------------------------------------------------------------
 #include "rts/segment/Segment.hpp"
 //---------------------------------------------------------------------------
+class AggregatedFactsSegment;
 class Database;
+class DatabaseBuilder;
+class FullyAggregatedFactsSegment;
+class MemoryMappedFile;
 //---------------------------------------------------------------------------
 /// Exact cardinality and join selectivity statistics
 class ExactStatisticsSegment : public Segment
 {
+   public:
+   class Dumper2;
+   class Dumper1;
+
    private:
-   /// Link to the other segment
-   Database& db;
    /// The position of the statistics
    unsigned c2ps,c2po,c2so,c1s,c1p,c1o;
    /// Join result sizes without constants
    unsigned long long c0ss,c0sp,c0so,c0ps,c0pp,c0po,c0os,c0op,c0oo;
    /// The total size of the database
    unsigned totalCardinality;
+   /// Position of the directory
+   unsigned directoryPage;
 
-   ExactStatisticsSegment(const ExactStatisticsSegment&);
-   void operator=(const ExactStatisticsSegment&);
-
+   /// Refresh segment info stored in the partition
+   void refreshInfo();
+   /// Lookup a segment
+   AggregatedFactsSegment& getAggregatedFacts(unsigned order) const;
+   /// Lookup a segment
+   FullyAggregatedFactsSegment& getFullyAggregatedFacts(unsigned order) const;
    /// Lookup join cardinalities
    bool getJoinInfo(unsigned long long* joinInfo,unsigned subjectConstant,unsigned predicateConstant,unsigned objectConstant) const;
    /// Lookup join cardinalities for two constants
@@ -37,9 +48,20 @@ class ExactStatisticsSegment : public Segment
    /// Lookup join cardinalities for one constant
    bool getJoinInfo1(unsigned root,unsigned value1,unsigned long long& s1,unsigned long long& p1,unsigned long long& o1,unsigned long long& s2,unsigned long long& p2,unsigned long long& o2) const;
 
+   /// Compute exact statistics (after loading)
+   void computeExactStatistics(MemoryMappedFile& countMap);
+
+   friend class DatabaseBuilder;
+
+   ExactStatisticsSegment(const ExactStatisticsSegment&);
+   void operator=(const ExactStatisticsSegment&);
+
    public:
    /// Constructor
-   ExactStatisticsSegment(DatabasePartition& partition,Database& db,unsigned c2ps,unsigned c2po,unsigned c2so,unsigned c1s,unsigned c1p,unsigned c1o,unsigned long long c0ss,unsigned long long c0sp,unsigned long long c0so,unsigned long long c0ps,unsigned long long c0pp,unsigned long long c0po,unsigned long long c0os,unsigned long long c0op,unsigned long long c0oo);
+   ExactStatisticsSegment(DatabasePartition& partition);
+
+   /// Get the type
+   Type getType() const;
 
    /// Compute the cardinality of a single pattern
    unsigned getCardinality(unsigned subjectConstant,unsigned predicateConstant,unsigned objectConstant) const;

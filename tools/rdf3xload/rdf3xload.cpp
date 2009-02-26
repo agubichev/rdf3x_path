@@ -588,12 +588,6 @@ static void loadStatistics(DatabaseBuilder& builder,TempFile& facts)
 {
    cout << "Computing statistics..." << endl;
 
-   for (unsigned index=0;index<6;index++)
-      builder.computeStatistics(index);
-
-   builder.computePathStatistics();
-
-   cout << "Computing exact statistics..." << endl;
    TempFile tmp(facts.getBaseFile());
    tmp.close();
    builder.computeExactStatistics(tmp.getFile().c_str());
@@ -610,9 +604,6 @@ static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)
 
    // Load the strings
    loadStrings(builder,stringTable);
-
-   // Finish the load phase
-   builder.finishLoading();
 
    // Compute the statistics
    loadStatistics(builder,facts);

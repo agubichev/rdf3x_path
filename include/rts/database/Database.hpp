@@ -20,8 +20,6 @@ class FilePartition;
 class DatabasePartition;
 class DictionarySegment;
 class ExactStatisticsSegment;
-class StatisticsSegment;
-class PathStatisticsSegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
 class Database
@@ -44,20 +42,6 @@ class Database
    uint64_t rootSN;
    /// LSN offset of the current log
    uint64_t startLSN;
-   /// The fact segments
-   FactsSegment* facts[6];
-   /// The aggregated fact segments
-   AggregatedFactsSegment* aggregatedFacts[6];
-   /// The fully aggregated facts
-   FullyAggregatedFactsSegment* fullyAggregatedFacts[3];
-   /// The dictionary segment
-   DictionarySegment* dictionary;
-   /// The statistics
-   StatisticsSegment* statistics[6];
-   /// The path statistics
-   PathStatisticsSegment* pathStatistics[2];
-   /// The exact statistics
-   ExactStatisticsSegment* exactStatistics;
 
    Database(const Database&);
    void operator=(const Database&);
@@ -81,14 +65,13 @@ class Database
    AggregatedFactsSegment& getAggregatedFacts(DataOrder order);
    /// Get fully aggregated fcats
    FullyAggregatedFactsSegment& getFullyAggregatedFacts(DataOrder order);
-   /// Get fact statistics
-   StatisticsSegment& getStatistics(DataOrder order);
-   /// Get path statistics
-   PathStatisticsSegment& getPathStatistics(bool stars);
    /// Get the exact statistics
    ExactStatisticsSegment& getExactStatistics();
    /// Get the dictionary
    DictionarySegment& getDictionary();
+
+   /// Get the first partition
+   DatabasePartition& getFirstPartition() { return *partition; }
 };
 //---------------------------------------------------------------------------
 #endif

@@ -13,6 +13,8 @@
 #include "rts/segment/Segment.hpp"
 #include "rts/buffer/BufferReference.hpp"
 //---------------------------------------------------------------------------
+class DatabaseBuilder;
+//---------------------------------------------------------------------------
 /// A compressed facts table stored in a clustered B-Tree
 class FactsSegment : public Segment
 {
@@ -24,15 +26,31 @@ class FactsSegment : public Segment
    /// Statistics
    unsigned pages,groups1,groups2,cardinality;
 
+   /// Refresh segment info stored in the partition
+   void refreshInfo();
    /// Lookup the first page contains entries >= the start condition
    bool lookup(unsigned start1,unsigned start2,unsigned start3,BufferReference& ref);
+
+   /// Pack the facts into leaves using prefix compression
+   void packLeaves(void* reader,void* boundaries);
+   /// Create inner nodes
+   void packInner(const void* data,void* boundaries);
+   /// Load the triples into the database
+   void loadFullFacts(void* reader);
+   /// Load count statistics
+   void loadCounts(unsigned groups1,unsigned groups2,unsigned cardinality);
 
    FactsSegment(const FactsSegment&);
    void operator=(const FactsSegment&);
 
+   friend class DatabaseBuilder;
+
    public:
    /// Constructor
-   FactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality);
+   explicit FactsSegment(DatabasePartition& partition);
+
+   /// Get the type
+   Type getType() const;
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }

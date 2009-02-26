@@ -1,4 +1,7 @@
 #include "rts/segment/AggregatedFactsSegment.hpp"
+#include "rts/database/DatabaseBuilder.hpp"
+#include <vector>
+#include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -9,24 +12,48 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+using namespace std;
+//---------------------------------------------------------------------------
 /// The size of the header on each fact page
-static const unsigned headerSize = 4;
+static const unsigned headerSize = 12; // LSN+next pointer
+//---------------------------------------------------------------------------
+// Info slots
+static const unsigned slotTableStart = 0;
+static const unsigned slotIndexRoot = 1;
+static const unsigned slotPages = 2;
+static const unsigned slotGroups1 = 3;
+static const unsigned slotGroups2 = 4;
 //---------------------------------------------------------------------------
 /// Helper functions
-static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+12*slot); }
-static inline unsigned readInner2(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+12*slot+4); }
-static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+12*slot+8); }
+static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+12*slot); }
+static inline unsigned readInner2(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+12*slot+4); }
+static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+12*slot+8); }
 //---------------------------------------------------------------------------
 /// Compare
 static inline bool greater(unsigned a1,unsigned a2,unsigned b1,unsigned b2) {
    return (a1>b1)||((a1==b1)&&(a2>b2));
 }
 //---------------------------------------------------------------------------
-AggregatedFactsSegment::AggregatedFactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2)
-   : Segment(partition),tableStart(tableStart),indexRoot(indexRoot),
-     pages(pages),groups1(groups1),groups2(groups2)
+AggregatedFactsSegment::AggregatedFactsSegment(DatabasePartition& partition)
+   : Segment(partition),tableStart(0),indexRoot(0),pages(0),groups1(0),groups2(0)
    // Constructor
 {
+}
+//---------------------------------------------------------------------------
+Segment::Type AggregatedFactsSegment::getType() const
+   // Get the type
+{
+   return Segment::Type_AggregatedFacts;
+}
+//---------------------------------------------------------------------------
+void AggregatedFactsSegment::refreshInfo()
+   // Refresh segment info stored in the partition
+{
+   tableStart=getSegmentData(slotTableStart);
+   indexRoot=getSegmentData(slotIndexRoot);
+   pages=getSegmentData(slotPages);
+   groups1=getSegmentData(slotGroups1);
+   groups2=getSegmentData(slotGroups2);
 }
 //---------------------------------------------------------------------------
 bool AggregatedFactsSegment::lookup(unsigned start1,unsigned start2,BufferReference& ref)
@@ -37,9 +64,9 @@ bool AggregatedFactsSegment::lookup(unsigned start1,unsigned start2,BufferRefere
    while (true) {
       const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
       // Inner node?
-      if (readUint32Aligned(page)==0xFFFFFFFF) {
+      if (readUint32Aligned(page+8)==0xFFFFFFFF) {
          // Perform a binary search. The test is more complex as we only have the upper bound for ranges
-         unsigned left=0,right=readUint32Aligned(page+8);
+         unsigned left=0,right=readUint32Aligned(page+16);
          while (left!=right) {
             unsigned middle=(left+right)/2;
             unsigned middle1=readInner1(page,middle),middle2=readInner2(page,middle);
@@ -62,6 +89,204 @@ bool AggregatedFactsSegment::lookup(unsigned start1,unsigned start2,BufferRefere
          return true;
       }
    }
+}
+//---------------------------------------------------------------------------
+static unsigned bytes0(unsigned v)
+   // Compute the number of bytes required to encode a value with 0 compression
+{
+   if (v>=(1<<24))
+      return 4; else
+   if (v>=(1<<16))
+      return 3; else
+   if (v>=(1<<8)) return 2;
+   if (v>0)
+      return 1; else
+      return 0;
+}
+//---------------------------------------------------------------------------
+static unsigned writeDelta0(unsigned char* buffer,unsigned ofs,unsigned value)
+   // Write an integer with varying size with 0 compression
+{
+   if (value>=(1<<24)) {
+      Segment::writeUint32(buffer+ofs,value);
+      return ofs+4;
+   } else if (value>=(1<<16)) {
+      buffer[ofs]=value>>16;
+      buffer[ofs+1]=(value>>8)&0xFF;
+      buffer[ofs+2]=value&0xFF;
+      return ofs+3;
+   } else if (value>=(1<<8)) {
+      buffer[ofs]=value>>8;
+      buffer[ofs+1]=value&0xFF;
+      return ofs+2;
+   } else if (value>0) {
+      buffer[ofs]=value;
+      return ofs+1;
+   } else return ofs;
+}
+//---------------------------------------------------------------------------
+void AggregatedFactsSegment::packAggregatedLeaves(void* reader_,void* boundaries_)
+   // Pack the aggregated facts into leaves using prefix compression
+{
+   DatabaseBuilder::FactsReader& factsReader=*static_cast<DatabaseBuilder::FactsReader*>(reader_);
+   std::vector<DatabaseBuilder::Triple>& boundaries=*static_cast<std::vector<DatabaseBuilder::Triple>*>(boundaries_);
+
+   DatabaseBuilder::PageChainer chainer(8);
+   unsigned char buffer[BufferReference::pageSize];
+   unsigned bufferPos=headerSize;
+   unsigned lastSubject=0,lastPredicate=0;
+
+   DatabaseBuilder::PutbackReader reader(factsReader);
+   unsigned subject,predicate,object;
+   while (reader.next(subject,predicate,object)) {
+      // Count the duplicates
+      unsigned nextSubject,nextPredicate,nextObject,count=1;
+      while (reader.next(nextSubject,nextPredicate,nextObject)) {
+         if ((nextSubject!=subject)||(nextPredicate!=predicate)) {
+            reader.putBack(nextSubject,nextPredicate,nextObject);
+            break;
+         }
+         if (nextObject==object)
+            continue;
+         object=nextObject;
+         count++;
+      }
+
+      // Try to pack it on the current page
+      unsigned len;
+      if ((subject==lastSubject)&&(count<5)&&((predicate-lastPredicate)<32))
+         len=1; else
+         len=1+bytes0(subject-lastSubject)+bytes0(predicate)+bytes0(count-1);
+
+      // Tuple too big or first element on the page?
+      if ((bufferPos==headerSize)||(bufferPos+len>BufferReference::pageSize)) {
+         // Write the partial page
+         if (bufferPos>headerSize) {
+            for (unsigned index=0;index<headerSize;index++)
+               buffer[index]=0;
+            for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+               buffer[index]=0;
+            chainer.store(this,buffer);
+            DatabaseBuilder::Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=chainer.getPageNo();
+            boundaries.push_back(t);
+         }
+         // Write the first element fully
+         bufferPos=headerSize;
+         writeUint32(buffer+bufferPos,subject); bufferPos+=4;
+         writeUint32(buffer+bufferPos,predicate); bufferPos+=4;
+         writeUint32(buffer+bufferPos,count); bufferPos+=4;
+      } else {
+         // No, pack them
+         if ((subject==lastSubject)&&(count<5)&&((predicate-lastPredicate)<32)) {
+            buffer[bufferPos++]=((count-1)<<5)|(predicate-lastPredicate);
+         } else {
+            buffer[bufferPos++]=0x80|((bytes0(subject-lastSubject)*25)+(bytes0(predicate)*5)+bytes0(count-1));
+            bufferPos=writeDelta0(buffer,bufferPos,subject-lastSubject);
+            bufferPos=writeDelta0(buffer,bufferPos,predicate);
+            bufferPos=writeDelta0(buffer,bufferPos,count-1);
+         }
+      }
+
+      // Update the values
+      lastSubject=subject; lastPredicate=predicate;
+   }
+   // Flush the last page
+   for (unsigned index=0;index<headerSize;index++)
+      buffer[index]=0;
+   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+      buffer[index]=0;
+   chainer.store(this,buffer);
+   DatabaseBuilder::Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=chainer.getPageNo();
+   boundaries.push_back(t);
+   chainer.finish();
+   tableStart=chainer.getFirstPageNo();
+   setSegmentData(slotTableStart,tableStart);
+
+   pages=chainer.getPages();
+   setSegmentData(slotPages,pages);
+}
+//---------------------------------------------------------------------------
+void AggregatedFactsSegment::packAggregatedInner(const void* data_,void* boundaries_)
+   // Create inner nodes
+{
+   const vector<DatabaseBuilder::Triple>& data=*static_cast<const vector<DatabaseBuilder::Triple>*>(data_);
+   vector<DatabaseBuilder::Triple>& boundaries=*static_cast<vector<DatabaseBuilder::Triple>*>(boundaries_);
+   boundaries.clear();
+
+   const unsigned headerSize = 24; // LSN+marker+next+count+padding
+   DatabaseBuilder::PageChainer chainer(8+4);
+   unsigned char buffer[BufferReference::pageSize];
+   unsigned bufferPos=headerSize,bufferCount=0;
+
+   for (vector<DatabaseBuilder::Triple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+      // Do we have to start a new page?
+      if ((bufferPos+12)>BufferReference::pageSize) {
+         for (unsigned index=0;index<8;index++)
+            buffer[index]=0;
+         writeUint32(buffer+8,0xFFFFFFFF);
+         writeUint32(buffer+12,0);
+         writeUint32(buffer+16,bufferCount);
+         writeUint32(buffer+20,0);
+         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+            buffer[index]=0;
+         chainer.store(this,buffer);
+         DatabaseBuilder::Triple t=*(iter-1); t.object=chainer.getPageNo();
+         boundaries.push_back(t);
+         bufferPos=headerSize; bufferCount=0;
+      }
+      // Write the entry
+      writeUint32(buffer+bufferPos,(*iter).subject); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).predicate); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).object); bufferPos+=4;
+      bufferCount++;
+   }
+   // Write the least page
+   for (unsigned index=0;index<8;index++)
+      buffer[index]=0;
+   writeUint32(buffer+8,0xFFFFFFFF);
+   writeUint32(buffer+12,0);
+   writeUint32(buffer+16,bufferCount);
+   writeUint32(buffer+20,0);
+   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+      buffer[index]=0;
+   chainer.store(this,buffer);
+   DatabaseBuilder::Triple t=data.back(); t.object=chainer.getPageNo();
+   boundaries.push_back(t);
+   chainer.finish();
+}
+//---------------------------------------------------------------------------
+void AggregatedFactsSegment::loadAggregatedFacts(void* reader_)
+   // Load the triples aggregated into the database
+{
+   DatabaseBuilder::FactsReader& reader=*static_cast<DatabaseBuilder::FactsReader*>(reader_);
+
+   // Write the leaf nodes
+   vector<DatabaseBuilder::Triple> boundaries;
+   packAggregatedLeaves(&reader,&boundaries);
+
+   // Only one leaf node? Special case this
+   vector<DatabaseBuilder::Triple> newBoundaries;
+   if (boundaries.size()==1) {
+      packAggregatedInner(&boundaries,&newBoundaries);
+      swap(boundaries,newBoundaries);
+   } else {
+      // Write the inner nodes
+      while (boundaries.size()>1) {
+         packAggregatedInner(&boundaries,&newBoundaries);
+         swap(boundaries,newBoundaries);
+      }
+   }
+
+   // Remember the index root
+   indexRoot=boundaries.back().object;
+   setSegmentData(slotIndexRoot,indexRoot);
+}
+//---------------------------------------------------------------------------
+void AggregatedFactsSegment::loadCounts(unsigned groups1,unsigned groups2)
+   // Load count statistics
+{
+   this->groups1=groups1; setSegmentData(slotGroups1,groups1);
+   this->groups2=groups2; setSegmentData(slotGroups2,groups2);
 }
 //---------------------------------------------------------------------------
 AggregatedFactsSegment::Scan::Hint::Hint()

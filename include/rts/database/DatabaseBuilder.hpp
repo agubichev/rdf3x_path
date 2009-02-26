@@ -10,15 +10,15 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-#include <fstream>
+#include "rts/database/Database.hpp"
+#include "rts/buffer/BufferReference.hpp"
+//---------------------------------------------------------------------------
+class Segment;
 //---------------------------------------------------------------------------
 /// Builds a new RDF database from scratch
 class DatabaseBuilder
 {
    public:
-   /// The page size
-   static const unsigned pageSize = 16384;
-
    /// A facts reader
    class FactsReader
    {
@@ -32,6 +32,25 @@ class DatabaseBuilder
       virtual bool next(unsigned& v1,unsigned& v2,unsigned& v3) = 0;
       /// Reset the reader
       virtual void reset() = 0;
+   };
+   /// A reader with putback capabilities
+   class PutbackReader {
+      private:
+      /// The real reader
+      FactsReader& reader;
+      /// The putback triple
+      unsigned subject,predicate,object;
+      /// Do we have a putback?
+      bool hasPutback;
+
+      public:
+      /// Constructor
+      PutbackReader(FactsReader& reader) : reader(reader),hasPutback(false) {}
+
+      /// Get the next triple
+      bool next(unsigned& subject,unsigned& predicate,unsigned& object);
+      /// Put a triple back
+      void putBack(unsigned subject,unsigned predicate,unsigned object);
    };
    /// A strings reader
    class StringsReader
@@ -58,6 +77,43 @@ class DatabaseBuilder
 
       /// Load a new data item
       virtual bool next(unsigned& v1,unsigned& v2) = 0;
+   };
+   /// A RDF triple
+   struct Triple {
+      /// The values as IDs
+      unsigned subject,predicate,object;
+   };
+   /// Helper class to automatically chain pages
+   class PageChainer {
+      private:
+      /// Buffer references
+      BufferReferenceModified lastPage,currentPage;
+      /// The link offset
+      unsigned ofs;
+      /// The first page
+      unsigned firstPage;
+      /// Number of written pages
+      unsigned pages;
+
+      public:
+      /// Constructor
+      explicit PageChainer(unsigned ofs);
+      /// Destructor
+      ~PageChainer();
+
+      /// Store a page
+      void store(Segment* seg,const void* pageData);
+      /// Allocate a page. Use for manual stores
+      void* nextPage(Segment* seg);
+
+      /// Get the current page number
+      unsigned getPageNo() const { return currentPage.getPageNo(); }
+      /// Get the first page number
+      unsigned getFirstPageNo() const { return firstPage; }
+      /// Get the page count
+      unsigned getPages() const { return pages; }
+      /// Finish chaining
+      void finish();
    };
 
    private:
@@ -104,16 +160,10 @@ class DatabaseBuilder
    };
 
    /// The database
-   std::ofstream out;
+   Database out;
    /// The file name
    const char* dbFile;
-   /// The current page number
-   unsigned page;
-   /// The directory
-   Directory directory;
 
-   /// Load the triples into the database
-   void loadFullFacts(unsigned order,FactsReader& reader);
    /// Load the triples aggregated into the database
    void loadAggregatedFacts(unsigned order,FactsReader& reader);
    /// Load the triples fully aggregated into the database
@@ -136,13 +186,7 @@ class DatabaseBuilder
    void loadStringMappings(StringInfoReader& reader);
    /// Load the hash->page mappings (must be in hash order)
    void loadStringHashes(StringInfoReader& reader);
-   /// Finish the load phase, write the directory
-   void finishLoading();
 
-   /// Compute specific statistics (after loading)
-   void computeStatistics(unsigned order);
-   /// Compute statistics about frequent paths (after loading)
-   void computePathStatistics();
    /// Compute the exact statistics (after loading)
    void computeExactStatistics(const char* tempFile);
 };

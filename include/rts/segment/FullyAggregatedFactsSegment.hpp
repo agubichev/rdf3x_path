@@ -24,15 +24,31 @@ class FullyAggregatedFactsSegment : public Segment
    /// Statistics
    unsigned pages,groups1;
 
+   /// Refresh segment info stored in the partition
+   void refreshInfo();
    /// Lookup the first page contains entries >= the start condition
    bool lookup(unsigned start1,BufferReference& ref);
+
+   /// Pack the aggregated facts into leaves using prefix compression
+   void packFullyAggregatedLeaves(void* factsReader,void* boundaries);
+   /// Create inner nodes
+   void packFullyAggregatedInner(const void* data,void* boundaries);
+   /// Load the triples into the database
+   void loadFullyAggregatedFacts(void* reader);
+   /// Load count statistics
+   void loadCounts(unsigned groups1);
 
    FullyAggregatedFactsSegment(const FullyAggregatedFactsSegment&);
    void operator=(const FullyAggregatedFactsSegment&);
 
+   friend class DatabaseBuilder;
+
    public:
    /// Constructor
-   FullyAggregatedFactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1);
+   explicit FullyAggregatedFactsSegment(DatabasePartition& partition);
+
+   /// Get the type
+   Type getType() const;
 
    /// Get the number of pages in the segment
    unsigned getPages() const { return pages; }

@@ -4,7 +4,6 @@
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
-#include "rts/segment/StatisticsSegment.hpp"
 #include "rts/segment/ExactStatisticsSegment.hpp"
 #include <map>
 #include <set>
@@ -151,34 +150,6 @@ static void normalizePattern(Database::DataOrder order,unsigned& c1,unsigned& c2
    c1=s; c2=p; c3=o;
 }
 //---------------------------------------------------------------------------
-static void maximizePrefix(Database::DataOrder& order,unsigned& c1,unsigned& c2,unsigned& c3)
-   // Reshuffle values to maximize the constant prefix
-{
-   // Reconstruct the original assignments first
-   unsigned s=c1,p=c2,o=c3;
-   normalizePattern(order,s,p,o);
-
-   // Now find the maximum prefix
-   if (~s) {
-      if ((~p)||(!~o)) {
-         order=Database::Order_Subject_Predicate_Object;
-         c1=s; c2=p; c3=o;
-      } else {
-         order=Database::Order_Subject_Object_Predicate;
-         c1=s; c2=o; c3=p;
-      }
-   } else if (~p) {
-      order=Database::Order_Predicate_Object_Subject;
-      c1=p; c2=o; c3=s;
-   } else if (~o) {
-      order=Database::Order_Object_Predicate_Subject;
-      c1=o; c2=p; c3=s;
-   } else {
-      order=Database::Order_Subject_Predicate_Object;
-      c1=s; c2=p; c3=o;
-   }
-}
-//---------------------------------------------------------------------------
 static unsigned getCardinality(Database& db,Database::DataOrder order,unsigned c1,unsigned c2,unsigned c3)
    // Estimate the cardinality of a predicate
 {
@@ -224,21 +195,12 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
 static unsigned getAggregatedCardinality(Database& db,Database::DataOrder order,unsigned c1,unsigned c2)
    // Estimate the cardinality of a predicate
 {
-   unsigned c3=~0u;
-   maximizePrefix(order,c1,c2,c3);
-
-   // Query the statistics
-   StatisticsSegment::Bucket result;
-   if ((~c3)||(~c2)) {
+   if ((~c1)&&(~c2))
       return 1;
-   } else if (~c1) {
-      db.getStatistics(order).lookup(c1,result);
-      if (result.prefix1Card)
-         return (result.card+result.prefix1Card-1)/result.prefix1Card;
-      return 1;
-   } else {
+   if (!~c1)
       return db.getAggregatedFacts(order).getLevel2Groups();
-   }
+   // XXX overstimates as it ignores the grouping
+   return min(getCardinality(db,order,c1,c2,~0u),db.getAggregatedFacts(order).getLevel2Groups());
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C)
@@ -282,21 +244,9 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
 static unsigned getFullyAggregatedCardinality(Database& db,Database::DataOrder order,unsigned c1)
    // Estimate the cardinality of a predicate
 {
-   unsigned c2=~0u,c3=~0u;
-   maximizePrefix(order,c1,c2,c3);
-
-   // Query the statistics
-   StatisticsSegment::Bucket result;
-   if ((~c3)||(~c2)) {
+   if (~c1)
       return 1;
-   } else if (~c1) {
-      db.getStatistics(order).lookup(c1,result);
-      if (result.prefix1Card)
-         return (result.card+result.prefix1Card-1)/result.prefix1Card;
-      return 1;
-   } else {
-      return db.getFullyAggregatedFacts(order).getLevel1Groups();
-   }
+   return db.getFullyAggregatedFacts(order).getLevel1Groups();
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C)

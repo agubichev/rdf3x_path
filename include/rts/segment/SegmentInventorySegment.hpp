@@ -18,7 +18,7 @@ class SegmentInventorySegment : public Segment
 {
    public:
    /// The segment id
-   static const Segment::Type ID = Segment::SegmentInventorySegment;
+   static const Segment::Type ID = Segment::Type_SegmentInventory;
    /// Possible actions
    enum Action { Action_InitializeEntry,Action_UpdateInventory,Action_UpdateFreeBlock,Action_UpdateFreePageList };
 
@@ -33,6 +33,9 @@ class SegmentInventorySegment : public Segment
    SegmentInventorySegment(DatabasePartition& partition);
    /// Destructor
    ~SegmentInventorySegment();
+
+   /// Get the type
+   Type getType() const;
 
    /// Add a segment, gives the new ID
    unsigned addSegment(Segment::Type type,unsigned tag=0);
@@ -57,7 +60,7 @@ class SegmentInventorySegment : public Segment
    void setCustom(unsigned id,unsigned slot,unsigned value);
 
    /// Open a partition
-   static void openPartition(DatabasePartition& partition,std::vector<Segment::Type>& segments);
+   static void openPartition(DatabasePartition& partition,std::vector<std::pair<Segment::Type,unsigned> >& segments);
 };
 //---------------------------------------------------------------------------
 #endif

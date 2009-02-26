@@ -374,6 +374,12 @@ SpaceInventorySegment::~SpaceInventorySegment()
 {
 }
 //---------------------------------------------------------------------------
+Segment::Type SpaceInventorySegment::getType() const
+   // Get the type
+{
+   return Segment::Type_SpaceInventory;
+}
+//---------------------------------------------------------------------------
 void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
    // Allocate a new page
 {

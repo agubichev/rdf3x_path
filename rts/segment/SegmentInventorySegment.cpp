@@ -88,6 +88,12 @@ SegmentInventorySegment::~SegmentInventorySegment()
 {
 }
 //---------------------------------------------------------------------------
+Segment::Type SegmentInventorySegment::getType() const
+   // Get the type
+{
+   return Segment::Type_SegmentInventory;
+}
+//---------------------------------------------------------------------------
 unsigned SegmentInventorySegment::addSegment(Segment::Type type,unsigned tag)
    // Add a segment
 {
@@ -188,7 +194,7 @@ void SegmentInventorySegment::setCustom(unsigned id,unsigned slot,unsigned value
    UpdateInventory(id,slot+5,inv->getValue(id,slot+5),value).apply(rootPage);
 }
 //---------------------------------------------------------------------------
-void SegmentInventorySegment::openPartition(DatabasePartition& partition,std::vector<Segment::Type>& segments)
+void SegmentInventorySegment::openPartition(DatabasePartition& partition,std::vector<std::pair<Segment::Type,unsigned> >& segments)
    // Open a partition
 {
    BufferReference rootPage;
@@ -197,8 +203,8 @@ void SegmentInventorySegment::openPartition(DatabasePartition& partition,std::ve
    for (unsigned index=0;index<InventoryPage::maxEntries;index++) {
       if (!inv->getType(index)) continue;
       while (segments.size()<index)
-         segments.push_back(Segment::Unused);
-      segments.push_back(static_cast<Segment::Type>(inv->getType(index)));
+         segments.push_back(pair<Segment::Type,unsigned>(Segment::Unused,0));
+      segments.push_back(pair<Segment::Type,unsigned>(static_cast<Segment::Type>(inv->getType(index)),inv->getValue(index,1)));
    }
 }
 //---------------------------------------------------------------------------

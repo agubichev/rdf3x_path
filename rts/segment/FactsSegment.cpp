@@ -1,4 +1,7 @@
 #include "rts/segment/FactsSegment.hpp"
+#include "rts/database/DatabaseBuilder.hpp"
+#include <vector>
+#include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -9,14 +12,24 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+using namespace std;
+//---------------------------------------------------------------------------
 /// The size of the header on each fact page
-static const unsigned headerSize = 4;
+static const unsigned headerSize = 12; // LSN + next pointer
+//---------------------------------------------------------------------------
+// Info slots
+static const unsigned slotTableStart = 0;
+static const unsigned slotIndexRoot = 1;
+static const unsigned slotPages = 2;
+static const unsigned slotGroups1 = 3;
+static const unsigned slotGroups2 = 4;
+static const unsigned slotCardinality = 5;
 //---------------------------------------------------------------------------
 /// Helper functions
-static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+16*slot); }
-static inline unsigned readInner2(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+16*slot+4); }
-static inline unsigned readInner3(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+16*slot+8); }
-static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+16*slot+12); }
+static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+16*slot); }
+static inline unsigned readInner2(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+16*slot+4); }
+static inline unsigned readInner3(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+16*slot+8); }
+static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+16*slot+12); }
 //---------------------------------------------------------------------------
 /// Compare
 static inline bool greater(unsigned a1,unsigned a2,unsigned a3,unsigned b1,unsigned b2,unsigned b3) {
@@ -25,11 +38,27 @@ static inline bool greater(unsigned a1,unsigned a2,unsigned a3,unsigned b1,unsig
                       ((a2==b2)&&(a3>b3))));
 }
 //---------------------------------------------------------------------------
-FactsSegment::FactsSegment(DatabasePartition& partition,unsigned tableStart,unsigned indexRoot,unsigned pages,unsigned groups1,unsigned groups2,unsigned cardinality)
-   : Segment(partition),tableStart(tableStart),indexRoot(indexRoot),
-     pages(pages),groups1(groups1),groups2(groups2),cardinality(cardinality)
+FactsSegment::FactsSegment(DatabasePartition& partition)
+   : Segment(partition),tableStart(0),indexRoot(0),pages(0),groups1(0),groups2(0),cardinality(0)
    // Constructor
 {
+}
+//---------------------------------------------------------------------------
+Segment::Type FactsSegment::getType() const
+   // Get the type
+{
+   return Segment::Type_Facts;
+}
+//---------------------------------------------------------------------------
+void FactsSegment::refreshInfo()
+   // Refresh segment info stored in the partition
+{
+   tableStart=getSegmentData(slotTableStart);
+   indexRoot=getSegmentData(slotIndexRoot);
+   pages=getSegmentData(slotPages);
+   groups1=getSegmentData(slotGroups1);
+   groups2=getSegmentData(slotGroups2);
+   cardinality=getSegmentData(slotCardinality);
 }
 //---------------------------------------------------------------------------
 bool FactsSegment::lookup(unsigned start1,unsigned start2,unsigned start3,BufferReference& ref)
@@ -40,9 +69,9 @@ bool FactsSegment::lookup(unsigned start1,unsigned start2,unsigned start3,Buffer
    while (true) {
       const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
       // Inner node?
-      if (readUint32Aligned(page)==0xFFFFFFFF) {
+      if (readUint32Aligned(page+8)==0xFFFFFFFF) {
          // Perform a binary search. The test is more complex as we only have the upper bound for ranges
-         unsigned left=0,right=readUint32Aligned(page+8);
+         unsigned left=0,right=readUint32Aligned(page+16);
          while (left!=right) {
             unsigned middle=(left+right)/2;
             unsigned middle1=readInner1(page,middle),middle2=readInner2(page,middle),middle3=readInner3(page,middle);
@@ -65,6 +94,219 @@ bool FactsSegment::lookup(unsigned start1,unsigned start2,unsigned start3,Buffer
          return true;
       }
    }
+}
+//---------------------------------------------------------------------------
+static unsigned bytes(unsigned v)
+   // Compute the number of bytes required to encode a value
+{
+   if (v>=(1<<24))
+      return 4; else
+   if (v>=(1<<16))
+      return 3; else
+   if (v>=(1<<8)) return 2; else
+      return 1;
+}
+//---------------------------------------------------------------------------
+static unsigned writeDelta(unsigned char* buffer,unsigned ofs,unsigned value)
+   // Write an integer with varying size
+{
+   if (value>=(1<<24)) {
+      Segment::writeUint32(buffer+ofs,value);
+      return ofs+4;
+   } else if (value>=(1<<16)) {
+      buffer[ofs]=value>>16;
+      buffer[ofs+1]=(value>>8)&0xFF;
+      buffer[ofs+2]=value&0xFF;
+      return ofs+3;
+   } else if (value>=(1<<8)) {
+      buffer[ofs]=value>>8;
+      buffer[ofs+1]=value&0xFF;
+      return ofs+2;
+   } else {
+      buffer[ofs]=value;
+      return ofs+1;
+   }
+}
+//---------------------------------------------------------------------------
+void FactsSegment::packLeaves(void* reader_,void* boundaries_)
+   // Pack the facts into leaves using prefix compression
+{
+   DatabaseBuilder::FactsReader& reader=*static_cast<DatabaseBuilder::FactsReader*>(reader_);
+   std::vector<std::pair<DatabaseBuilder::Triple,unsigned> >& boundaries=*static_cast<std::vector<std::pair<DatabaseBuilder::Triple,unsigned> >*>(boundaries_);
+
+   DatabaseBuilder::PageChainer chainer(8);
+   unsigned char buffer[BufferReference::pageSize];
+   unsigned bufferPos=headerSize;
+   unsigned lastSubject=0,lastPredicate=0,lastObject=0;
+
+   unsigned subject,predicate,object;
+   while (reader.next(subject,predicate,object)) {
+      // Try to pack it on the current page
+      unsigned len;
+      if (subject==lastSubject) {
+         if (predicate==lastPredicate) {
+            if (object==lastObject) {
+               // Skipping a duplicate
+               continue;
+            } else {
+               if ((object-lastObject)<128)
+                  len=1; else
+                  len=1+bytes(object-lastObject-128);
+            }
+         } else {
+            len=1+bytes(predicate-lastPredicate)+bytes(object);
+         }
+      } else {
+         len=1+bytes(subject-lastSubject)+bytes(predicate)+bytes(object);
+      }
+
+      // Tuple too big or first element on the page?
+      if ((bufferPos==headerSize)||(bufferPos+len>BufferReference::pageSize)) {
+         // Write the partial page
+         if (bufferPos>headerSize) {
+            // Erase header and tail
+            for (unsigned index=0;index<headerSize;index++)
+               buffer[0]=0;
+            for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+               buffer[index]=0;
+            chainer.store(this,buffer);
+            DatabaseBuilder::Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
+            boundaries.push_back(pair<DatabaseBuilder::Triple,unsigned>(t,chainer.getPageNo()));
+         }
+         // Write the first element fully
+         bufferPos=headerSize;
+         writeUint32(buffer+bufferPos,subject); bufferPos+=4;
+         writeUint32(buffer+bufferPos,predicate); bufferPos+=4;
+         writeUint32(buffer+bufferPos,object); bufferPos+=4;
+      } else {
+         // No, pack them
+         if (subject==lastSubject) {
+            if (predicate==lastPredicate) {
+               if (object==lastObject) {
+                  // Skipping a duplicate
+                  continue;
+               } else {
+                  if ((object-lastObject)<128) {
+                     buffer[bufferPos++]=object-lastObject;
+                  } else {
+                     buffer[bufferPos++]=0x80|(bytes(object-lastObject-128)-1);
+                     bufferPos=writeDelta(buffer,bufferPos,object-lastObject-128);
+                  }
+               }
+            } else {
+               buffer[bufferPos++]=0x80|(bytes(predicate-lastPredicate)<<2)|(bytes(object)-1);
+               bufferPos=writeDelta(buffer,bufferPos,predicate-lastPredicate);
+               bufferPos=writeDelta(buffer,bufferPos,object);
+            }
+         } else {
+            buffer[bufferPos++]=0xC0|((bytes(subject-lastSubject)-1)<<4)|((bytes(predicate)-1)<<2)|(bytes(object)-1);
+            bufferPos=writeDelta(buffer,bufferPos,subject-lastSubject);
+            bufferPos=writeDelta(buffer,bufferPos,predicate);
+            bufferPos=writeDelta(buffer,bufferPos,object);
+         }
+      }
+
+      // Update the values
+      lastSubject=subject; lastPredicate=predicate; lastObject=object;
+   }
+   // Flush the last page
+   for (unsigned index=0;index<headerSize;index++)
+      buffer[0]=0;
+   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+      buffer[index]=0;
+   chainer.store(this,buffer);
+   DatabaseBuilder::Triple t; t.subject=lastSubject; t.predicate=lastPredicate; t.object=lastObject;
+   boundaries.push_back(pair<DatabaseBuilder::Triple,unsigned>(t,chainer.getPageNo()));
+
+   chainer.finish();
+   tableStart=chainer.getFirstPageNo();
+   setSegmentData(slotTableStart,tableStart);
+
+   pages=chainer.getPages();
+   setSegmentData(slotPages,pages);
+}
+//---------------------------------------------------------------------------
+void FactsSegment::packInner(const void* data_,void* boundaries_)
+   // Create inner nodes
+{
+   const vector<pair<DatabaseBuilder::Triple,unsigned> >& data=*static_cast<const vector<pair<DatabaseBuilder::Triple,unsigned> >*>(data_);
+   vector<pair<DatabaseBuilder::Triple,unsigned> >& boundaries=*static_cast<vector<pair<DatabaseBuilder::Triple,unsigned> >*>(boundaries_);
+   boundaries.clear();
+
+   const unsigned headerSize = 24; // LSN+marker+next+count+padding
+   DatabaseBuilder::PageChainer chainer(8+4);
+   unsigned char buffer[BufferReference::pageSize];
+   unsigned bufferPos=headerSize,bufferCount=0;
+
+   for (vector<pair<DatabaseBuilder::Triple,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
+      // Do we have to start a new page?
+      if ((bufferPos+16)>BufferReference::pageSize) {
+         for (unsigned index=0;index<8;index++)
+            buffer[index]=0;
+         writeUint32(buffer+8,0xFFFFFFFF);
+         writeUint32(buffer+12,0);
+         writeUint32(buffer+16,bufferCount);
+         writeUint32(buffer+20,0);
+         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+            buffer[index]=0;
+         chainer.store(this,buffer);
+         boundaries.push_back(pair<DatabaseBuilder::Triple,unsigned>((*(iter-1)).first,chainer.getPageNo()));
+         bufferPos=headerSize; bufferCount=0;
+      }
+      // Write the entry
+      writeUint32(buffer+bufferPos,(*iter).first.subject); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).first.predicate); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).first.object); bufferPos+=4;
+      writeUint32(buffer+bufferPos,(*iter).second); bufferPos+=4;
+      bufferCount++;
+   }
+   // Write the least page
+   for (unsigned index=0;index<8;index++)
+      buffer[index]=0;
+   writeUint32(buffer+8,0xFFFFFFFF);
+   writeUint32(buffer+12,0);
+   writeUint32(buffer+16,bufferCount);
+   writeUint32(buffer+20,0);
+   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
+      buffer[index]=0;
+   chainer.store(this,buffer);
+   boundaries.push_back(pair<DatabaseBuilder::Triple,unsigned>(data.back().first,chainer.getPageNo()));
+   chainer.finish();
+}
+//---------------------------------------------------------------------------
+void FactsSegment::loadFullFacts(void* reader_)
+   // Load the triples into the database
+{
+   DatabaseBuilder::FactsReader& reader=*static_cast<DatabaseBuilder::FactsReader*>(reader_);
+
+   // Write the leaf nodes
+   vector<pair<DatabaseBuilder::Triple,unsigned> > boundaries;
+   packLeaves(&reader,&boundaries);
+
+   // Only one leaf node? Special case this
+   vector<pair<DatabaseBuilder::Triple,unsigned> > newBoundaries;
+   if (boundaries.size()==1) {
+      packInner(&boundaries,&newBoundaries);
+      swap(boundaries,newBoundaries);
+   } else {
+      // Write the inner nodes
+      while (boundaries.size()>1) {
+         packInner(&boundaries,&newBoundaries);
+         swap(boundaries,newBoundaries);
+      }
+   }
+
+   // Remember the index root
+   indexRoot=boundaries.back().second;
+   setSegmentData(slotIndexRoot,indexRoot);
+}
+//---------------------------------------------------------------------------
+void FactsSegment::loadCounts(unsigned groups1,unsigned groups2,unsigned cardinality)
+   // Load count statistics
+{
+   this->groups1=groups1; setSegmentData(slotGroups1,groups1);
+   this->groups2=groups2; setSegmentData(slotGroups2,groups2);
+   this->cardinality=cardinality; setSegmentData(slotCardinality,cardinality);
 }
 //---------------------------------------------------------------------------
 FactsSegment::Scan::Hint::Hint()
