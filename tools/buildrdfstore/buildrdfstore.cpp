@@ -339,25 +339,13 @@ bool buildDatabase(DatabaseBuilder& builder,const char* factsFile,const char* st
       }
    }
 
-   // Finish the load phase
-   builder.finishLoading();
-
    return true;
 }
 //---------------------------------------------------------------------------
 bool buildDatabaseStatistics(DatabaseBuilder& builder,const char* targetName)
    // Build the database statistics
 {
-   // Compute the individual statistics
    cout << "Computing statistics..." << endl;
-   for (unsigned index=0;index<6;index++) {
-      cout << "Building statistic " << (index+1) << "..." << endl;
-      builder.computeStatistics(index);
-   }
-   cout << "Building path statistic" << endl;
-   builder.computePathStatistics();
-
-   cout << "Building exact statistic" << endl;
    string tmpName=targetName;
    tmpName+=".tmp";
    builder.computeExactStatistics(tmpName.c_str());
