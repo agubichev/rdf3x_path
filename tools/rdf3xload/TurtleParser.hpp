@@ -110,6 +110,8 @@ class TurtleParser
    /// Is a (generalized) name token?
    static inline bool isName(Lexer::Token token);
 
+   // Convert a relative URI into an absolute one
+   void constructAbsoluteURI(std::string& uri);
    /// Construct a new blank node
    void newBlankNode(std::string& node);
    /// Report an error

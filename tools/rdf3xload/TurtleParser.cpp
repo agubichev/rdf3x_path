@@ -349,6 +349,21 @@ void TurtleParser::newBlankNode(std::string& node)
    node=buffer.str();
 }
 //---------------------------------------------------------------------------
+void TurtleParser::constructAbsoluteURI(std::string& uri)
+   // Convert a relative URI into an absolute one
+{
+   // No base?
+   if (base.empty())
+      return;
+
+   // Already absolute? XXX fix the check!
+   if (uri.find("://")<10)
+      return;
+
+   // Put the base in front
+   uri=base+uri;
+}
+//---------------------------------------------------------------------------
 void TurtleParser::parseDirective()
    // Parse a directive
 {
@@ -359,11 +374,6 @@ void TurtleParser::parseDirective()
    if (value=="base") {
       if (lexer.next(base)!=Lexer::URI)
          parseError("URI expected after @base");
-      static bool warned=false;
-      if (!warned) {
-         cerr << "warning: @base directives are currently ignored" << endl;
-         warned=true; // XXX
-      }
    } else if (value=="prefix") {
       std::string prefixName;
       Lexer::Token token=lexer.next(prefixName);
@@ -401,12 +411,14 @@ void TurtleParser::parseQualifiedName(const string& prefix,string& name)
       parseError("':' expected in qualified name");
    if (!prefixes.count(prefix))
       parseError("unknown prefix '"+prefix+"'");
+   string expandedPrefix=prefixes[prefix];
+
    Lexer::Token token=lexer.next(name);
    if (isName(token)) {
-      name=prefixes[prefix]+name;
+      name=expandedPrefix+name;
    } else {
       lexer.unget(token,name);
-      name=prefixes[prefix];
+      name=expandedPrefix;
    }
 }
 //---------------------------------------------------------------------------
@@ -475,6 +487,7 @@ void TurtleParser::parseSubject(Lexer::Token token,std::string& subject)
    switch (token) {
       case Lexer::URI:
          // URI
+         constructAbsoluteURI(subject);
          return;
       case Lexer::A: subject="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"; return;
       case Lexer::Colon:
@@ -508,6 +521,7 @@ void TurtleParser::parseObject(std::string& object)
    switch (token) {
       case Lexer::URI:
          // URI
+         constructAbsoluteURI(object);
          return;
       case Lexer::Colon:
          // Qualified name with empty prefix?
@@ -575,7 +589,7 @@ void TurtleParser::parsePredicateObjectList(const string& subject,string& predic
    // Parse the first predicate
    Lexer::Token token;
    switch (token=lexer.next(predicate)) {
-      case Lexer::URI: break;
+      case Lexer::URI: constructAbsoluteURI(predicate); break;
       case Lexer::A: predicate="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"; break;
       case Lexer::Colon: lexer.unget(token,predicate); parseQualifiedName("",predicate); break;
       case Lexer::Name: if (predicate=="_") parseError("blank nodes not allowed as predicate"); parseQualifiedName(predicate,predicate); break;
@@ -599,7 +613,7 @@ void TurtleParser::parsePredicateObjectList(const string& subject,string& predic
       // Parse the predicate
       string additionalPredicate;
       switch (token=lexer.next(additionalPredicate)) {
-         case Lexer::URI: break;
+         case Lexer::URI: constructAbsoluteURI(additionalPredicate); break;
          case Lexer::A: additionalPredicate="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"; break;
          case Lexer::Colon: lexer.unget(token,additionalPredicate); parseQualifiedName("",additionalPredicate); break;
          case Lexer::Name: if (additionalPredicate=="_") parseError("blank nodes not allowed as predicate"); parseQualifiedName(additionalPredicate,additionalPredicate); break;
