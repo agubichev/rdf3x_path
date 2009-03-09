@@ -1,4 +1,5 @@
 src_rts_runtime:=				\
+	rts/runtime/DifferentialIndex.cpp	\
 	rts/runtime/DomainDescription.cpp	\
 	rts/runtime/Runtime.cpp
 
