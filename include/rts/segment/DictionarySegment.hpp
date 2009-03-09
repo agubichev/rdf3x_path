@@ -12,6 +12,7 @@
 //---------------------------------------------------------------------------
 #include "rts/segment/Segment.hpp"
 #include <string>
+#include <vector>
 //---------------------------------------------------------------------------
 class DatabaseBuilder;
 //---------------------------------------------------------------------------
@@ -59,6 +60,9 @@ class DictionarySegment : public Segment
    bool lookupById(unsigned id,const char*& start,const char*& stop);
    /// Lookup a string for a given id
    std::string mapId(unsigned id);
+
+   /// Load new strings into the dictionary
+   void appendStrings(const std::vector<std::string>& strings);
 };
 //---------------------------------------------------------------------------
 #endif

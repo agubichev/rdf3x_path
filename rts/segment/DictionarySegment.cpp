@@ -459,3 +459,116 @@ void DictionarySegment::loadStringHashes(void* reader_)
    setSegmentData(slotIndexRoot,indexRoot);
 }
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+struct EntryInfo {
+   /// The info
+   unsigned page,ofsLen,hash;
+
+   /// Constructor
+   EntryInfo(unsigned page,unsigned ofsLen,unsigned hash) : page(page),ofsLen(ofsLen),hash(hash) {}
+};
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
+   // Load new strings into the dictionary
+{
+   static const unsigned pageSize = BufferReference::pageSize;
+
+   // Prepare the buffer
+   const unsigned headerSize = 16; // LSN+next+count
+   DatabaseBuilder::PageChainer chainer(8);
+   unsigned char* buffer=0;
+   unsigned bufferPos=headerSize,bufferCount=0;
+
+   // Read the strings
+   unsigned id=nextId;
+   vector<EntryInfo> info;
+   info.reserve(strings.size());
+   for (vector<string>::const_iterator iter=strings.begin(),limit=strings.end();iter!=limit;++iter) {
+      const char* data=(*iter).c_str();
+      unsigned len=(*iter).size();
+      // Is the page full?
+      if ((bufferPos+12+len>pageSize)&&(bufferCount)) {
+         for (unsigned index=bufferPos;index<pageSize;index++)
+            buffer[index]=0;
+         writeUint32(buffer+12,bufferCount);
+         buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+         bufferPos=headerSize; bufferCount=0;
+      }
+      // Check the len, handle an overlong string
+      if (bufferPos+12+len>pageSize) {
+         // Write the first page
+         unsigned hash=Hash::hash(data,len);
+         writeUint32(buffer+12,1);
+         writeUint32(buffer+bufferPos,id);
+         writeUint32(buffer+bufferPos+4,hash);
+         writeUint32(buffer+bufferPos+8,len);
+         memcpy(buffer+bufferPos+12,data,pageSize-(bufferPos+12));
+         info.push_back(EntryInfo(chainer.getPageNo(),(bufferPos<<16)|(0xFFFF),hash));
+         buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+         ++id;
+
+         // Write all intermediate pages
+         const char* dataIter=data;
+         unsigned iterLen=len;
+         dataIter+=pageSize-(bufferPos+12);
+         iterLen-=pageSize-(bufferPos+12);
+         while (iterLen>(pageSize-headerSize)) {
+            writeUint32(buffer+12,0);
+            memcpy(buffer+headerSize,dataIter,pageSize-headerSize);
+            buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+            dataIter+=pageSize-headerSize;
+            iterLen-=pageSize-headerSize;
+         }
+
+         // Write the last page
+         if (iterLen) {
+            writeUint32(buffer+12,0);
+            memcpy(buffer+headerSize,dataIter,iterLen);
+            for (unsigned index=headerSize+iterLen;index<pageSize;index++)
+               buffer[index]=0;
+            buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+         }
+
+         continue;
+      }
+
+      // Hash the current string...
+      unsigned hash=Hash::hash(data,len);
+
+      // ...store it...
+      if (!buffer)
+         buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+      writeUint32(buffer+bufferPos,id); bufferPos+=4;
+      writeUint32(buffer+bufferPos,hash); bufferPos+=4;
+      writeUint32(buffer+bufferPos,len); bufferPos+=4;
+      unsigned ofs=bufferPos;
+      for (unsigned index=0;index<len;index++)
+         buffer[bufferPos++]=data[index];
+      ++bufferCount;
+
+      // ...and remember its position
+      info.push_back(EntryInfo(chainer.getPageNo(),(ofs<<16)|(len),hash));
+      ++id;
+   }
+   // Flush the last page
+   if (buffer) {
+      for (unsigned index=bufferPos;index<pageSize;index++)
+         buffer[index]=0;
+      writeUint32(buffer+12,bufferCount);
+   }
+   // XXX link to tableStart (or even better put everything behind the existing chain)
+   chainer.finish();
+
+   // Remember start and count
+   tableStart=chainer.getFirstPageNo();
+   setSegmentData(slotTableStart,tableStart);
+   nextId=id;
+   setSegmentData(slotNextId,nextId);
+
+   // XXX load id->pos mapping (stored in info, sort by id)
+   // XXX load hash->pos mapping (stored in info, sort by hash)
+}
+//---------------------------------------------------------------------------
