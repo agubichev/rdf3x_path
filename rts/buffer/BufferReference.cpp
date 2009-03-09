@@ -190,6 +190,20 @@ void BufferReferenceModified::unfixWithoutRecovery()
    frame=0;
 }
 //---------------------------------------------------------------------------
+void BufferReferenceModified::finishWithoutRecovery(BufferReferenceExclusive& ref)
+   // Finish without logging. Logging is done by Transaction::unfix. Transfers ownership
+{
+   ref.reset();
+
+   // Empty reference?
+   if (!frame) return;
+
+   // Mark as dirty and transfer
+   frame->getBufferManager()->markDirtyWithoutRecovery(frame);
+   ref.frame=frame;
+   frame=0;
+}
+//---------------------------------------------------------------------------
 void* BufferReferenceModified::getPage() const
    // Access the page
 {

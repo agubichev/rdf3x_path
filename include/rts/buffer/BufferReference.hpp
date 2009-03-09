@@ -169,6 +169,8 @@ class BufferReferenceModified
    void modify(BufferReferenceExclusive& ref);
    /// Unfix without logging. Logging is done by Transaction::unfix
    void unfixWithoutRecovery();
+   /// Finish without logging. Logging is done by Transaction::unfix. Transfers ownership
+   void finishWithoutRecovery(BufferReferenceExclusive& ref);
 
    /// Access the page
    void* getPage() const;

@@ -12,6 +12,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+class BufferReferenceExclusive;
 class BufferReferenceModified;
 //---------------------------------------------------------------------------
 /// Base class for all loggable operations
@@ -32,6 +33,8 @@ class LogAction
 
    /// Apply the operation to a page and unfix the page afterwards
    void apply(BufferReferenceModified& page) const;
+   /// Apply the operation to a page but do not unfix
+   void applyButKeep(BufferReferenceModified& page,BufferReferenceExclusive& newPage) const;
 };
 //---------------------------------------------------------------------------
 /// A chunk of data to be stored in the log
@@ -55,7 +58,7 @@ class LogActionGlue
    template <class T> class Helper {};
    /// A hook for registering the class
    template <unsigned segmentId,unsigned actionId,class T> class Hook { public: Hook(); };
-   
+
    /// Register a action
    static void registerAction(unsigned segmentId,unsigned actionId,LogAction* singleton);
 };
@@ -135,10 +138,19 @@ void LOGACTION_ID(seg,action)::readLog(const void* ptr_) { LogActionGlue::Helper
 /// A log entry with 7 parameters
 #define LOGACTION7(seg,action,t1,v1,t2,v2,t3,v3,t4,v4,t5,v5,t6,v6,t7,v7) \
 LOGACTION_HEAD(seg,action) \
-private: t1 v1; t2 v2; t3 v3; t4 v4; t5 v5; t6 v6; t7 v7: public: \
+private: t1 v1; t2 v2; t3 v3; t4 v4; t5 v5; t6 v6; t7 v7; public: \
 LOGACTION_ID(seg,action)(t1 v1,t2 v2,t3 v3,t4 v4,t5 v5,t6 v6,t7 v7) : v1(v1),v2(v2),v3(v3),v4(v4),v5(v5),v6(v6),v7(v7) {}\
 LOGACTION_TAIL(seg,action) \
 void* LOGACTION_ID(seg,action)::writeLog(void* ptr_) const { return LogActionGlue::Helper<t7>::write(LogActionGlue::Helper<t6>::write(LogActionGlue::Helper<t5>::write(LogActionGlue::Helper<t4>::write(LogActionGlue::Helper<t3>::write(LogActionGlue::Helper<t2>::write(LogActionGlue::Helper<t1>::write(ptr_,v1),v2),v3),v4),v5),v6),v7); } \
 void LOGACTION_ID(seg,action)::readLog(const void* ptr_) { LogActionGlue::Helper<t7>::read(LogActionGlue::Helper<t6>::read(LogActionGlue::Helper<t5>::read(LogActionGlue::Helper<t4>::read(LogActionGlue::Helper<t3>::read(LogActionGlue::Helper<t2>::read(LogActionGlue::Helper<t1>::read(ptr_,v1),v2),v3),v4),v5),v6),v7); }
+//---------------------------------------------------------------------------
+/// A log entry with 8 parameters
+#define LOGACTION8(seg,action,t1,v1,t2,v2,t3,v3,t4,v4,t5,v5,t6,v6,t7,v7,t8,v8) \
+LOGACTION_HEAD(seg,action) \
+private: t1 v1; t2 v2; t3 v3; t4 v4; t5 v5; t6 v6; t7 v7; t8 v8; public: \
+LOGACTION_ID(seg,action)(t1 v1,t2 v2,t3 v3,t4 v4,t5 v5,t6 v6,t7 v7,t8 v8) : v1(v1),v2(v2),v3(v3),v4(v4),v5(v5),v6(v6),v7(v7),v8(v8) {}\
+LOGACTION_TAIL(seg,action) \
+void* LOGACTION_ID(seg,action)::writeLog(void* ptr_) const { return LogActionGlue::Helper<t8>::write(LogActionGlue::Helper<t7>::write(LogActionGlue::Helper<t6>::write(LogActionGlue::Helper<t5>::write(LogActionGlue::Helper<t4>::write(LogActionGlue::Helper<t3>::write(LogActionGlue::Helper<t2>::write(LogActionGlue::Helper<t1>::write(ptr_,v1),v2),v3),v4),v5),v6),v7),v8); } \
+void LOGACTION_ID(seg,action)::readLog(const void* ptr_) { LogActionGlue::Helper<t8>::read(LogActionGlue::Helper<t7>::read(LogActionGlue::Helper<t6>::read(LogActionGlue::Helper<t5>::read(LogActionGlue::Helper<t4>::read(LogActionGlue::Helper<t3>::read(LogActionGlue::Helper<t2>::read(LogActionGlue::Helper<t1>::read(ptr_,v1),v2),v3),v4),v5),v6),v7),v8); }
 //---------------------------------------------------------------------------
 #endif

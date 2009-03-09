@@ -294,6 +294,20 @@ void BufferManager::unfixDirtyPageWithoutRecovery(BufferFrame* frame)
    frame->latch.unlock();
 }
 //---------------------------------------------------------------------------
+void BufferManager::markDirtyWithoutRecovery(BufferFrame* frame)
+   // Release a dirty page without recovery information. Recovery is handled by Transaction::unfixDirtyPage
+{
+   // Mark as modiied
+   if (frame->state!=BufferFrame::WriteDirty) {
+      mutex.lock();
+      frame->state=BufferFrame::WriteDirty;
+      if (++dirtCounter>dirtLimit) {
+         flusherNotify.notify(mutex);
+      }
+      mutex.unlock();
+   }
+}
+//---------------------------------------------------------------------------
 bool BufferManager::doFlush()
    // Write dirty unfixed pages
 {

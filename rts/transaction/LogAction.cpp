@@ -101,6 +101,16 @@ void LogAction::apply(BufferReferenceModified& page) const
    page.unfixWithoutRecovery();
 }
 //---------------------------------------------------------------------------
+void LogAction::applyButKeep(BufferReferenceModified& page,BufferReferenceExclusive& newPage) const
+   // Apply the operation to a page and keep the page fixed
+{
+   // XXX implement the logging case, too
+   // log _before_ applying the change! Might reference the old data
+
+   redo(page.getPage());
+   page.finishWithoutRecovery(newPage);
+}
+//---------------------------------------------------------------------------
 void LogActionGlue::registerAction(unsigned segmentId,unsigned actionId,LogAction* singleton)
    // Register a action
 {

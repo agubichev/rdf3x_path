@@ -18,7 +18,22 @@ class DatabaseBuilder;
 /// A compressed facts table stored in a clustered B-Tree
 class FactsSegment : public Segment
 {
+   public:
+   /// The segment id
+   static const Segment::Type ID = Segment::Type_Facts;
+   /// Possible actions
+   enum Action {
+      Action_UpdateInnerPage, Action_UpdateInner,Action_InsertInner,Action_UpdateLeaf
+   };
+
    private:
+   /// A triple
+   struct Triple {
+      unsigned value1,value2,value3;
+   };
+   class SourceCollector;
+   class Updater;
+
    /// The start of the raw facts table
    unsigned tableStart;
    /// The root of the index b-tree
@@ -30,6 +45,12 @@ class FactsSegment : public Segment
    void refreshInfo();
    /// Lookup the first page contains entries >= the start condition
    bool lookup(unsigned start1,unsigned start2,unsigned start3,BufferReference& ref);
+   /// Decompress triples
+   static Triple* decompress(const unsigned char* reader,const unsigned char* limit,Triple* writer);
+   /// Compare two triples
+   static int cmpTriple(const Triple& a,const Triple& b);
+   /// Merge triples
+   static Triple* mergeTriples(Triple* mergedTriplesStart,Triple* mergedTriplesLimit,Triple*& currentTriplesStart,Triple* currentTriplesLimit,SourceCollector& input,Triple limit);
 
    /// Pack the facts into leaves using prefix compression
    void packLeaves(void* reader,void* boundaries);
@@ -61,6 +82,20 @@ class FactsSegment : public Segment
    /// Get the total cardinality
    unsigned getCardinality() const { return cardinality; }
 
+   /// A source for updates
+   class Source {
+      public:
+      /// Destructor
+      virtual ~Source();
+
+      /// Get the next triples
+      virtual bool next(unsigned& value1,unsigned& value2,unsigned& value3) = 0;
+      /// Mark the last triple as duplicate
+      virtual void markAsDuplicate() = 0;
+   };
+   /// Update the segment
+   void update(Source& source);
+
    /// A scan over the facts segment
    class Scan {
       public:
@@ -79,10 +114,6 @@ class FactsSegment : public Segment
       private:
       /// The maximum number of entries per page
       static const unsigned maxCount = BufferReference::pageSize;
-      /// A triple
-      struct Triple {
-         unsigned value1,value2,value3;
-      };
 
       /// The current page
       BufferReference current;

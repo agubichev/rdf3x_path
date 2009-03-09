@@ -159,6 +159,8 @@ class BufferManager
    void unfixPage(const BufferFrame* cframe);
    /// Release a dirty page without recovery information. Recovery is handled by Transaction::unfixDirtyPage
    void unfixDirtyPageWithoutRecovery(BufferFrame* frame);
+   /// Mark a dirty page without recovery information. Recovery is handled by Transaction::unfixDirtyPage
+   void markDirtyWithoutRecovery(BufferFrame* frame);
 };
 //---------------------------------------------------------------------------
 #endif
