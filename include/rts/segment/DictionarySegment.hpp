@@ -61,6 +61,9 @@ class DictionarySegment : public Segment
    /// Lookup a string for a given id
    std::string mapId(unsigned id);
 
+   /// Get the next id
+   unsigned getNextId() const { return nextId; }
+
    /// Load new strings into the dictionary
    void appendStrings(const std::vector<std::string>& strings);
 };

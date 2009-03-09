@@ -1,5 +1,6 @@
 #include "rts/runtime/DifferentialIndex.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -28,9 +29,9 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples)
    // Load new triples
 {
    static const unsigned created = 0;
-   
+
    latch.lockExclusive();
-   
+
    // SPO
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[0].insert(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,created,~0u));
@@ -49,6 +50,25 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples)
    // OPS
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[5].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,~0u));
+
+   latch.unlock();
+}
+//---------------------------------------------------------------------------
+void DifferentialIndex::mapStrings(const std::vector<std::string>& strings,std::vector<unsigned>& ids)
+   // Map strings to ids
+{
+   ids.resize(strings.size());
+
+   latch.lockExclusive();
+
+   for (unsigned index=0,limit=strings.size();index<limit;index++)
+      if (string2id.count(strings[index])) {
+         ids[index]=string2id[strings[index]];
+      } else {
+         unsigned id=db.getDictionary().getNextId()+string2id.size();
+         string2id[strings[index]]=ids[index]=id;
+         id2string.push_back(strings[index]);
+      }
 
    latch.unlock();
 }
@@ -77,12 +97,12 @@ bool TriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& value3)
 {
    if (iter==limit)
       return false;
-   
+
    value1=(*iter).value1;
    value2=(*iter).value2;
    value3=(*iter).value3;
    ++iter;
-   
+
    return true;
 }
 //---------------------------------------------------------------------------
@@ -99,10 +119,20 @@ void TriplesLoader::markAsDuplicate()
 void DifferentialIndex::sync()
    // Synchronize with the underlying database
 {
+   latch.lockExclusive();
+
+   // Load the new strings
+   db.getDictionary().appendStrings(id2string);
+   id2string.clear();
+   string2id.clear();
+
+   // Load the new triples
    for (unsigned index=0;index<6;index++) {
       TriplesLoader loader(triples[index].begin(),triples[index].end());
       db.getFacts(static_cast<Database::DataOrder>(index)).update(loader);
       triples[index].clear();
    }
+
+   latch.unlock();
 }
 //---------------------------------------------------------------------------

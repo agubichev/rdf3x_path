@@ -2,7 +2,9 @@
 #define H_rts_runtime_DifferentialIndex
 //---------------------------------------------------------------------------
 #include "infra/osdep/Latch.hpp"
+#include <map>
 #include <set>
+#include <string>
 #include <vector>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -34,7 +36,7 @@ class DifferentialIndex
 
       /// Constructor
       VersionedTriple(unsigned value1,unsigned value2,unsigned value3,unsigned created,unsigned deleted) : value1(value1),value2(value2),value3(value3),created(created),deleted(deleted) {}
-      
+
       /// Compare
       bool operator<(const VersionedTriple& v) const { return (value1<v.value1)||((value1==v.value1)&&((value2<v.value2)||((value2==v.value2)&&((value3<v.value3)||((value3==v.value3)&&(created<v.created)))))); }
    };
@@ -44,6 +46,10 @@ class DifferentialIndex
    Database& db;
    /// Triples
    std::set<VersionedTriple> triples[6];
+   /// Dictionary
+   std::map<std::string,unsigned> string2id;
+   /// Dictionary
+   std::vector<std::string> id2string;
    /// The latch
    Latch latch;
 
@@ -55,6 +61,8 @@ class DifferentialIndex
 
    /// Load new triples
    void load(const std::vector<Triple>& triples);
+   /// Map strings to ids
+   void mapStrings(const std::vector<std::string>& strings,std::vector<unsigned>& ids);
 
    /// Synchronize with the underlying database
    void sync();
