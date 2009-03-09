@@ -59,6 +59,9 @@ class DifferentialIndex
    /// Destructor
    ~DifferentialIndex();
 
+   /// Get the underlying database
+   Database& getDatabase() { return db; }
+
    /// Load new triples
    void load(const std::vector<Triple>& triples);
    /// Map strings to ids

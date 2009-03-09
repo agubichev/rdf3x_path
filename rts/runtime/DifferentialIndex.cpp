@@ -122,12 +122,15 @@ void DifferentialIndex::sync()
    latch.lockExclusive();
 
    // Load the new strings
-   db.getDictionary().appendStrings(id2string);
+   if (!id2string.empty())
+      db.getDictionary().appendStrings(id2string);
    id2string.clear();
    string2id.clear();
 
    // Load the new triples
    for (unsigned index=0;index<6;index++) {
+      if (triples[index].empty())
+         continue;
       TriplesLoader loader(triples[index].begin(),triples[index].end());
       db.getFacts(static_cast<Database::DataOrder>(index)).update(loader);
       triples[index].clear();
