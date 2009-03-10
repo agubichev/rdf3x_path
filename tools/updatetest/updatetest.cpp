@@ -1,7 +1,10 @@
 #include "../rdf3xload/TurtleParser.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/BulkOperation.hpp"
+#include "infra/osdep/Event.hpp"
+#include "infra/osdep/Mutex.hpp"
 #include "infra/osdep/Timestamp.hpp"
+#include "infra/osdep/Thread.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -19,6 +22,64 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 using namespace std;
+//---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// A work description
+struct WorkDescription {
+   /// The synchronizing mutex
+   Mutex mutex;
+   /// Notification
+   Event event;
+   /// The chunks
+   vector<string> chunkFiles;
+   /// The current work position
+   unsigned workPos;
+   /// Active workers
+   unsigned activeWorkers;
+   /// The differential index
+   DifferentialIndex* db;
+   /// Total number of processed triples
+   unsigned tripleCount;
+
+   /// Constructor
+   WorkDescription() : workPos(0),activeWorkers(0),db(0),tripleCount(0) {}
+};
+//---------------------------------------------------------------------------
+static void worker(void* data)
+   // A worker thread
+{
+   WorkDescription& work=*static_cast<WorkDescription*>(data);
+
+   unsigned processed = 0;
+   while (true) {
+      // Check for new work
+      work.mutex.lock();
+      work.tripleCount+=processed;
+      processed=0;
+      if (work.workPos>=work.chunkFiles.size()) {
+         work.activeWorkers--;
+         work.event.notify(work.mutex);
+         work.mutex.unlock();
+         break;
+      }
+      string chunkFile=work.chunkFiles[work.workPos++];
+      work.mutex.unlock();
+
+      // Process the file
+      BulkOperation bulk(*work.db);
+      ifstream in(chunkFile.c_str());
+      TurtleParser parser(in);
+      string subject,predicate,object;
+      while (true) {
+         if (!parser.parse(subject,predicate,object))
+            break;
+         bulk.insert(subject,predicate,object);
+         processed++;
+      }
+      bulk.commit();
+   }
+}
 //---------------------------------------------------------------------------
 static void writeURI(ostream& out,const string& str)
    // Write a URI
@@ -102,6 +163,8 @@ static void dumpObject(ostream& out,const string& str)
    writeLiteral(out,str);
 }
 //---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    if (argc!=2) {
@@ -144,7 +207,7 @@ int main(int argc,char* argv[])
    // Prepare some triple chunks
    vector<string> chunkFiles;
    static const unsigned chunkSize = 10000;
-   static const unsigned chunkCount = 100;
+   static const unsigned chunkCount = 10;
    for (unsigned index=0;index<chunkCount;index++) {
       stringstream sname; sname << "updatetest.chunk" << index << ".tmp";
       string name=sname.str();
@@ -169,32 +232,32 @@ int main(int argc,char* argv[])
       cerr << "unable to open updatetest.2.tmp" << endl;
       return 1;
    }
+   DifferentialIndex diff(db);
+   WorkDescription work;
+   work.chunkFiles=chunkFiles;
+   work.db=&diff;
 
    // Apply some updates
    cerr << "Applying updates..." << endl;
    Timestamp t1;
-   DifferentialIndex diff(db);
-   unsigned tripleCount = 0;
-   for (unsigned index=0;index<10;index++) {
-      BulkOperation bulk(diff);
-      ifstream in(chunkFiles[index].c_str());
-      TurtleParser parser(in);
-      string subject,predicate,object;
-      while (true) {
-         if (!parser.parse(subject,predicate,object))
-            break;
-         bulk.insert(subject,predicate,object);
-         tripleCount++;
-      }
-      bulk.commit();
+   if (work.chunkFiles.size()>10)
+      work.chunkFiles.resize(10);
+   work.mutex.lock();
+   static const unsigned threadCount = 2;
+   for (unsigned index=0;index<threadCount;index++) {
+      work.activeWorkers++;
+      Thread::start(worker,&work);
    }
+   while (work.activeWorkers)
+      work.event.wait(work.mutex);
+   work.mutex.unlock();
    Timestamp t2;
    diff.sync();
    Timestamp t3;
 
    cerr << "Transaction time: " << (t2-t1) << endl;
    cerr << "Total time: " << (t3-t1) << endl;
-   cerr << "Triples/s: " << (tripleCount*1000/(t3-t1)) << endl;
+   cerr << "Triples/s: " << (work.tripleCount*1000/(t3-t1)) << endl;
 
    remove("updatetest.2.tmp");
    for (vector<string>::const_iterator iter=chunkFiles.begin(),limit=chunkFiles.end();iter!=limit;++iter)
