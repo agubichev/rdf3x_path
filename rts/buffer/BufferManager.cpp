@@ -108,6 +108,7 @@ BufferFrame* BufferManager::findBufferFrame(Partition* partition,unsigned pageNo
 {
    // Check the diectory
    PageID pageID(partition,pageNo);
+
    std::map<PageID,BufferFrame*>::iterator iter=directory.find(pageID);
    if (iter!=directory.end()) {
       // Fond, try to lock it...
@@ -136,6 +137,7 @@ BufferFrame* BufferManager::findBufferFrame(Partition* partition,unsigned pageNo
    if (releasedFrames) {
       frame=releasedFrames;
       releasedFrames=frame->next;
+      frame->next=0;
    } else {
       frame=new BufferFrame();
    }
@@ -251,6 +253,8 @@ void BufferManager::unfixPage(const BufferFrame* cframe)
 {
    // Was this the last reference?
    BufferFrame* frame=const_cast<BufferFrame*>(cframe);
+   Partition* oldPartition=frame->partition;
+   unsigned oldPageNo=frame->pageNo;
    if (frame->latch.unlock()) {
       // Dirty pages are released by the background writer
       if (frame->state==BufferFrame::WriteDirty)
@@ -259,20 +263,25 @@ void BufferManager::unfixPage(const BufferFrame* cframe)
       mutex.lock();
       // Is this really the last reference?
       if (frame->latch.tryLockExclusive()) {
-         // Then release it
-         switch (frame->state) {
-            case BufferFrame::Empty: break;
-            case BufferFrame::Read: frame->partition->finishReadPage(frame->pageInfo); frame->state=BufferFrame::Empty; break;
-            case BufferFrame::Write: frame->partition->finishWrittenPage(frame->pageInfo); frame->state=BufferFrame::Empty; break;
-            case BufferFrame::WriteDirty: /* cannot happen, see the if above */ break;
+         // Still the same?
+         if ((frame->partition==oldPartition)&&(frame->pageNo==oldPageNo)) {
+            // Then release it
+            switch (frame->state) {
+               case BufferFrame::Empty: break;
+               case BufferFrame::Read: frame->partition->finishReadPage(frame->pageInfo); frame->state=BufferFrame::Empty; break;
+               case BufferFrame::Write: frame->partition->finishWrittenPage(frame->pageInfo); frame->state=BufferFrame::Empty; break;
+               case BufferFrame::WriteDirty: break;
+            }
+            // And release the buffer frame itself
+            if ((frame->state==BufferFrame::Empty)&&(!frame->intentionLock)) {
+               directory.erase(PageID(frame->partition,frame->pageNo));
+               frame->next=releasedFrames;
+               releasedFrames=frame;
+               frame->partition=0;
+               frame->pageNo=0;
+            }
          }
-         // And release the buffer frame itself
          frame->latch.unlock();
-         if (!frame->intentionLock) {
-            directory.erase(PageID(frame->partition,frame->pageNo));
-            frame->next=releasedFrames;
-            releasedFrames=frame;
-         }
       }
       mutex.unlock();
    }
@@ -357,20 +366,31 @@ bool BufferManager::doFlush()
    // Grab the mutex and mark the pages as written
    mutex.lock();
    for (unsigned index=0;index<totalCount;index++) {
-      list[index]->state=BufferFrame::Write;
-      if (list[index]->latch.unlock()) {
+      BufferFrame* frame=list[index];
+      frame->state=BufferFrame::Write;
+      Partition* oldPartition=frame->partition;
+      unsigned oldPageNo=frame->pageNo;
+      if (frame->latch.unlock()) {
          // Last reference?
-         if (list[index]->latch.tryLockExclusive()) {
-            // Then release it
-            list[index]->partition->finishWrittenPage(list[index]->pageInfo);
-            list[index]->state=BufferFrame::Empty;
-            list[index]->latch.unlock();
-            // Release the buffer frame if there is no contention
-            if (!list[index]->intentionLock) {
-               list[index]->next=releasedFrames;
-               releasedFrames=list[index];
-               directory.erase(PageID(list[index]->partition,list[index]->pageNo));
+         if (frame->latch.tryLockExclusive()) {
+            if ((frame->partition==oldPartition)&&(frame->pageNo==oldPageNo)) {
+               // Then release it
+               switch (frame->state) {
+                  case BufferFrame::Empty: break;
+                  case BufferFrame::Read: frame->partition->finishReadPage(frame->pageInfo); frame->state=BufferFrame::Empty; break;
+                  case BufferFrame::Write: frame->partition->finishWrittenPage(frame->pageInfo); frame->state=BufferFrame::Empty; break;
+                  case BufferFrame::WriteDirty: break;
+               }
+               // Release the buffer frame if there is no contention
+               if ((frame->state==BufferFrame::Empty)&&(!frame->intentionLock)) {
+                  directory.erase(PageID(frame->partition,frame->pageNo));
+                  frame->next=releasedFrames;
+                  releasedFrames=frame;
+                  frame->partition=0;
+                  frame->pageNo=0;
+               }
             }
+            frame->latch.unlock();
          }
       }
    }
