@@ -50,8 +50,8 @@ class DifferentialIndex
    std::map<std::string,unsigned> string2id;
    /// Dictionary
    std::vector<std::string> id2string;
-   /// The latch
-   Latch latch;
+   /// The latches
+   Latch latches[7];
 
    public:
    /// Constructor

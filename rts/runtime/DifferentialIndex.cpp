@@ -30,28 +30,36 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples)
 {
    static const unsigned created = 0;
 
-   latch.lockExclusive();
-
    // SPO
+   latches[0].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[0].insert(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,created,~0u));
+   latches[0].unlock();
    // SOP
+   latches[1].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,~0u));
+   latches[1].unlock();
    // PSO
+   latches[2].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[2].insert(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,created,~0u));
+   latches[2].unlock();
    // POS
+   latches[3].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[3].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,~0u));
+   latches[3].unlock();
    // OSP
+   latches[4].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[4].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,~0u));
+   latches[4].unlock();
    // OPS
+   latches[5].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[5].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,~0u));
-
-   latch.unlock();
+   latches[5].unlock();
 }
 //---------------------------------------------------------------------------
 void DifferentialIndex::mapStrings(const std::vector<std::string>& strings,std::vector<unsigned>& ids)
@@ -59,7 +67,7 @@ void DifferentialIndex::mapStrings(const std::vector<std::string>& strings,std::
 {
    ids.resize(strings.size());
 
-   latch.lockExclusive();
+   latches[6].lockExclusive();
 
    for (unsigned index=0,limit=strings.size();index<limit;index++)
       if (string2id.count(strings[index])) {
@@ -70,7 +78,7 @@ void DifferentialIndex::mapStrings(const std::vector<std::string>& strings,std::
          id2string.push_back(strings[index]);
       }
 
-   latch.unlock();
+   latches[6].unlock();
 }
 //---------------------------------------------------------------------------
 namespace {
@@ -119,7 +127,8 @@ void TriplesLoader::markAsDuplicate()
 void DifferentialIndex::sync()
    // Synchronize with the underlying database
 {
-   latch.lockExclusive();
+   for (unsigned index=0;index<7;index++)
+      latches[index].lockExclusive();
 
    // Load the new strings
    if (!id2string.empty())
@@ -136,6 +145,7 @@ void DifferentialIndex::sync()
       triples[index].clear();
    }
 
-   latch.unlock();
+   for (unsigned index=0;index<7;index++)
+      latches[index].unlock();
 }
 //---------------------------------------------------------------------------
