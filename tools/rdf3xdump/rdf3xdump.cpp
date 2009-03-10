@@ -112,9 +112,11 @@ static void dumpObject(DictionarySegment& dic,unsigned id)
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
-   bool rawDump=false;
+   bool rawDump=false,ntriplesDump=false;
    if ((argc==3)&&(string(argv[2])=="--raw"))
      rawDump=true;
+   if ((argc==3)&&(string(argv[2])=="--ntriples"))
+     ntriplesDump=true;
 
    // Greeting
    if (!rawDump)
@@ -177,7 +179,16 @@ int main(int argc,char* argv[])
    Register subject,predicate,object;
    subject.reset(); predicate.reset(); object.reset();
    IndexScan* scan=IndexScan::create(db,Database::Order_Subject_Predicate_Object,&subject,false,&predicate,false,&object,false);
-   if (scan->first()) {
+   if (ntriplesDump) {
+      if (scan->first()) do {
+         dumpSubject(dic,subject.value);
+         cout << " ";
+         dumpPredicate(dic,predicate.value);
+         cout << " ";
+         dumpObject(dic,object.value);
+         cout << "." << endl;
+      } while (scan->next());
+   } else if (scan->first()) {
       // Write the first triple
       dumpSubject(dic,subject.value);
       cout << " ";
