@@ -2,6 +2,7 @@
 #define H_rts_runtime_DifferentialIndex
 //---------------------------------------------------------------------------
 #include "infra/osdep/Latch.hpp"
+#include "rts/database/Database.hpp"
 #include <map>
 #include <set>
 #include <string>
@@ -17,6 +18,8 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 class Database;
+class Operator;
+class Register;
 //---------------------------------------------------------------------------
 /// Index for all transient updates
 class DifferentialIndex
@@ -34,6 +37,8 @@ class DifferentialIndex
       /// Versions
       unsigned created,deleted;
 
+      /// Constructor
+      VersionedTriple() : value1(0),value2(0),value3(0),created(0),deleted(0) {}
       /// Constructor
       VersionedTriple(unsigned value1,unsigned value2,unsigned value3,unsigned created,unsigned deleted) : value1(value1),value2(value2),value3(value3),created(created),deleted(deleted) {}
 
@@ -69,6 +74,9 @@ class DifferentialIndex
 
    /// Synchronize with the underlying database
    void sync();
+
+   /// Create a suitable scan operator scanning both the DB and the differential index
+   Operator* createScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
 };
 //---------------------------------------------------------------------------
 #endif
