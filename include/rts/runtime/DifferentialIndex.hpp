@@ -77,6 +77,10 @@ class DifferentialIndex
 
    /// Create a suitable scan operator scanning both the DB and the differential index
    Operator* createScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
+   /// Create a suitable scan operator scanning both the DB and the differential index
+   Operator* createAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
+   /// Create a suitable scan operator scanning both the DB and the differential index
+   Operator* createFullyAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound);
 };
 //---------------------------------------------------------------------------
 #endif
