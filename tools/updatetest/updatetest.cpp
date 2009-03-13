@@ -251,6 +251,200 @@ void RDF3XDriver::sync()
    diff.sync();
 }
 //---------------------------------------------------------------------------
+/// A PostgreSQL driver
+class PostgresDriver : public Driver
+{
+   private:
+   /// The string table
+   map<string,unsigned> dictionary;
+   /// The job sizes
+   map<string,unsigned> jobSize;
+
+   public:
+   /// Constructor
+   PostgresDriver();
+   /// Destructor
+   ~PostgresDriver();
+
+   /// Build the initial database
+   bool buildDatabase(TurtleParser& input,unsigned initialSize);
+   /// Prepare a chunk of work
+   void prepareChunk(const string& name,TurtleParser& parser,unsigned chunkSize);
+   /// The prepare step is done
+   void prepareDone();
+   /// Process a chunk of work
+   unsigned processChunk(const string& chunkFile);
+   /// Synchronize to disk
+   void sync();
+};
+//---------------------------------------------------------------------------
+PostgresDriver::PostgresDriver()
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+PostgresDriver::~PostgresDriver()
+   // Destructor
+{
+   if (system("psql -c \"drop schema if exists updatetest cascade;\"")!=0)
+      cerr << "warning: psql call failed" << endl;
+}
+//---------------------------------------------------------------------------
+string escapeCopy(const string& s)
+   // Escape an SQL string
+{
+   string result;
+   for (string::const_iterator iter=s.begin(),limit=s.end();iter!=limit;++iter) {
+      char c=(*iter);
+      switch (c) {
+         case '\\': result+="\\\\"; break;
+         case '\"': result+="\\\""; break;
+         case '\'': result+="\\\'"; break;
+         case '\t': result+="\\\t"; break;
+         case '\0': result+="\\x00"; break;
+         default:
+            /* if (c<' ') {
+               result+='\\';
+               result+=c;
+            } else */ result+=c;
+      }
+   }
+   return result;
+}
+//---------------------------------------------------------------------------
+bool PostgresDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
+   // Build the initial database
+{
+   dictionary.clear();
+   {     
+      ofstream out("updatetest.1.tmp");
+      out << "drop schema if exists updatetest cascade;" << endl;
+      out << "create schema updatetest;" << endl;
+      out << "create table updatetest.facts(subject int not null, predicate int not null, object int not null);" << endl;
+      out << "copy updatetest.facts from stdin;" << endl;
+      
+      string subject,predicate,object;
+      for (unsigned index=0;index<initialSize;index++) {
+         if (!input.parse(subject,predicate,object))
+            break;
+         unsigned subjectId,predicateId,objectId;
+         if (dictionary.count(subject)) {
+            subjectId=dictionary[subject];
+         } else {
+            subjectId=dictionary.size();
+            dictionary[subject]=subjectId;
+         }
+         if (dictionary.count(predicate)) {
+            predicateId=dictionary[predicate];
+         } else {
+            predicateId=dictionary.size();
+            dictionary[predicate]=predicateId;
+         }
+         if (dictionary.count(object)) {
+            objectId=dictionary[object];
+         } else {
+            objectId=dictionary.size();
+            dictionary[object]=objectId;
+         }         
+         out << subjectId << "\t" << predicateId << "\t" << objectId << endl;
+      }
+      out << "\\." << endl;
+      out << "create index facts_spo on updatetest.facts (subject, predicate, object);" << endl;
+      out << "create index facts_pso on updatetest.facts (predicate, subject, object);" << endl;
+      out << "create index facts_pos on updatetest.facts (predicate, object, subject);" << endl;
+      
+      out << "create table updatetest.strings(id int not null primary key, value varchar(16000) not null);" << endl;
+      out << "copy updatetest.strings from stdin;" << endl;
+      for (map<string,unsigned>::const_iterator iter=dictionary.begin(),limit=dictionary.end();iter!=limit;++iter)
+         out << (*iter).second << "\t" << escapeCopy((*iter).first) << endl;
+      out << "\\." << endl;
+   }
+   if (system("psql -f updatetest.1.tmp")!=0) {
+      remove("updatetest.1.tmp");
+      cerr << "unable to execute psql" << endl;
+      return false;
+   }
+   //remove("updatetest.1.tmp");
+
+   return true;
+}
+//---------------------------------------------------------------------------
+void PostgresDriver::prepareChunk(const string& name,TurtleParser& parser,unsigned chunkSize)
+   // Prepare a chunk of work
+{
+   ofstream out(name.c_str());
+   vector<unsigned> triples;
+   vector<pair<unsigned,string> > added;
+   
+   string subject,predicate,object;
+   unsigned size=0;
+   out << "begin transaction;" << endl;
+   for (unsigned index2=0;index2<chunkSize;index2++) {
+      if (!parser.parse(subject,predicate,object))
+         break;
+//      out << "select id from updatetest.strings where value=E'" << escapeCopy(subject) << "' \\g /dev/null" << endl;
+//      out << "select id from updatetest.strings where value=E'" << escapeCopy(predicate) << "' \\g /dev/null" << endl;
+//      out << "select id from updatetest.strings where value=E'" << escapeCopy(object) << "' \\g /dev/null" << endl;
+      if (dictionary.count(subject)) {
+         triples.push_back(dictionary[subject]);
+      } else {
+         unsigned id=dictionary.size();
+         dictionary[subject]=id;
+         added.push_back(pair<unsigned,string>(id,subject));
+         triples.push_back(id);
+      }
+      if (dictionary.count(predicate)) {
+         triples.push_back(dictionary[predicate]);
+      } else {
+         unsigned id=dictionary.size();
+         dictionary[predicate]=id;
+         added.push_back(pair<unsigned,string>(id,predicate));
+         triples.push_back(id);
+      }
+      if (dictionary.count(object)) {
+         triples.push_back(dictionary[object]);
+      } else {
+         unsigned id=dictionary.size();
+         dictionary[object]=id;
+         added.push_back(pair<unsigned,string>(id,object));
+         triples.push_back(id);
+      }
+      ++size;
+   }
+   jobSize[name]=size;
+   out << "copy updatetest.strings from stdin;" << endl;
+   for (vector<pair<unsigned,string> >::const_iterator iter=added.begin(),limit=added.end();iter!=limit;++iter)
+      out << (*iter).first << "\t" << escapeCopy((*iter).second) << endl;
+   out << "\\." << endl;
+   out << "copy updatetest.facts from stdin;" << endl;
+   for (unsigned index=0,limit=triples.size();index<limit;index+=3)
+      out << triples[index] << "\t" << triples[index+1] << "\t" << triples[index+2] << endl;
+   out << "\\." << endl;
+   out << "commit;" << endl;
+}
+//---------------------------------------------------------------------------
+void PostgresDriver::prepareDone()
+   // The prepare step is done
+{
+   dictionary.clear();
+}
+//---------------------------------------------------------------------------
+unsigned PostgresDriver::processChunk(const string& chunkFile)
+   // Process a chunk of work
+{
+   stringstream command; command << "psql -f " << chunkFile << endl;
+   if (system(command.str().c_str())!=0) {
+      cerr << "warning: psql call failed" << endl;
+      return 0;
+   }
+   return jobSize[chunkFile];
+}
+//---------------------------------------------------------------------------
+void PostgresDriver::sync()
+   // Synchronize to disk
+{
+}
+//---------------------------------------------------------------------------
 /// A work description
 struct WorkDescription {
    /// The synchronizing mutex
@@ -301,11 +495,19 @@ static void worker(void* data)
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
-   if (argc!=2) {
-      cerr << "usage: " << argv[0] << " <input>" << endl;
+   if (argc!=3) {
+      cerr << "usage: " << argv[0] << " <input> <driver>" << endl;
       return 1;
    }
-   Driver* driver=new RDF3XDriver();
+   Driver* driver=0;
+   if (string(argv[2])=="rdf3x") {
+      driver=new RDF3XDriver();
+   } else if (string(argv[2])=="postgres") {
+      driver=new PostgresDriver();
+   } else {
+      cout << "unknown driver " << argv[1] << endl;
+      return 1;
+   }
 
    // Try to open the input
    ifstream in(argv[1]);
