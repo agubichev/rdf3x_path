@@ -58,7 +58,7 @@ class RDF3XDriver : public Driver
    Database db;
    /// The differential index
    DifferentialIndex diff;
-   
+
    public:
    /// Constructor
    RDF3XDriver();
@@ -67,7 +67,7 @@ class RDF3XDriver : public Driver
 
    /// Build the initial database
    bool buildDatabase(TurtleParser& input,unsigned initialSize);
-   /// Prepare a chunk of work   
+   /// Prepare a chunk of work
    void prepareChunk(const string& name,TurtleParser& parser,unsigned chunkSize);
    /// The prepare step is done
    void prepareDone();
@@ -194,7 +194,7 @@ bool RDF3XDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
       return false;
    }
    remove("updatetest.1.tmp");
-   
+
    if (!db.open("updatetest.2.tmp")) {
       cerr << "unable to open updatetest.2.tmp" << endl;
       return false;
@@ -229,7 +229,7 @@ unsigned RDF3XDriver::processChunk(const string& chunkFile)
    // Process a chunk of work
 {
    unsigned processed=0;
-   
+
    BulkOperation bulk(diff);
    ifstream in(chunkFile.c_str());
    TurtleParser parser(in);
@@ -316,13 +316,13 @@ bool PostgresDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
    // Build the initial database
 {
    dictionary.clear();
-   {     
+   {
       ofstream out("updatetest.1.tmp");
       out << "drop schema if exists updatetest cascade;" << endl;
       out << "create schema updatetest;" << endl;
       out << "create table updatetest.facts(subject int not null, predicate int not null, object int not null);" << endl;
       out << "copy updatetest.facts from stdin;" << endl;
-      
+
       string subject,predicate,object;
       for (unsigned index=0;index<initialSize;index++) {
          if (!input.parse(subject,predicate,object))
@@ -345,14 +345,14 @@ bool PostgresDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
          } else {
             objectId=dictionary.size();
             dictionary[object]=objectId;
-         }         
+         }
          out << subjectId << "\t" << predicateId << "\t" << objectId << endl;
       }
       out << "\\." << endl;
       out << "create index facts_spo on updatetest.facts (subject, predicate, object);" << endl;
       out << "create index facts_pso on updatetest.facts (predicate, subject, object);" << endl;
       out << "create index facts_pos on updatetest.facts (predicate, object, subject);" << endl;
-      
+
       out << "create table updatetest.strings(id int not null primary key, value varchar(16000) not null);" << endl;
       out << "copy updatetest.strings from stdin;" << endl;
       for (map<string,unsigned>::const_iterator iter=dictionary.begin(),limit=dictionary.end();iter!=limit;++iter)
@@ -375,7 +375,7 @@ void PostgresDriver::prepareChunk(const string& name,TurtleParser& parser,unsign
    ofstream out(name.c_str());
    vector<unsigned> triples;
    vector<pair<unsigned,string> > added;
-   
+
    string subject,predicate,object;
    unsigned size=0;
    out << "begin transaction;" << endl;
@@ -491,12 +491,36 @@ static void worker(void* data)
    }
 }
 //---------------------------------------------------------------------------
+template <class T> istream& readValue(istream& in,T& value)
+   // Read a value from the input stream
+{
+   // Skip comments
+   while (true) {
+      char c=in.peek();
+      if ((c==' ')||(c=='\n')||(c=='\r')||(c=='\t')) {
+         in.get();
+         continue;
+      }
+      if (c=='#') {
+         while (in) {
+            c=in.get();
+            if ((c=='\n')||(c=='\r'))
+               break;
+         }
+         continue;
+      }
+      break;
+   }
+   // Read the entry
+   return in >> value;
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
-   if (argc!=3) {
-      cerr << "usage: " << argv[0] << " <input> <driver>" << endl;
+   if (argc!=4) {
+      cerr << "usage: " << argv[0] << " <input> <driver> <configuration>" << endl;
       return 1;
    }
    Driver* driver=0;
@@ -509,24 +533,35 @@ int main(int argc,char* argv[])
       return 1;
    }
 
+   // Read the configuration
+   unsigned initialSize,chunkSize,chunkCount,threadCount;
+   {
+      ifstream in(argv[3]);
+      if (!in.is_open()) {
+         cerr << "unable to open " << argv[3] << endl;
+         return 1;
+      }
+      readValue(in,initialSize);
+      readValue(in,chunkSize);
+      readValue(in,chunkCount);
+      readValue(in,threadCount);
+   }
+
    // Try to open the input
    ifstream in(argv[1]);
    if (!in.is_open()) {
       cerr << "unable to open " << argv[1] << endl;
       return 1;
    }
-   TurtleParser parser(in);   
+   TurtleParser parser(in);
 
    // Build a small database first
    cerr << "Building initial database..." << endl;
-   static const unsigned initialSize = 100000; //00;
    if (!driver->buildDatabase(parser,initialSize))
       return 1;
 
    // Prepare some triple chunks
    vector<string> chunkFiles;
-   static const unsigned chunkSize = 10000;
-   static const unsigned chunkCount = 10;
    for (unsigned index=0;index<chunkCount;index++) {
       stringstream cname; cname << "updatetest.chunk" << index << ".tmp";
       string name=cname.str();
@@ -543,10 +578,9 @@ int main(int argc,char* argv[])
    // Apply some updates
    cerr << "Applying updates..." << endl;
    Timestamp t1;
-   if (work.chunkFiles.size()>10)
-      work.chunkFiles.resize(10);
+   if (work.chunkFiles.size()>chunkCount)
+      work.chunkFiles.resize(chunkCount);
    work.mutex.lock();
-   static const unsigned threadCount = 2;
    for (unsigned index=0;index<threadCount;index++) {
       work.activeWorkers++;
       Thread::start(worker,&work);
