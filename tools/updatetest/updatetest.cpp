@@ -40,7 +40,7 @@ class Driver {
    /// The prepare step is done
    virtual void prepareDone() = 0;
    /// Process a chunk of work
-   virtual unsigned processChunk(const string& chunkFile) = 0;
+   virtual unsigned processChunk(const string& chunkFile,unsigned delay) = 0;
    /// Synchronize to disk
    virtual void sync() = 0;
 };
@@ -72,7 +72,7 @@ class RDF3XDriver : public Driver
    /// The prepare step is done
    void prepareDone();
    /// Process a chunk of work
-   unsigned processChunk(const string& chunkFile);
+   unsigned processChunk(const string& chunkFile,unsigned delay);
    /// Synchronize to disk
    void sync();
 };
@@ -225,7 +225,7 @@ void RDF3XDriver::prepareDone()
 {
 }
 //---------------------------------------------------------------------------
-unsigned RDF3XDriver::processChunk(const string& chunkFile)
+unsigned RDF3XDriver::processChunk(const string& chunkFile,unsigned delay)
    // Process a chunk of work
 {
    unsigned processed=0;
@@ -240,6 +240,8 @@ unsigned RDF3XDriver::processChunk(const string& chunkFile)
       bulk.insert(subject,predicate,object);
       processed++;
    }
+   if (delay)
+      Thread::sleep(delay);
    bulk.commit();
 
    return processed;
@@ -273,7 +275,7 @@ class PostgresDriver : public Driver
    /// The prepare step is done
    void prepareDone();
    /// Process a chunk of work
-   unsigned processChunk(const string& chunkFile);
+   unsigned processChunk(const string& chunkFile,unsigned delay);
    /// Synchronize to disk
    void sync();
 };
@@ -427,7 +429,7 @@ void PostgresDriver::prepareDone()
    dictionary.clear();
 }
 //---------------------------------------------------------------------------
-unsigned PostgresDriver::processChunk(const string& chunkFile)
+unsigned PostgresDriver::processChunk(const string& chunkFile,unsigned delay)
    // Process a chunk of work
 {
    FILE* out=popen("psql","w");
@@ -437,6 +439,10 @@ unsigned PostgresDriver::processChunk(const string& chunkFile)
    fprintf(out,"begin transaction;\n");
    fprintf(out,"\\i %s\n",chunkFile.c_str());
    fflush(out);
+   if (delay) {
+      fprintf(out,"! sleep %g\n",static_cast<double>(delay)/1000.0);
+      fflush(out);
+   }
    fprintf(out,"commit;\n");
    fprintf(out,"\\q\n");
    fflush(out);
@@ -455,6 +461,8 @@ struct WorkDescription {
    Mutex mutex;
    /// Notification
    Event event;
+   /// The delay model
+   unsigned delayModel;
    /// The chunks
    vector<string> chunkFiles;
    /// The current work position
@@ -467,7 +475,7 @@ struct WorkDescription {
    unsigned tripleCount;
 
    /// Constructor
-   WorkDescription() : workPos(0),activeWorkers(0),driver(0),tripleCount(0) {}
+   WorkDescription() : delayModel(0),workPos(0),activeWorkers(0),driver(0),tripleCount(0) {}
 };
 //---------------------------------------------------------------------------
 static void worker(void* data)
@@ -491,7 +499,10 @@ static void worker(void* data)
       work.mutex.unlock();
 
       // Process the chunk
-      processed=work.driver->processChunk(chunkFile);
+      unsigned delay=0;
+      if (work.delayModel==1)
+         delay=(random()%100);
+      processed=work.driver->processChunk(chunkFile,delay);
    }
 }
 //---------------------------------------------------------------------------
@@ -538,7 +549,7 @@ int main(int argc,char* argv[])
    }
 
    // Read the configuration
-   unsigned initialSize,chunkSize,chunkCount,threadCount;
+   unsigned initialSize,chunkSize,chunkCount,threadCount,delayModel;
    {
       ifstream in(argv[3]);
       if (!in.is_open()) {
@@ -549,6 +560,7 @@ int main(int argc,char* argv[])
       readValue(in,chunkSize);
       readValue(in,chunkCount);
       readValue(in,threadCount);
+      readValue(in,delayModel);
    }
 
    // Try to open the input
@@ -578,6 +590,7 @@ int main(int argc,char* argv[])
    WorkDescription work;
    work.chunkFiles=chunkFiles;
    work.driver=driver;
+   work.delayModel=delayModel;
 
    // Apply some updates
    cerr << "Applying updates..." << endl;
