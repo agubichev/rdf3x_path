@@ -378,7 +378,6 @@ void PostgresDriver::prepareChunk(const string& name,TurtleParser& parser,unsign
 
    string subject,predicate,object;
    unsigned size=0;
-   out << "begin transaction;" << endl;
    for (unsigned index2=0;index2<chunkSize;index2++) {
       if (!parser.parse(subject,predicate,object))
          break;
@@ -420,7 +419,6 @@ void PostgresDriver::prepareChunk(const string& name,TurtleParser& parser,unsign
    for (unsigned index=0,limit=triples.size();index<limit;index+=3)
       out << triples[index] << "\t" << triples[index+1] << "\t" << triples[index+2] << endl;
    out << "\\." << endl;
-   out << "commit;" << endl;
 }
 //---------------------------------------------------------------------------
 void PostgresDriver::prepareDone()
@@ -432,11 +430,17 @@ void PostgresDriver::prepareDone()
 unsigned PostgresDriver::processChunk(const string& chunkFile)
    // Process a chunk of work
 {
-   stringstream command; command << "psql -f " << chunkFile << endl;
-   if (system(command.str().c_str())!=0) {
+   FILE* out=popen("psql","w");
+   if (!out) {
       cerr << "warning: psql call failed" << endl;
-      return 0;
    }
+   fprintf(out,"begin transaction;\n");
+   fprintf(out,"\\i %s\n",chunkFile.c_str());
+   fflush(out);
+   fprintf(out,"commit;\n");
+   fprintf(out,"\\q\n");
+   fflush(out);
+   pclose(out);
    return jobSize[chunkFile];
 }
 //---------------------------------------------------------------------------
