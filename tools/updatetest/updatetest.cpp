@@ -1,4 +1,6 @@
 #include "../rdf3xload/TurtleParser.hpp"
+#include "cts/parser/SPARQLLexer.hpp"
+#include "cts/parser/SPARQLParser.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/BulkOperation.hpp"
 #include "infra/osdep/Event.hpp"
@@ -37,6 +39,8 @@ class Driver {
    virtual bool buildDatabase(TurtleParser& input,unsigned initialSize) = 0;
    /// Prepare a chunk of work
    virtual void prepareChunk(const string& name,TurtleParser& parser,unsigned chunkSize) = 0;
+   /// Preprate a query
+   virtual string prepareQuery(const string& query) = 0;
    /// The prepare step is done
    virtual void prepareDone() = 0;
    /// Process a chunk of work
@@ -69,6 +73,8 @@ class RDF3XDriver : public Driver
    bool buildDatabase(TurtleParser& input,unsigned initialSize);
    /// Prepare a chunk of work
    void prepareChunk(const string& name,TurtleParser& parser,unsigned chunkSize);
+   /// Preprate a query
+   string prepareQuery(const string& query);
    /// The prepare step is done
    void prepareDone();
    /// Process a chunk of work
@@ -220,6 +226,12 @@ void RDF3XDriver::prepareChunk(const string& name,TurtleParser& parser,unsigned 
    }
 }
 //---------------------------------------------------------------------------
+string RDF3XDriver::prepareQuery(const string& query)
+   // Preprate a query
+{
+   return query;
+}
+//---------------------------------------------------------------------------
 void RDF3XDriver::prepareDone()
    // The prepare step is done
 {
@@ -272,6 +284,8 @@ class PostgresDriver : public Driver
    bool buildDatabase(TurtleParser& input,unsigned initialSize);
    /// Prepare a chunk of work
    void prepareChunk(const string& name,TurtleParser& parser,unsigned chunkSize);
+   /// Preprate a query
+   string prepareQuery(const string& query);
    /// The prepare step is done
    void prepareDone();
    /// Process a chunk of work
@@ -423,6 +437,134 @@ void PostgresDriver::prepareChunk(const string& name,TurtleParser& parser,unsign
    out << "\\." << endl;
 }
 //---------------------------------------------------------------------------
+static string buildFactsAttribute(unsigned id,const char* attribute)
+    // Build the attribute name for a facts attribute
+{
+   stringstream out;
+   out << "f" << id << "." << attribute;
+   return out.str();
+}
+//---------------------------------------------------------------------------
+string PostgresDriver::prepareQuery(const string& query)
+   // Preprate a query
+{
+   // Parse the query
+   SPARQLLexer lexer(query);
+   SPARQLParser parser(lexer);
+   try {
+      parser.parse();
+   } catch (const SPARQLParser::ParserException& e) {
+      cerr << "parse error: " << e.message << endl;
+      return "";
+   }
+
+   // Translate it
+   stringstream out;
+   out << "select ";
+   {
+      unsigned id=0;
+      for (SPARQLParser::projection_iterator iter=parser.projectionBegin(),limit=parser.projectionEnd();iter!=limit;++iter) {
+         if (id) out << ",";
+         out << "s" << id << ".value";
+         id++;
+      }
+   }
+   out << " from (";
+   map<unsigned,string> representative;
+   {
+      unsigned id=0;
+      for (vector<SPARQLParser::Pattern>::const_iterator iter=parser.getPatterns().patterns.begin(),limit=parser.getPatterns().patterns.end();iter!=limit;++iter) {
+         if (((*iter).subject.type==SPARQLParser::Element::Variable)&&(!representative.count((*iter).subject.id)))
+            representative[(*iter).subject.id]=buildFactsAttribute(id,"subject");
+         if (((*iter).predicate.type==SPARQLParser::Element::Variable)&&(!representative.count((*iter).predicate.id)))
+            representative[(*iter).predicate.id]=buildFactsAttribute(id,"predicate");
+         if (((*iter).object.type==SPARQLParser::Element::Variable)&&(!representative.count((*iter).object.id)))
+            representative[(*iter).object.id]=buildFactsAttribute(id,"object");
+         ++id;
+      }
+   }
+   out << "select ";
+   {
+      unsigned id=0;
+      for (SPARQLParser::projection_iterator iter=parser.projectionBegin(),limit=parser.projectionEnd();iter!=limit;++iter) {
+         if (id) out << ",";
+         out << representative[*iter] << " as r" << id;
+         id++;
+      }
+   }
+   out << " from ";
+   {
+      unsigned id=0;
+      for (vector<SPARQLParser::Pattern>::const_iterator iter=parser.getPatterns().patterns.begin(),limit=parser.getPatterns().patterns.end();iter!=limit;++iter) {
+         if (id) out << ",";
+         out << "updatetest.facts f" << id;
+         ++id;
+      }
+
+   }
+   out << " where ";
+   {
+      unsigned id=0; bool first=true;
+      for (vector<SPARQLParser::Pattern>::const_iterator iter=parser.getPatterns().patterns.begin(),limit=parser.getPatterns().patterns.end();iter!=limit;++iter) {
+         string s=buildFactsAttribute(id,"subject"),p=buildFactsAttribute(id,"predicate"),o=buildFactsAttribute(id,"object");
+         if ((*iter).subject.type!=SPARQLParser::Element::Variable) {
+            if (first) first=false; else out << " and ";
+            unsigned val;
+            if (dictionary.count((*iter).subject.value))
+               val=dictionary[(*iter).subject.value]; else
+               val=dictionary.size();
+            out << s << "=" << val;
+         } else if (representative[(*iter).subject.id]!=s) {
+            if (first) first=false; else out << " and ";
+            out << s << "=" << representative[(*iter).subject.id];
+         }
+         if ((*iter).predicate.type!=SPARQLParser::Element::Variable) {
+            if (first) first=false; else out << " and ";
+            unsigned val;
+            if (dictionary.count((*iter).predicate.value))
+               val=dictionary[(*iter).predicate.value]; else
+               val=dictionary.size();
+            out << p << "=" << val;
+         } else if (representative[(*iter).predicate.id]!=p) {
+            if (first) first=false; else out << " and ";
+            out << p << "=" << representative[(*iter).predicate.id];
+         }
+         if ((*iter).object.type!=SPARQLParser::Element::Variable) {
+            if (first) first=false; else out << " and ";
+            unsigned val;
+            if (dictionary.count((*iter).object.value))
+               val=dictionary[(*iter).object.value]; else
+               val=dictionary.size();
+            out << o << "=" << val;
+         } else if (representative[(*iter).object.id]!=o) {
+            if (first) first=false; else out << " and ";
+            out << o << "=" << representative[(*iter).object.id];
+         }
+         ++id;
+      }
+   }
+   out << ") facts";
+   {
+      unsigned id=0;
+      for (SPARQLParser::projection_iterator iter=parser.projectionBegin(),limit=parser.projectionEnd();iter!=limit;++iter) {
+         out << ",updatetest.strings s" << id;
+         id++;
+      }
+   }
+   out << " where ";
+   {
+      unsigned id=0;
+      for (SPARQLParser::projection_iterator iter=parser.projectionBegin(),limit=parser.projectionEnd();iter!=limit;++iter) {
+         if (id) out << " and ";
+         out << "s" << id << ".id=facts.r" << id;
+         id++;
+      }
+   }
+   out << ";";
+
+   return out.str();
+}
+//---------------------------------------------------------------------------
 void PostgresDriver::prepareDone()
    // The prepare step is done
 {
@@ -506,10 +648,9 @@ static void worker(void* data)
    }
 }
 //---------------------------------------------------------------------------
-template <class T> istream& readValue(istream& in,T& value)
-   // Read a value from the input stream
-{
+static istream& skipComment(istream& in)
    // Skip comments
+{
    while (true) {
       char c=in.peek();
       if ((c==' ')||(c=='\n')||(c=='\r')||(c=='\t')) {
@@ -526,6 +667,15 @@ template <class T> istream& readValue(istream& in,T& value)
       }
       break;
    }
+   return in;
+}
+//---------------------------------------------------------------------------
+template <class T> istream& readValue(istream& in,T& value)
+   // Read a value from the input stream
+{
+   // Skip comments
+   skipComment(in);
+
    // Read the entry
    return in >> value;
 }
@@ -544,12 +694,13 @@ int main(int argc,char* argv[])
    } else if (string(argv[2])=="postgres") {
       driver=new PostgresDriver();
    } else {
-      cout << "unknown driver " << argv[1] << endl;
+      cerr << "unknown driver " << argv[1] << endl;
       return 1;
    }
 
    // Read the configuration
-   unsigned initialSize,chunkSize,chunkCount,threadCount,delayModel;
+   unsigned initialSize,chunkSize,chunkCount,threadCount,delayModel,queryModel;
+   vector<string> queries;
    {
       ifstream in(argv[3]);
       if (!in.is_open()) {
@@ -561,6 +712,15 @@ int main(int argc,char* argv[])
       readValue(in,chunkCount);
       readValue(in,threadCount);
       readValue(in,delayModel);
+      readValue(in,queryModel);
+      while(true) {
+         skipComment(in);
+         string s;
+         if (!getline(in,s))
+            break;
+         if (s=="") continue;
+         queries.push_back(s);
+      }
    }
 
    // Try to open the input
@@ -584,6 +744,8 @@ int main(int argc,char* argv[])
       driver->prepareChunk(name,parser,chunkSize);
       chunkFiles.push_back(name);
    }
+   for (unsigned index=0;index<queries.size();index++)
+      queries[index]=driver->prepareQuery(queries[index]);
    driver->prepareDone();
 
    // Open the database again
