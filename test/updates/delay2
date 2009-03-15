@@ -1,11 +1,11 @@
 # initial database size
-100000
+1000000
 
 # chunk size
 10000
 
 # chunk count
-10
+100
 
 # worker threads
 2

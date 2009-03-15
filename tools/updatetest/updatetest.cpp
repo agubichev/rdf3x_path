@@ -679,8 +679,12 @@ struct WorkDescription {
    Event event;
    /// The delay model
    unsigned delayModel;
+   /// The query model
+   unsigned queryModel;
    /// The chunks
    vector<string> chunkFiles;
+   /// The queries
+   vector<string> queries;
    /// The current work position
    unsigned workPos;
    /// Active workers
@@ -691,35 +695,58 @@ struct WorkDescription {
    unsigned tripleCount;
 
    /// Constructor
-   WorkDescription() : delayModel(0),workPos(0),activeWorkers(0),driver(0),tripleCount(0) {}
+   WorkDescription() : delayModel(0),queryModel(0),workPos(0),activeWorkers(0),driver(0),tripleCount(0) {}
 };
 //---------------------------------------------------------------------------
 static void worker(void* data)
    // A worker thread
 {
    WorkDescription& work=*static_cast<WorkDescription*>(data);
+   char rndBuffer[32];
+   random_data rnd;
+   initstate_r(0,rndBuffer,sizeof(rndBuffer),&rnd);
 
    unsigned processed = 0;
    while (true) {
       // Check for new work
+      bool queryMode=false;
+      string chunkFile,query;
       work.mutex.lock();
       work.tripleCount+=processed;
       processed=0;
-      if (work.workPos>=work.chunkFiles.size()) {
-         work.activeWorkers--;
-         work.event.notify(work.mutex);
-         work.mutex.unlock();
-         break;
+      if (work.queryModel==1) {
+         if ((work.workPos/2)>=work.chunkFiles.size())
+            break;
+         if (work.workPos&1) {
+            chunkFile=work.chunkFiles[work.workPos/2];
+         } else {
+            queryMode=true;
+            query=work.queries[(work.workPos/2)%work.queries.size()];
+         }
+      } else {
+         if (work.workPos>=work.chunkFiles.size())
+            break;
+         chunkFile=work.chunkFiles[work.workPos];
       }
-      string chunkFile=work.chunkFiles[work.workPos++];
+      work.workPos++;
       work.mutex.unlock();
 
       // Process the chunk
-      unsigned delay=0;
-      if (work.delayModel==1)
-         delay=(random()%100);
-      processed=work.driver->processChunk(chunkFile,delay);
+      if (queryMode) {
+         work.driver->processQuery(query);
+      } else {
+         int delay=0;
+         if (work.delayModel==1) {
+            random_r(&rnd,&delay);
+            delay=delay%100;
+         }
+         processed=work.driver->processChunk(chunkFile,delay);
+      }
    }
+
+   work.activeWorkers--;
+   work.event.notify(work.mutex);
+   work.mutex.unlock();
 }
 //---------------------------------------------------------------------------
 static istream& skipComment(istream& in)
@@ -825,8 +852,10 @@ int main(int argc,char* argv[])
    // Open the database again
    WorkDescription work;
    work.chunkFiles=chunkFiles;
+   work.queries=queries;
    work.driver=driver;
    work.delayModel=delayModel;
+   work.queryModel=queryModel;
 
    // Apply some updates
    cerr << "Applying updates..." << endl;
