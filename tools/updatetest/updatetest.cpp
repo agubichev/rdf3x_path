@@ -1,12 +1,19 @@
 #include "../rdf3xload/TurtleParser.hpp"
+#include "cts/codegen/CodeGen.hpp"
+#include "cts/infra/QueryGraph.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
 #include "cts/parser/SPARQLParser.hpp"
-#include "rts/database/Database.hpp"
-#include "rts/runtime/BulkOperation.hpp"
+#include "cts/plangen/PlanGen.hpp"
+#include "cts/semana/SemanticAnalysis.hpp"
 #include "infra/osdep/Event.hpp"
 #include "infra/osdep/Mutex.hpp"
-#include "infra/osdep/Timestamp.hpp"
 #include "infra/osdep/Thread.hpp"
+#include "infra/osdep/Timestamp.hpp"
+#include "rts/database/Database.hpp"
+#include "rts/operator/Operator.hpp"
+#include "rts/operator/Scheduler.hpp"
+#include "rts/runtime/BulkOperation.hpp"
+#include "rts/runtime/Runtime.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -43,6 +50,8 @@ class Driver {
    virtual string prepareQuery(const string& query) = 0;
    /// The prepare step is done
    virtual void prepareDone() = 0;
+   /// Process a query
+   virtual void processQuery(const string& query) = 0;
    /// Process a chunk of work
    virtual unsigned processChunk(const string& chunkFile,unsigned delay) = 0;
    /// Synchronize to disk
@@ -77,6 +86,8 @@ class RDF3XDriver : public Driver
    string prepareQuery(const string& query);
    /// The prepare step is done
    void prepareDone();
+   /// Process a query
+   void processQuery(const string& query);
    /// Process a chunk of work
    unsigned processChunk(const string& chunkFile,unsigned delay);
    /// Synchronize to disk
@@ -237,6 +248,53 @@ void RDF3XDriver::prepareDone()
 {
 }
 //---------------------------------------------------------------------------
+void RDF3XDriver::processQuery(const string& query)
+   // Process a query
+{
+   QueryGraph queryGraph;
+   {
+      // Parse the query
+      SPARQLLexer lexer(query);
+      SPARQLParser parser(lexer);
+      try {
+         parser.parse();
+      } catch (const SPARQLParser::ParserException& e) {
+         cerr << "parse error: " << e.message << endl;
+         return;
+      }
+
+      // And perform the semantic anaylsis
+      SemanticAnalysis semana(db);
+      semana.transform(parser,queryGraph);
+      if (queryGraph.knownEmpty()) {
+         // cerr << "<empty result>" << endl;
+         return;
+      }
+   }
+
+   // Run the optimizer
+   PlanGen plangen;
+   Plan* plan=plangen.translate(db,queryGraph);
+   if (!plan) {
+      cerr << "plan generation failed" << endl;
+      return;
+   }
+
+   // Build a physical plan
+   Runtime runtime(db);
+   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,true);
+
+   vector<unsigned> regValues;
+   for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
+      regValues.push_back(runtime.getRegister(index)->value);
+
+   // And execute it
+   Scheduler scheduler;
+   scheduler.execute(operatorTree);
+
+   delete operatorTree;
+}
+//---------------------------------------------------------------------------
 unsigned RDF3XDriver::processChunk(const string& chunkFile,unsigned delay)
    // Process a chunk of work
 {
@@ -288,6 +346,8 @@ class PostgresDriver : public Driver
    string prepareQuery(const string& query);
    /// The prepare step is done
    void prepareDone();
+   /// Process a query
+   void processQuery(const string& query);
    /// Process a chunk of work
    unsigned processChunk(const string& chunkFile,unsigned delay);
    /// Synchronize to disk
@@ -569,6 +629,20 @@ void PostgresDriver::prepareDone()
    // The prepare step is done
 {
    dictionary.clear();
+}
+//---------------------------------------------------------------------------
+void PostgresDriver::processQuery(const string& query)
+   // Process a query
+{
+   FILE* out=popen("psql","w");
+   if (!out) {
+      cerr << "warning: psql call failed" << endl;
+   }
+   fprintf(out,"%s;\n",query.c_str());
+   fflush(out);
+   fprintf(out,"\\q\n");
+   fflush(out);
+   pclose(out);
 }
 //---------------------------------------------------------------------------
 unsigned PostgresDriver::processChunk(const string& chunkFile,unsigned delay)
