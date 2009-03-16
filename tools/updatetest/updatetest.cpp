@@ -14,6 +14,7 @@
 #include "rts/operator/Scheduler.hpp"
 #include "rts/runtime/BulkOperation.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/runtime/PredicateLockManager.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -54,6 +55,8 @@ class Driver {
    virtual void processQuery(const string& query) = 0;
    /// Process a chunk of work
    virtual unsigned processChunk(const string& chunkFile,unsigned delay) = 0;
+   /// Process a query and a chunk of work
+   virtual unsigned processQueryAndChunk(const string& query,const string& chunkFile,unsigned delay) = 0;
    /// Synchronize to disk
    virtual void sync() = 0;
 };
@@ -71,6 +74,12 @@ class RDF3XDriver : public Driver
    Database db;
    /// The differential index
    DifferentialIndex diff;
+   /// The predicate locks
+   PredicateLockManager locks;
+   /// The next transaction id (for locks)
+   unsigned nextLockTransaction;
+   /// Mutex
+   Mutex nextLockTransactionLock;
 
    public:
    /// Constructor
@@ -90,12 +99,14 @@ class RDF3XDriver : public Driver
    void processQuery(const string& query);
    /// Process a chunk of work
    unsigned processChunk(const string& chunkFile,unsigned delay);
+   /// Process a query and a chunk of work
+   unsigned processQueryAndChunk(const string& query,const string& chunkFile,unsigned delay);
    /// Synchronize to disk
    void sync();
 };
 //---------------------------------------------------------------------------
 RDF3XDriver::RDF3XDriver()
-   : diff(db)
+   : diff(db),nextLockTransaction(0)
    // Constructor
 {
 }
@@ -317,6 +328,119 @@ unsigned RDF3XDriver::processChunk(const string& chunkFile,unsigned delay)
    return processed;
 }
 //---------------------------------------------------------------------------
+unsigned RDF3XDriver::processQueryAndChunk(const string& query,const string& chunkFile,unsigned delay)
+   // Process a query and a chunk of work
+{
+   // Parse the query
+   QueryGraph queryGraph;
+   bool knownEmpty=false;
+   {
+      // Parse the query
+      SPARQLLexer lexer(query);
+      SPARQLParser parser(lexer);
+      try {
+         parser.parse();
+      } catch (const SPARQLParser::ParserException& e) {
+         cerr << "parse error: " << e.message << endl;
+         return 0;
+      }
+
+      // And perform the semantic anaylsis
+      SemanticAnalysis semana(db);
+      semana.transform(parser,queryGraph);
+      if (queryGraph.knownEmpty()) {
+         // cerr << "<empty result>" << endl;
+         knownEmpty=true;
+      }
+   }
+
+   // Read the triples
+   unsigned processed=0;
+   BulkOperation bulk(diff);
+   ifstream in(chunkFile.c_str());
+   TurtleParser parser(in);
+   string subject,predicate,object;
+   while (true) {
+      if (!parser.parse(subject,predicate,object))
+         break;
+      bulk.insert(subject,predicate,object);
+      processed++;
+   }
+
+   // Build the locks
+   vector<pair<PredicateLockManager::Box,bool> > locks;
+   if (!knownEmpty)
+   for (vector<QueryGraph::Node>::const_iterator iter=queryGraph.getQuery().nodes.begin(),limit=queryGraph.getQuery().nodes.end();iter!=limit;++iter) {
+      const QueryGraph::Node& n=*iter;
+      PredicateLockManager::Box b(0,~0u,0,~0u,0,~0u);
+      if (n.constSubject)
+         b.subjectMin=b.subjectMax=n.subject;
+      if (n.constPredicate)
+         b.predicateMin=b.predicateMax=n.predicate;
+      if (n.constObject)
+         b.objectMin=b.objectMax=n.object;
+      locks.push_back(pair<PredicateLockManager::Box,bool>(b,false));
+   }
+   {
+      vector<PredicateLockManager::Box> writeLocks;
+      bulk.buildCover(20,writeLocks);
+      for (vector<PredicateLockManager::Box>::const_iterator iter=writeLocks.begin(),limit=writeLocks.end();iter!=limit;++iter)
+         locks.push_back(pair<PredicateLockManager::Box,bool>(*iter,true));
+   }
+
+   // Try locking
+   unsigned lockTransaction;
+   while (true) {
+      // Produce a new id
+      {
+         auto_lock lock(nextLockTransactionLock);
+         lockTransaction=nextLockTransaction++;
+      }
+
+      // Try to lock everything
+      if (this->locks.lockMultiple(lockTransaction,locks))
+         break;
+
+      // Locking failed, retry
+      //cerr << "locking failed..." << endl;
+   }
+
+   // Run the query
+   if (!knownEmpty) {
+      // Run the optimizer
+      PlanGen plangen;
+      Plan* plan=plangen.translate(db,queryGraph);
+      if (!plan) {
+         cerr << "plan generation failed" << endl;
+         return 0;
+      }
+
+      // Build a physical plan
+      Runtime runtime(db);
+      Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,true);
+
+      vector<unsigned> regValues;
+      for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
+         regValues.push_back(runtime.getRegister(index)->value);
+
+      // And execute it
+      Scheduler scheduler;
+      scheduler.execute(operatorTree);
+
+      delete operatorTree;
+   }
+
+   // Commit
+   if (delay)
+      Thread::sleep(delay);
+   bulk.commit();
+
+   // And release all locks
+   this->locks.finished(lockTransaction);
+
+   return processed;
+}
+//---------------------------------------------------------------------------
 void RDF3XDriver::sync()
    // Synchronize to disk
 {
@@ -350,6 +474,8 @@ class PostgresDriver : public Driver
    void processQuery(const string& query);
    /// Process a chunk of work
    unsigned processChunk(const string& chunkFile,unsigned delay);
+   /// Process a query and a chunk of work
+   unsigned processQueryAndChunk(const string& query,const string& chunkFile,unsigned delay);
    /// Synchronize to disk
    void sync();
 };
@@ -666,6 +792,29 @@ unsigned PostgresDriver::processChunk(const string& chunkFile,unsigned delay)
    return jobSize[chunkFile];
 }
 //---------------------------------------------------------------------------
+unsigned PostgresDriver::processQueryAndChunk(const string& query,const string& chunkFile,unsigned delay)
+   // Process a query and a chunk of work
+{
+   FILE* out=popen("psql","w");
+   if (!out) {
+      cerr << "warning: psql call failed" << endl;
+   }
+   fprintf(out,"begin transaction;\n");
+   fprintf(out,"%s;\n",query.c_str());
+   fflush(out);
+   fprintf(out,"\\i %s\n",chunkFile.c_str());
+   fflush(out);
+   if (delay) {
+      fprintf(out,"! sleep %g\n",static_cast<double>(delay)/1000.0);
+      fflush(out);
+   }
+   fprintf(out,"commit;\n");
+   fprintf(out,"\\q\n");
+   fflush(out);
+   pclose(out);
+   return jobSize[chunkFile];
+}
+//---------------------------------------------------------------------------
 void PostgresDriver::sync()
    // Synchronize to disk
 {
@@ -716,14 +865,14 @@ static void worker(void* data)
       work.mutex.lock();
       work.tripleCount+=processed;
       processed=0;
-      if (work.queryModel==1) {
+      if ((work.queryModel==1)||(work.queryModel==2)) {
          if ((work.workPos/2)>=work.chunkFiles.size())
             break;
+         query=work.queries[(work.workPos/2)%work.queries.size()];
          if (work.workPos&1) {
             chunkFile=work.chunkFiles[work.workPos/2];
          } else {
             queryMode=true;
-            query=work.queries[(work.workPos/2)%work.queries.size()];
          }
       } else {
          if (work.workPos>=work.chunkFiles.size())
@@ -743,7 +892,9 @@ static void worker(void* data)
             random_r(&rnd,&delay);
             delay=delay%100;
          }
-         processed=work.driver->processChunk(chunkFile,delay);
+         if (work.queryModel==2)
+            processed=work.driver->processQueryAndChunk(query,chunkFile,delay); else
+            processed=work.driver->processChunk(chunkFile,delay);
       }
    }
 

@@ -64,6 +64,39 @@ bool PredicateLockManager::lock(unsigned transaction,const Box& box,bool exclusi
    return true;
 }
 //---------------------------------------------------------------------------
+bool PredicateLockManager::lockMultiple(unsigned transaction,const std::vector<std::pair<Box,bool> > regions)
+   // Lock multiple regions at once
+{
+   // Check for conflicting locks
+   auto_lock lock(mutex);
+   for (vector<Lock>::const_iterator iter=locks.begin(),limit=locks.end();iter!=limit;++iter) {
+      for (vector<pair<Box,bool> >::const_iterator iter2=regions.begin(),limit2=regions.end();iter2!=limit2;++iter2) {
+         if ((*iter).box.intersects((*iter2).first)) {
+            // Same transaction?
+            if ((*iter).transaction==transaction)
+               continue;
+            // Compatible?
+            if ((!(*iter2).second)&&(!(*iter).exclusive))
+               continue;
+            // Already committed?
+            if (committed.count((*iter).transaction))
+               continue;
+            // No, fail. XXX implement waiting
+            return false;
+         }
+      }
+   }
+
+   // Create new locks
+   for (vector<pair<Box,bool> >::const_iterator iter=regions.begin(),limit=regions.end();iter!=limit;++iter)
+      locks.push_back(Lock((*iter).first,transaction,(*iter).second));
+
+   // Remember the transaction
+   active.insert(transaction);
+
+   return true;
+}
+//---------------------------------------------------------------------------
 void PredicateLockManager::finished(unsigned transaction)
    // A transaction finished
 {

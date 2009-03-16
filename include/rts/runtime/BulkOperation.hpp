@@ -2,6 +2,7 @@
 #define H_rts_runtime_BulkOperation
 //---------------------------------------------------------------------------
 #include "rts/runtime/DifferentialIndex.hpp"
+#include "rts/runtime/PredicateLockManager.hpp"
 #include <map>
 #include <string>
 #include <vector>
@@ -39,6 +40,8 @@ class BulkOperation
 
    /// Add a triple
    void insert(const std::string& subject,const std::string& predicate,const std::string& object);
+   /// Build a lock cover
+   void buildCover(unsigned maxSize,std::vector<PredicateLockManager::Box>& boxes);
 
    /// Commit
    void commit();

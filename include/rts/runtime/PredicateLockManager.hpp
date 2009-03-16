@@ -60,6 +60,8 @@ class PredicateLockManager
 
    /// Lock a region
    bool lock(unsigned transaction,const Box& box,bool exclusive);
+   /// Lock multiple regions at once
+   bool lockMultiple(unsigned transaction,const std::vector<std::pair<Box,bool> > regions);
    /// A transaction finished
    void finished(unsigned transaction);
 };
