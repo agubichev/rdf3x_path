@@ -693,9 +693,11 @@ struct WorkDescription {
    Driver* driver;
    /// Total number of processed triples
    unsigned tripleCount;
+   /// Total number of processed transactions
+   unsigned transactionCount;
 
    /// Constructor
-   WorkDescription() : delayModel(0),queryModel(0),workPos(0),activeWorkers(0),driver(0),tripleCount(0) {}
+   WorkDescription() : delayModel(0),queryModel(0),workPos(0),activeWorkers(0),driver(0),tripleCount(0),transactionCount(0) {}
 };
 //---------------------------------------------------------------------------
 static void worker(void* data)
@@ -729,6 +731,7 @@ static void worker(void* data)
          chunkFile=work.chunkFiles[work.workPos];
       }
       work.workPos++;
+      work.transactionCount++;
       work.mutex.unlock();
 
       // Process the chunk
@@ -877,6 +880,7 @@ int main(int argc,char* argv[])
    cerr << "Transaction time: " << (t2-t1) << endl;
    cerr << "Total time: " << (t3-t1) << endl;
    cerr << "Triples/s: " << (work.tripleCount*1000/(t3-t1)) << endl;
+   cerr << "Transactions/s: " << (static_cast<double>(work.transactionCount*1000)/(t3-t1)) << endl;
 
    delete driver;
    for (vector<string>::const_iterator iter=chunkFiles.begin(),limit=chunkFiles.end();iter!=limit;++iter)
