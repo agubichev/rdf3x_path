@@ -782,7 +782,7 @@ unsigned PostgresDriver::processChunk(const string& chunkFile,unsigned delay)
    fprintf(out,"\\i %s\n",chunkFile.c_str());
    fflush(out);
    if (delay) {
-      fprintf(out,"! sleep %g\n",static_cast<double>(delay)/1000.0);
+      fprintf(out,"\\! sleep %g\n",static_cast<double>(delay)/1000.0);
       fflush(out);
    }
    fprintf(out,"commit;\n");
@@ -805,7 +805,7 @@ unsigned PostgresDriver::processQueryAndChunk(const string& query,const string& 
    fprintf(out,"\\i %s\n",chunkFile.c_str());
    fflush(out);
    if (delay) {
-      fprintf(out,"! sleep %g\n",static_cast<double>(delay)/1000.0);
+      fprintf(out,"\\! sleep %g\n",static_cast<double>(delay)/1000.0);
       fflush(out);
    }
    fprintf(out,"commit;\n");

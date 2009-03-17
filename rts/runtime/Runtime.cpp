@@ -16,8 +16,8 @@ void Register::reset()
    domain=0;
 }
 //---------------------------------------------------------------------------
-Runtime::Runtime(Database& db)
-   : db(db)
+Runtime::Runtime(Database& db,DifferentialIndex* diff)
+   : db(db),diff(diff)
    // Constructor
 {
 }

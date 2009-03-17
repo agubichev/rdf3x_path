@@ -14,6 +14,7 @@
 #include <vector>
 //---------------------------------------------------------------------------
 class Database;
+class DifferentialIndex;
 //---------------------------------------------------------------------------
 /// A runtime register storing a single value
 class Register
@@ -34,6 +35,8 @@ class Runtime
    private:
    /// The database
    Database& db;
+   /// The differential index (if any)
+   DifferentialIndex* diff;
    /// The registers
    std::vector<Register> registers;
    /// The domain descriptions
@@ -41,12 +44,16 @@ class Runtime
 
    public:
    /// Constructor
-   explicit Runtime(Database& db);
+   Runtime(Database& db,DifferentialIndex* diff=0);
    /// Destructor
    ~Runtime();
 
    /// Get the database
    Database& getDatabase() const { return db; }
+   /// Has a differential index?
+   bool hasDifferentialIndex() const { return diff; }
+   /// Get the differential index
+   DifferentialIndex& getDifferentialIndex() const { return *diff; }
    /// Set the number of registers
    void allocateRegisters(unsigned count);
    /// Get the number of registers

@@ -18,6 +18,7 @@
 #include "rts/operator/TupleCounter.hpp"
 #include "rts/operator/Union.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/runtime/DifferentialIndex.hpp"
 #include <cstdlib>
 #include <map>
 #include <set>
@@ -73,6 +74,8 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
    resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject);
 
    // And return the operator
+   if (runtime.hasDifferentialIndex())
+      return runtime.getDifferentialIndex().createScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject);
    return IndexScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
                             subject,constSubject,
                             predicate,constPredicate,
@@ -93,6 +96,8 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigne
    resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject,(order==Database::Order_Subject_Predicate_Object)||(order==Database::Order_Predicate_Subject_Object));
 
    // And return the operator
+   if (runtime.hasDifferentialIndex())
+      return runtime.getDifferentialIndex().createAggregatedScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject);
    return AggregatedIndexScan::create(runtime.getDatabase(),order,
                                       subject,constSubject,
                                       predicate,constPredicate,
@@ -113,6 +118,8 @@ static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<un
    resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject,(order!=Database::Order_Object_Subject_Predicate)&&(order!=Database::Order_Object_Predicate_Subject));
 
    // And return the operator
+   if (runtime.hasDifferentialIndex())
+      return runtime.getDifferentialIndex().createFullyAggregatedScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject);
    return FullyAggregatedIndexScan::create(runtime.getDatabase(),order,
                                            subject,constSubject,
                                            predicate,constPredicate,
