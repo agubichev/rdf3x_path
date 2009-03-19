@@ -46,7 +46,7 @@ class FactsSegment : public Segment
    /// Lookup the first page contains entries >= the start condition
    bool lookup(unsigned start1,unsigned start2,unsigned start3,BufferReference& ref);
    /// Decompress triples
-   static Triple* decompress(const unsigned char* reader,const unsigned char* limit,Triple* writer);
+   static Triple* decompress(const unsigned char* reader,const unsigned char* limit,Triple* writer,unsigned time);
    /// Compare two triples
    static int cmpTriple(const Triple& a,const Triple& b);
    /// Merge triples
