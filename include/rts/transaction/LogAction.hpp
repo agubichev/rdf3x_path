@@ -81,32 +81,40 @@ template <unsigned segmentId,unsigned actionId,class T> LogActionGlue::Hook<segm
 #define LOGACTION_HEAD(seg,action) \
 class LOGACTION_ID(seg,action) : public LogAction { public: LOGACTION_ID(seg,action)();
 /// Common tail of all log actions
-#define LOGACTION_TAIL(seg,action) \
+#define LOGACTION_TAILDECL(seg,action) \
 void* writeLog(void* buffer) const;\
 void readLog(const void* buffer);\
 void redo(void* page) const;\
 void undo(void* page) const;\
-};\
+};
+#define LOGACTION_TAILDEF(seg,action) \
 LOGACTION_ID(seg,action)::LOGACTION_ID(seg,action)() {}\
 static LogActionGlue::Hook<seg::ID,seg::Action_##action,LOGACTION_ID(seg,action)> LOGACTION_HOOK(seg,action);
+#define LOGACTION_TAIL(seg,action) LOGACTION_TAILDECL(seg,action) LOGACTION_TAILDEF(seg,action)
 //---------------------------------------------------------------------------
 /// A log entry with 2 parameters
-#define LOGACTION2(seg,action,t1,v1,t2,v2) \
+#define LOGACTION2DECL(seg,action,t1,v1,t2,v2) \
 LOGACTION_HEAD(seg,action) \
 private: t1 v1; t2 v2; public:\
 LOGACTION_ID(seg,action)(t1 v1,t2 v2) : v1(v1),v2(v2) {}\
-LOGACTION_TAIL(seg,action) \
+LOGACTION_TAILDECL(seg,action)
+#define LOGACTION2DEF(seg,action,t1,v1,t2,v2) \
+LOGACTION_TAILDEF(seg,action) \
 void* LOGACTION_ID(seg,action)::writeLog(void* ptr_) const { return LogActionGlue::Helper<t2>::write(LogActionGlue::Helper<t1>::write(ptr_,v1),v2); } \
 void LOGACTION_ID(seg,action)::readLog(const void* ptr_) { LogActionGlue::Helper<t2>::read(LogActionGlue::Helper<t1>::read(ptr_,v1),v2); }
+#define LOGACTION2(seg,action,t1,v1,t2,v2) LOGACTION2DECL(seg,action,t1,v1,t2,v2) LOGACTION2DEF(seg,action,t1,v1,t2,v2)
 //---------------------------------------------------------------------------
 /// A log entry with 3 parameters
-#define LOGACTION3(seg,action,t1,v1,t2,v2,t3,v3) \
+#define LOGACTION3DECL(seg,action,t1,v1,t2,v2,t3,v3) \
 LOGACTION_HEAD(seg,action) \
 private: t1 v1; t2 v2; t3 v3; public:\
 LOGACTION_ID(seg,action)(t1 v1,t2 v2,t3 v3) : v1(v1),v2(v2),v3(v3) {}\
-LOGACTION_TAIL(seg,action) \
+LOGACTION_TAILDECL(seg,action)
+#define LOGACTION3DEF(seg,action,t1,v1,t2,v2,t3,v3) \
+LOGACTION_TAILDEF(seg,action) \
 void* LOGACTION_ID(seg,action)::writeLog(void* ptr_) const { return LogActionGlue::Helper<t3>::write(LogActionGlue::Helper<t2>::write(LogActionGlue::Helper<t1>::write(ptr_,v1),v2),v3); } \
 void LOGACTION_ID(seg,action)::readLog(const void* ptr_) { LogActionGlue::Helper<t3>::read(LogActionGlue::Helper<t2>::read(LogActionGlue::Helper<t1>::read(ptr_,v1),v2),v3); }
+#define LOGACTION3(seg,action,t1,v1,t2,v2,t3,v3) LOGACTION3DECL(seg,action,t1,v1,t2,v2,t3,v3) LOGACTION3DEF(seg,action,t1,v1,t2,v2,t3,v3)
 //---------------------------------------------------------------------------
 /// A log entry with 4 parameters
 #define LOGACTION4(seg,action,t1,v1,t2,v2,t3,v3,t4,v4) \

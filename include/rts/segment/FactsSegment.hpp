@@ -25,15 +25,26 @@ class FactsSegment : public Segment
    enum Action {
       Action_UpdateInnerPage, Action_UpdateInner,Action_InsertInner,Action_UpdateLeaf
    };
+   /// A source for updates
+   class Source {
+      public:
+      /// Destructor
+      virtual ~Source();
 
-   private:
+      /// Get the next triples
+      virtual bool next(unsigned& value1,unsigned& value2,unsigned& value3) = 0;
+      /// Mark the last triple as duplicate
+      virtual void markAsDuplicate() = 0;
+   };
    /// A triple
    struct Triple {
       unsigned value1,value2,value3;
    };
-   class SourceCollector;
-   class Updater;
 
+   /// The index
+   class Index;
+
+   private:
    /// The start of the raw facts table
    unsigned tableStart;
    /// The root of the index b-tree
@@ -43,21 +54,9 @@ class FactsSegment : public Segment
 
    /// Refresh segment info stored in the partition
    void refreshInfo();
-   /// Lookup the first page contains entries >= the start condition
-   bool lookup(unsigned start1,unsigned start2,unsigned start3,BufferReference& ref);
-   /// Decompress triples
-   static Triple* decompress(const unsigned char* reader,const unsigned char* limit,Triple* writer,unsigned time);
-   /// Compare two triples
-   static int cmpTriple(const Triple& a,const Triple& b);
-   /// Merge triples
-   static Triple* mergeTriples(Triple* mergedTriplesStart,Triple* mergedTriplesLimit,Triple*& currentTriplesStart,Triple* currentTriplesLimit,SourceCollector& input,Triple limit);
 
-   /// Pack the facts into leaves using prefix compression
-   void packLeaves(void* reader,void* boundaries);
-   /// Create inner nodes
-   void packInner(const void* data,void* boundaries);
    /// Load the triples into the database
-   void loadFullFacts(void* reader);
+   void loadFullFacts(Source& reader);
    /// Load count statistics
    void loadCounts(unsigned groups1,unsigned groups2,unsigned cardinality);
 
@@ -82,17 +81,6 @@ class FactsSegment : public Segment
    /// Get the total cardinality
    unsigned getCardinality() const { return cardinality; }
 
-   /// A source for updates
-   class Source {
-      public:
-      /// Destructor
-      virtual ~Source();
-
-      /// Get the next triples
-      virtual bool next(unsigned& value1,unsigned& value2,unsigned& value3) = 0;
-      /// Mark the last triple as duplicate
-      virtual void markAsDuplicate() = 0;
-   };
    /// Update the segment
    void update(Source& source);
 

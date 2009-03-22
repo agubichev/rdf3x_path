@@ -134,6 +134,27 @@ DatabaseBuilder::~DatabaseBuilder()
 {
 }
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// A source for the facts segment
+class FactsSegmentSource : public FactsSegment::Source
+{
+   private:
+   /// The real source
+   DatabaseBuilder::FactsReader& reader;
+
+   public:
+   /// Constructor
+   FactsSegmentSource(DatabaseBuilder::FactsReader& reader) : reader(reader) {}
+
+   /// Get the next entry
+   bool next(unsigned& value1,unsigned& value2,unsigned& value3) { return reader.next(value1,value2,value3); }
+   /// Mark as duplicate
+   void markAsDuplicate() {}
+};
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
 void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
    // Loads the facts in a given order
 {
@@ -141,7 +162,10 @@ void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
    FactsSegment* fullFacts=new FactsSegment(out.getFirstPartition());
    out.getFirstPartition().addSegment(fullFacts,DatabasePartition::Tag_SPO+order);
    reader.reset();
-   fullFacts->loadFullFacts(&reader);
+   {
+      FactsSegmentSource source(reader);
+      fullFacts->loadFullFacts(source);
+   }
 
    // Load the aggregated facts
    AggregatedFactsSegment* aggregatedFacts=new AggregatedFactsSegment(out.getFirstPartition());

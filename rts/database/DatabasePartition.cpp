@@ -84,6 +84,7 @@ void DatabasePartition::open()
          case Segment::Type_FullyAggregatedFacts: seg=new FullyAggregatedFactsSegment(*this); break;
          case Segment::Type_Dictionary: seg=new DictionarySegment(*this); break;
          case Segment::Type_ExactStatistics: seg=new ExactStatisticsSegment(*this); break;
+         case Segment::Type_BTree: break; // Pseudo-Type
       }
       assert(seg);
       seg->id=id++;
