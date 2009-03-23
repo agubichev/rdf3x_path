@@ -2,8 +2,6 @@
 #include "rts/database/DatabaseBuilder.hpp"
 #include "rts/transaction/LogAction.hpp"
 #include "rts/segment/BTree.hpp"
-#include <vector>
-#include <cstring>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -16,15 +14,6 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-/// The size of the header on each fact page
-static const unsigned headerSize = 12; // LSN + next pointer
-/// The size of the header on an inner page
-static const unsigned headerSizeInner = 24;
-/// The size of an entry on a inner page
-static const unsigned entrySizeInner = 16;
-/// Maximum number of entries on a inner page
-static const unsigned maxEntriesOnInner = (BufferReference::pageSize-headerSizeInner)/entrySizeInner;
-//---------------------------------------------------------------------------
 // Info slots
 static const unsigned slotTableStart = 0;
 static const unsigned slotIndexRoot = 1;
@@ -33,14 +22,6 @@ static const unsigned slotGroups1 = 3;
 static const unsigned slotGroups2 = 4;
 static const unsigned slotCardinality = 5;
 //---------------------------------------------------------------------------
-/// Helper functions
-static inline unsigned readInnerCount(const unsigned char* page) { return Segment::readUint32Aligned(page+16); }
-static inline const unsigned char* readInnerPtr(const unsigned char* page,unsigned slot) { return page+headerSizeInner+entrySizeInner*slot; }
-static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+headerSizeInner+entrySizeInner*slot); }
-static inline unsigned readInner2(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+headerSizeInner+entrySizeInner*slot+4); }
-static inline unsigned readInner3(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+headerSizeInner+entrySizeInner*slot+8); }
-static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+headerSizeInner+entrySizeInner*slot+12); }
-//---------------------------------------------------------------------------
 /// Compare
 static inline bool greater(unsigned a1,unsigned a2,unsigned a3,unsigned b1,unsigned b2,unsigned b3) {
    return (a1>b1)||
@@ -48,7 +29,7 @@ static inline bool greater(unsigned a1,unsigned a2,unsigned a3,unsigned b1,unsig
                       ((a2==b2)&&(a3>b3))));
 }
 //---------------------------------------------------------------------------
-/// A index
+/// An index
 class FactsSegment::Index : public BTree<Index>
 {
    public:
@@ -147,6 +128,9 @@ class FactsSegment::Index : public BTree<Index>
    static unsigned packLeafEntries(unsigned char* writer,unsigned char* limit,vector<LeafEntry>::const_iterator entriesStart,vector<LeafEntry>::const_iterator entriesLimit);
    /// Unpack leaf entries
    static void unpackLeafEntries(vector<LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit);
+
+   /// Size of the leaf header (used for scans)
+   using BTree<Index>::leafHeaderSize;
 };
 //---------------------------------------------------------------------------
 void FactsSegment::Index::setRootPage(unsigned page)
@@ -815,7 +799,7 @@ bool FactsSegment::Scan::readNextPage()
    static const unsigned time = 0; // XXX use transaction time
    const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
    pos=triples;
-   posLimit=decompress(page+headerSize,page+BufferReference::pageSize,triples,time);
+   posLimit=decompress(page+Index::leafHeaderSize,page+BufferReference::pageSize,triples,time);
 
    // Check if we should make a skip
    if (hint) {

@@ -57,7 +57,7 @@
   */
 template <class T> class BTree
 {
-   private:
+   protected:
    /// Helper for updates
    class Updater;
 
