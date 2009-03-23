@@ -870,6 +870,52 @@ void TriplesLoader::markAsDuplicate()
    const_cast<DifferentialIndex::VersionedTriple&>(*last).deleted=0;
 }
 //---------------------------------------------------------------------------
+/// Loads triples for consumption
+class AggregatedTriplesLoader : public AggregatedFactsSegment::Source
+{
+   private:
+   /// The range
+   set<DifferentialIndex::VersionedTriple>::iterator iter,limit;
+
+   public:
+   /// Constructor
+   AggregatedTriplesLoader(set<DifferentialIndex::VersionedTriple>::iterator iter,set<DifferentialIndex::VersionedTriple>::iterator limit) : iter(iter),limit(limit) {}
+
+   /// Get the next triple
+   bool next(unsigned& value1,unsigned& value2,unsigned& count);
+   /// Mark the last entry as duplicate
+   void markAsDuplicate();
+};
+//---------------------------------------------------------------------------
+bool AggregatedTriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& count)
+   // Get the next triple
+{
+   // Make sure the current entry is not a duplicate
+   while (true) {
+      if (iter==limit)
+         return false;
+      if ((*iter).deleted!=0)
+         break;
+      ++iter;
+   }
+
+   value1=(*iter).value1;
+   value2=(*iter).value2;
+   count=1;
+   while ((iter!=limit)&&((*iter).value1==value1)&&((*iter).value2==value2)) {
+      if ((*iter).deleted!=0)
+         ++count;
+      ++iter;
+   }
+
+   return true;
+}
+//---------------------------------------------------------------------------
+void AggregatedTriplesLoader::markAsDuplicate()
+   // Mark the last entry as duplicate
+{
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DifferentialIndex::sync()
@@ -888,8 +934,14 @@ void DifferentialIndex::sync()
    for (unsigned index=0;index<6;index++) {
       if (triples[index].empty())
          continue;
-      TriplesLoader loader(triples[index].begin(),triples[index].end());
-      db.getFacts(static_cast<Database::DataOrder>(index)).update(loader);
+      {
+         TriplesLoader loader(triples[index].begin(),triples[index].end());
+         db.getFacts(static_cast<Database::DataOrder>(index)).update(loader);
+      }
+      {
+         AggregatedTriplesLoader loader(triples[index].begin(),triples[index].end());
+         db.getAggregatedFacts(static_cast<Database::DataOrder>(index)).update(loader);
+      }
       triples[index].clear();
    }
 

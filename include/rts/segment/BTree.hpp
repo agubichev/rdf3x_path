@@ -609,8 +609,9 @@ template <class T> template <class S> void BTree<T>::performUpdate(S& source)
             } else if ((*currentEntriesIter)<current) {
                mergedEntries.push_back(*(currentEntriesIter++));
             } else {
-               // We found a duplicate, ignore the added value
+               // We found a duplicate, merge the added value
                mergedEntries.push_back(*(currentEntriesIter++));
+               T::mergeConflictWith(current,mergedEntries.back());
                source.markAsConflict();
                hasCurrent=false;
             }

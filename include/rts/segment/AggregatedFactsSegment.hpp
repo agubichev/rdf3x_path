@@ -18,7 +18,23 @@ class DatabaseBuilder;
 /// A compressed and aggregated facts table stored in a clustered B-Tree
 class AggregatedFactsSegment : public Segment
 {
+   public:
+   /// A source for updates
+   class Source {
+      public:
+      /// Destructor
+      virtual ~Source();
+
+      /// Get the next triples
+      virtual bool next(unsigned& value1,unsigned& value2,unsigned& count) = 0;
+      /// Mark the last triple as duplicate
+      virtual void markAsDuplicate() = 0;
+   };
+
    private:
+   /// The index
+   class Index;
+
    /// The start of the raw facts table
    unsigned tableStart;
    /// The root of the index b-tree
@@ -28,14 +44,8 @@ class AggregatedFactsSegment : public Segment
 
    /// Refresh segment info stored in the partition
    void refreshInfo();
-   /// Lookup the first page contains entries >= the start condition
-   bool lookup(unsigned start1,unsigned start2,BufferReference& ref);
-   /// Pack the aggregated facts into leaves using prefix compression
-   void packAggregatedLeaves(void* factsReader,void* boundaries);
-   /// Create inner nodes
-   void packAggregatedInner(const void* data,void* boundaries);
    /// Load the triples into the database
-   void loadAggregatedFacts(void* reader);
+   void loadAggregatedFacts(Source& reader);
    /// Load count statistics
    void loadCounts(unsigned groups1,unsigned groups2);
 
@@ -57,6 +67,9 @@ class AggregatedFactsSegment : public Segment
    unsigned getLevel1Groups() const { return groups1; }
    /// Get the number of level 2 groups
    unsigned getLevel2Groups() const { return groups2; }
+
+   /// Update the segment
+   void update(Source& source);
 
    /// A scan over the facts segment
    class Scan {

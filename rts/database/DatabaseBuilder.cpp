@@ -153,6 +153,60 @@ class FactsSegmentSource : public FactsSegment::Source
    void markAsDuplicate() {}
 };
 //---------------------------------------------------------------------------
+/// A source for the aggregated facts segment
+class AggregatedFactsSegmentSource : public AggregatedFactsSegment::Source
+{
+   private:
+   /// The real source
+   DatabaseBuilder::FactsReader& reader;
+   /// Flags
+   bool headKnown,inputDone;
+   /// The next entry (if known)
+   unsigned head1,head2;
+
+   public:
+   /// Constructor
+   AggregatedFactsSegmentSource(DatabaseBuilder::FactsReader& reader) : reader(reader),headKnown(false),inputDone(false) {}
+
+   /// Get the next entry
+   bool next(unsigned& value1,unsigned& value2,unsigned& count);
+   /// Mark as duplicate
+   void markAsDuplicate() {}
+};
+//---------------------------------------------------------------------------
+bool AggregatedFactsSegmentSource::next(unsigned& value1,unsigned& value2,unsigned& count)
+   // Get the next entry
+{
+   // Examine the head
+   if (headKnown) {
+      value1=head1;
+      value2=head2;
+      headKnown=false;
+   } else {
+      if (inputDone)
+         return false;
+      unsigned value3;
+      if (!reader.next(value1,value2,value3)) {
+         inputDone=true;
+         return false;
+      }
+   }
+   count=1;
+
+   // Merge with other values
+   unsigned head3;
+   while (reader.next(head1,head2,head3)) {
+      if ((head1!=value1)||(head2!=value2)) {
+         headKnown=true;
+         return true;
+      }
+      count++;
+   }
+   inputDone=true;
+
+   return true;
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
@@ -171,7 +225,10 @@ void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
    AggregatedFactsSegment* aggregatedFacts=new AggregatedFactsSegment(out.getFirstPartition());
    out.getFirstPartition().addSegment(aggregatedFacts,DatabasePartition::Tag_SP+order);
    reader.reset();
-   aggregatedFacts->loadAggregatedFacts(&reader);
+   {
+      AggregatedFactsSegmentSource source(reader);
+      aggregatedFacts->loadAggregatedFacts(source);
+   }
 
    // Load the fully aggregated facts
    FullyAggregatedFactsSegment* fullyAggregatedFacts=0;

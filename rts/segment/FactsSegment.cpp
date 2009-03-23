@@ -185,7 +185,7 @@ static unsigned char* writeDelta(unsigned char* writer,unsigned value)
 unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<FactsSegment::Index::LeafEntry>::const_iterator entriesStart,vector<FactsSegment::Index::LeafEntry>::const_iterator entriesLimit)
    // Pack the facts into leaves using prefix compression
 {
-   unsigned lastValue1=0,lastValue2=0,lastValue3=0;
+   unsigned lastValue1,lastValue2,lastValue3;
    unsigned value1,value2,value3;
 
    // Store the first entry
@@ -193,9 +193,9 @@ unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned cha
       return 0;
    if ((writer+12)>writerLimit)
       return 0;
-   Segment::writeUint32Aligned(writer,(*entriesStart).value1);
-   Segment::writeUint32Aligned(writer+4,(*entriesStart).value2);
-   Segment::writeUint32Aligned(writer+8,(*entriesStart).value3);
+   Segment::writeUint32Aligned(writer,lastValue1=(*entriesStart).value1);
+   Segment::writeUint32Aligned(writer+4,lastValue2=(*entriesStart).value2);
+   Segment::writeUint32Aligned(writer+8,lastValue3=(*entriesStart).value3);
    writer+=12;
 
    // Store the remaining entries
