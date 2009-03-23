@@ -207,6 +207,59 @@ bool AggregatedFactsSegmentSource::next(unsigned& value1,unsigned& value2,unsign
    return true;
 }
 //---------------------------------------------------------------------------
+/// A source for the fullyaggregated facts segment
+class FullyAggregatedFactsSegmentSource : public FullyAggregatedFactsSegment::Source
+{
+   private:
+   /// The real source
+   DatabaseBuilder::FactsReader& reader;
+   /// Flags
+   bool headKnown,inputDone;
+   /// The next entry (if known)
+   unsigned head1;
+
+   public:
+   /// Constructor
+   FullyAggregatedFactsSegmentSource(DatabaseBuilder::FactsReader& reader) : reader(reader),headKnown(false),inputDone(false) {}
+
+   /// Get the next entry
+   bool next(unsigned& value1,unsigned& count);
+   /// Mark as duplicate
+   void markAsDuplicate() {}
+};
+//---------------------------------------------------------------------------
+bool FullyAggregatedFactsSegmentSource::next(unsigned& value1,unsigned& count)
+   // Get the next entry
+{
+   // Examine the head
+   if (headKnown) {
+      value1=head1;
+      headKnown=false;
+   } else {
+      if (inputDone)
+         return false;
+      unsigned value2,value3;
+      if (!reader.next(value1,value2,value3)) {
+         inputDone=true;
+         return false;
+      }
+   }
+   count=1;
+
+   // Merge with other values
+   unsigned head2,head3;
+   while (reader.next(head1,head2,head3)) {
+      if (head1!=value1) {
+         headKnown=true;
+         return true;
+      }
+      count++;
+   }
+   inputDone=true;
+
+   return true;
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
@@ -236,7 +289,8 @@ void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
       fullyAggregatedFacts=new FullyAggregatedFactsSegment(out.getFirstPartition());
       out.getFirstPartition().addSegment(fullyAggregatedFacts,DatabasePartition::Tag_S+(order/2));
       reader.reset();
-      fullyAggregatedFacts->loadFullyAggregatedFacts(&reader);
+      FullyAggregatedFactsSegmentSource source(reader);
+      fullyAggregatedFacts->loadFullyAggregatedFacts(source);
    }
 
    // Compute the tuple statistics

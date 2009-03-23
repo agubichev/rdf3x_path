@@ -16,7 +16,23 @@
 /// Fully aggregated facts, i.e. counts for single values
 class FullyAggregatedFactsSegment : public Segment
 {
+   public:
+   /// A source for updates
+   class Source {
+      public:
+      /// Destructor
+      virtual ~Source();
+
+      /// Get the next triples
+      virtual bool next(unsigned& value1,unsigned& count) = 0;
+      /// Mark the last triple as duplicate
+      virtual void markAsDuplicate() = 0;
+   };
+
    private:
+   /// The index
+   class Index;
+
    /// The start of the raw facts table
    unsigned tableStart;
    /// The root of the index b-tree
@@ -26,15 +42,9 @@ class FullyAggregatedFactsSegment : public Segment
 
    /// Refresh segment info stored in the partition
    void refreshInfo();
-   /// Lookup the first page contains entries >= the start condition
-   bool lookup(unsigned start1,BufferReference& ref);
 
-   /// Pack the aggregated facts into leaves using prefix compression
-   void packFullyAggregatedLeaves(void* factsReader,void* boundaries);
-   /// Create inner nodes
-   void packFullyAggregatedInner(const void* data,void* boundaries);
    /// Load the triples into the database
-   void loadFullyAggregatedFacts(void* reader);
+   void loadFullyAggregatedFacts(Source& reader);
    /// Load count statistics
    void loadCounts(unsigned groups1);
 
@@ -54,6 +64,9 @@ class FullyAggregatedFactsSegment : public Segment
    unsigned getPages() const { return pages; }
    /// Get the number of level 1 groups
    unsigned getLevel1Groups() const { return groups1; }
+
+   /// Update the segment
+   void update(Source& source);
 
    /// A scan over the facts segment
    class Scan {

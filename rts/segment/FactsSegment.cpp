@@ -251,6 +251,7 @@ unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned cha
          writer=writeDelta(writer,value2);
          writer=writeDelta(writer,value3);
       }
+      lastValue1=value1; lastValue2=value2; lastValue3=value3;
    }
 
    // Done, everything fitted

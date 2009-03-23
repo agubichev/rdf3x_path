@@ -1,7 +1,6 @@
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/database/DatabaseBuilder.hpp"
-#include <vector>
-#include <cstring>
+#include "rts/segment/BTree.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -14,18 +13,276 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-/// The size of the header on each fact page
-static const unsigned headerSize = 12; // LSN+next pointer
-//---------------------------------------------------------------------------
 // Info slots
 static const unsigned slotTableStart = 0;
 static const unsigned slotIndexRoot = 1;
 static const unsigned slotPages = 2;
 static const unsigned slotGroups1 = 3;
 //---------------------------------------------------------------------------
-/// Helper functions
-static inline unsigned readInner1(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+8*slot); }
-static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+8*slot+4); }
+/// An index
+class FullyAggregatedFactsSegment::Index : public BTree<Index>
+{
+   public:
+   /// The size of an inner key
+   static const unsigned innerKeySize = 4;
+   /// An inner key
+   struct InnerKey {
+      /// The values
+      unsigned value1;
+
+      /// Constructor
+      InnerKey() : value1(0) {}
+      /// Constructor
+      explicit InnerKey(unsigned value1) : value1(value1) {}
+
+      /// Compare
+      bool operator==(const InnerKey& o) const { return (value1==o.value1); }
+      /// Compare
+      bool operator<(const InnerKey& o) const { return (value1<o.value1); }
+   };
+   /// Read an inner key
+   static void readInnerKey(InnerKey& key,const unsigned char* ptr) {
+      key.value1=Segment::readUint32Aligned(ptr);
+   }
+   /// Write an inner key
+   static void writeInnerKey(unsigned char* ptr,const InnerKey& key) {
+      Segment::writeUint32Aligned(ptr,key.value1);
+   }
+   /// A leaf entry
+   struct LeafEntry {
+      /// The key value
+      unsigned value1;
+      /// THe payload
+      unsigned count;
+
+      /// Compare
+      bool operator==(const LeafEntry& o) const { return (value1==o.value1); }
+      /// Compare
+      bool operator<(const LeafEntry& o) const { return (value1<o.value1); }
+      /// Compare
+      bool operator<(const InnerKey& o) const { return (value1<o.value1); }
+   };
+   /// A leaf entry source
+   class LeafEntrySource {
+      private:
+      /// The real source
+      FullyAggregatedFactsSegment::Source& source;
+
+      public:
+      /// Constructor
+      LeafEntrySource(FullyAggregatedFactsSegment::Source& source) : source(source) {}
+
+      /// Read the next entry
+      bool next(LeafEntry& l) { return source.next(l.value1,l.count); }
+      /// Mark last entry as conflict
+      void markAsConflict() { source.markAsDuplicate(); }
+   };
+   /// Derive an inner key
+   static InnerKey deriveInnerKey(const LeafEntry& e) { return InnerKey(e.value1); }
+   /// Read the first leaf entry
+   static void readFirstLeafEntryKey(InnerKey& key,const unsigned char* ptr) {
+      key.value1=Segment::readUint32Aligned(ptr);
+   }
+
+   private:
+   /// The segment
+   FullyAggregatedFactsSegment& segment;
+
+   public:
+   /// Constructor
+   explicit Index(FullyAggregatedFactsSegment& segment) : segment(segment) {}
+
+   /// Get the segment
+   Segment& getSegment() const { return segment; }
+   /// Read a specific page
+   BufferRequest readShared(unsigned page) const { return segment.readShared(page); }
+   /// Read a specific page
+   BufferRequestExclusive readExclusive(unsigned page) const { return segment.readExclusive(page); }
+   /// Allocate a new page
+   bool allocPage(BufferReferenceModified& page) { return segment.allocPage(page); }
+   /// Get the root page
+   unsigned getRootPage() const { return segment.indexRoot; }
+   /// Set the root page
+   void setRootPage(unsigned page);
+   /// Store info about the leaf pages
+   void updateLeafInfo(unsigned firstLeaf,unsigned leafCount);
+
+   /// Check for duplicates/conflicts and "merge" if equired
+   static bool mergeConflictWith(const LeafEntry& newEntry,LeafEntry& oldEntry) { if (newEntry==oldEntry) { oldEntry.count+=newEntry.count; return true; } else return false; }
+
+   /// Pack leaf entries
+   static unsigned packLeafEntries(unsigned char* writer,unsigned char* limit,vector<LeafEntry>::const_iterator entriesStart,vector<LeafEntry>::const_iterator entriesLimit);
+   /// Unpack leaf entries
+   static void unpackLeafEntries(vector<LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit);
+
+   /// Size of the leaf header (used for scans)
+   using BTree<Index>::leafHeaderSize;
+};
+//---------------------------------------------------------------------------
+void FullyAggregatedFactsSegment::Index::setRootPage(unsigned page)
+   // Se the root page
+{
+   segment.indexRoot=page;
+   segment.setSegmentData(slotIndexRoot,segment.indexRoot);
+}
+//---------------------------------------------------------------------------
+void FullyAggregatedFactsSegment::Index::updateLeafInfo(unsigned firstLeaf,unsigned leafCount)
+   // Store info about the leaf pages
+{
+   segment.tableStart=firstLeaf;
+   segment.setSegmentData(slotTableStart,segment.tableStart);
+
+   segment.pages=leafCount;
+   segment.setSegmentData(slotPages,segment.pages);
+}
+//---------------------------------------------------------------------------
+static unsigned bytes0(unsigned v)
+   // Compute the number of bytes required to encode a value with 0 compression
+{
+   if (v>=(1<<24))
+      return 4; else
+   if (v>=(1<<16))
+      return 3; else
+   if (v>=(1<<8)) return 2;
+   if (v>0)
+      return 1; else
+      return 0;
+}
+//---------------------------------------------------------------------------
+static unsigned char* writeDelta0(unsigned char* writer,unsigned value)
+   // Write an integer with varying size with 0 compression
+{
+   if (value>=(1<<24)) {
+      Segment::writeUint32(writer,value);
+      return writer+4;
+   } else if (value>=(1<<16)) {
+      writer[0]=value>>16;
+      writer[1]=(value>>8)&0xFF;
+      writer[2]=value&0xFF;
+      return writer+3;
+   } else if (value>=(1<<8)) {
+      writer[0]=value>>8;
+      writer[1]=value&0xFF;
+      return writer+2;
+   } else if (value>0) {
+      writer[0]=value;
+      return writer+1;
+   } else return writer;
+}
+//---------------------------------------------------------------------------
+unsigned FullyAggregatedFactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<FullyAggregatedFactsSegment::Index::LeafEntry>::const_iterator entriesStart,vector<FullyAggregatedFactsSegment::Index::LeafEntry>::const_iterator entriesLimit)
+   // Pack the facts into leaves using prefix compression
+{
+   unsigned lastValue1=0;
+   unsigned value1,count;
+
+   // Store the first entry
+   if (entriesStart==entriesLimit)
+      return 0;
+   if ((writer+8)>writerLimit)
+      return 0;
+   Segment::writeUint32Aligned(writer,lastValue1=(*entriesStart).value1);
+   Segment::writeUint32Aligned(writer+4,(*entriesStart).count);
+   writer+=8;
+
+   // Store the remaining entries
+   for (vector<LeafEntry>::const_iterator iter=entriesStart+1;iter!=entriesLimit;++iter) {
+      // Compute the length
+      value1=(*iter).value1; count=(*iter).count;
+      unsigned len;
+      if (value1==lastValue1) {
+         // Duplicate, must not happen!
+         continue;
+      }
+      if (((value1-lastValue1)<16)&&(count<=8))
+         len=1; else
+         len=1+bytes0(value1-lastValue1-1)+bytes0(count-1);
+
+      // Entry too big?
+      if ((writer+len)>writerLimit) {
+         memset(writer,0,writerLimit-writer);
+         return iter-entriesStart;
+      }
+
+      // No, pack it
+      if (((value1-lastValue1)<16)&&(count<=8)) {
+         *(writer++)=((count-1)<<4)|(value1-lastValue1);
+      } else {
+         *(writer++)=0x80|((bytes0(value1-lastValue1-1)*5)+bytes0(count-1));
+         writer=writeDelta0(writer,value1-lastValue1-1);
+         writer=writeDelta0(writer,count-1);
+      }
+      lastValue1=value1;
+   }
+
+   // Done, everything fitted
+   memset(writer,0,writerLimit-writer);
+   return entriesLimit-entriesStart;
+}
+//---------------------------------------------------------------------------
+static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }
+static unsigned readDelta2(const unsigned char* pos) { return (pos[0]<<8)|pos[1]; }
+static unsigned readDelta3(const unsigned char* pos) { return (pos[0]<<16)|(pos[1]<<8)|pos[2]; }
+static unsigned readDelta4(const unsigned char* pos) { return (pos[0]<<24)|(pos[1]<<16)|(pos[2]<<8)|pos[3]; }
+//---------------------------------------------------------------------------
+void FullyAggregatedFactsSegment::Index::unpackLeafEntries(vector<FullyAggregatedFactsSegment::Index::LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit)
+   // Read the facts stored on a leaf page
+{
+   // Decompress the first triple
+   LeafEntry e;
+   e.value1=readUint32Aligned(reader); reader+=4;
+   e.count=readUint32Aligned(reader); reader+=4;
+   entries.push_back(e);
+
+   // Decompress the remainder of the page
+   while (reader<limit) {
+      // Decode the header byte
+      unsigned info=*(reader++);
+      // Small gap only?
+      if (info<0x80) {
+         if (!info)
+            break;
+         e.count=(info>>4)+1;
+         e.value1+=(info&15);
+         entries.push_back(e);
+         continue;
+      }
+      // Decode it
+      switch (info&127) {
+         case 0: e.value1+=1; e.count=1; break;
+         case 1: e.value1+=1; e.count=readDelta1(reader)+1; reader+=1; break;
+         case 2: e.value1+=1; e.count=readDelta2(reader)+1; reader+=2; break;
+         case 3: e.value1+=1; e.count=readDelta3(reader)+1; reader+=3; break;
+         case 4: e.value1+=1; e.count=readDelta4(reader)+1; reader+=4; break;
+         case 5: e.value1+=readDelta1(reader)+1; e.count=1; reader+=1; break;
+         case 6: e.value1+=readDelta1(reader)+1; e.count=readDelta1(reader+1)+1; reader+=2; break;
+         case 7: e.value1+=readDelta1(reader)+1; e.count=readDelta2(reader+1)+1; reader+=3; break;
+         case 8: e.value1+=readDelta1(reader)+1; e.count=readDelta3(reader+1)+1; reader+=4; break;
+         case 9: e.value1+=readDelta1(reader)+1; e.count=readDelta4(reader+1)+1; reader+=5; break;
+         case 10: e.value1+=readDelta2(reader)+1; e.count=1; reader+=2; break;
+         case 11: e.value1+=readDelta2(reader)+1; e.count=readDelta1(reader+2)+1; reader+=3; break;
+         case 12: e.value1+=readDelta2(reader)+1; e.count=readDelta2(reader+2)+1; reader+=4; break;
+         case 13: e.value1+=readDelta2(reader)+1; e.count=readDelta3(reader+2)+1; reader+=5; break;
+         case 14: e.value1+=readDelta2(reader)+1; e.count=readDelta4(reader+2)+1; reader+=6; break;
+         case 15: e.value1+=readDelta3(reader)+1; e.count=1; reader+=3; break;
+         case 16: e.value1+=readDelta3(reader)+1; e.count=readDelta1(reader+3)+1; reader+=4; break;
+         case 17: e.value1+=readDelta3(reader)+1; e.count=readDelta2(reader+3)+1; reader+=5; break;
+         case 18: e.value1+=readDelta3(reader)+1; e.count=readDelta3(reader+3)+1; reader+=6; break;
+         case 19: e.value1+=readDelta3(reader)+1; e.count=readDelta4(reader+3)+1; reader+=7; break;
+         case 20: e.value1+=readDelta4(reader)+1; e.count=1; reader+=4; break;
+         case 21: e.value1+=readDelta4(reader)+1; e.count=readDelta1(reader+4)+1; reader+=5; break;
+         case 22: e.value1+=readDelta4(reader)+1; e.count=readDelta2(reader+4)+1; reader+=6; break;
+         case 23: e.value1+=readDelta4(reader)+1; e.count=readDelta3(reader+4)+1; reader+=7; break;
+         case 24: e.value1+=readDelta4(reader)+1; e.count=readDelta4(reader+4)+1; reader+=8; break;
+      }
+      entries.push_back(e);
+   }
+}
+//---------------------------------------------------------------------------
+FullyAggregatedFactsSegment::Source::~Source()
+   // Destructor
+{
+}
 //---------------------------------------------------------------------------
 FullyAggregatedFactsSegment::FullyAggregatedFactsSegment(DatabasePartition& partition)
    : Segment(partition),tableStart(0),indexRoot(0),pages(0),groups1(0)
@@ -48,235 +305,24 @@ void FullyAggregatedFactsSegment::refreshInfo()
    groups1=getSegmentData(slotGroups1);
 }
 //---------------------------------------------------------------------------
-bool FullyAggregatedFactsSegment::lookup(unsigned start1,BufferReference& ref)
-   // Lookup the first page contains entries >= the start condition
-{
-   // Traverse the B-Tree
-   ref=readShared(indexRoot);
-   while (true) {
-      const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
-      // Inner node?
-      if (readUint32Aligned(page+8)==0xFFFFFFFF) {
-         // Perform a binary search. The test is more complex as we only have the upper bound for ranges
-         unsigned left=0,right=readUint32Aligned(page+16);
-         while (left!=right) {
-            unsigned middle=(left+right)/2;
-            unsigned middle1=readInner1(page,middle);
-            if (start1>middle1) {
-               left=middle+1;
-            } else if ((!middle)||(start1>readInner1(page,middle-1))) {
-               ref=readShared(readInnerPage(page,middle));
-               break;
-            } else {
-               right=middle;
-            }
-         }
-         // Unsuccessful search?
-         if (left==right) {
-            ref.reset();
-            return false;
-         }
-      } else {
-         // A leaf node. Stop here, the exact entry is found by the Scan
-         return true;
-      }
-   }
-}
-//---------------------------------------------------------------------------
-static unsigned bytes0(unsigned v)
-   // Compute the number of bytes required to encode a value with 0 compression
-{
-   if (v>=(1<<24))
-      return 4; else
-   if (v>=(1<<16))
-      return 3; else
-   if (v>=(1<<8)) return 2;
-   if (v>0)
-      return 1; else
-      return 0;
-}
-//---------------------------------------------------------------------------
-static unsigned writeDelta0(unsigned char* buffer,unsigned ofs,unsigned value)
-   // Write an integer with varying size with 0 compression
-{
-   if (value>=(1<<24)) {
-      Segment::writeUint32(buffer+ofs,value);
-      return ofs+4;
-   } else if (value>=(1<<16)) {
-      buffer[ofs]=value>>16;
-      buffer[ofs+1]=(value>>8)&0xFF;
-      buffer[ofs+2]=value&0xFF;
-      return ofs+3;
-   } else if (value>=(1<<8)) {
-      buffer[ofs]=value>>8;
-      buffer[ofs+1]=value&0xFF;
-      return ofs+2;
-   } else if (value>0) {
-      buffer[ofs]=value;
-      return ofs+1;
-   } else return ofs;
-}
-//---------------------------------------------------------------------------
-void FullyAggregatedFactsSegment::packFullyAggregatedLeaves(void* reader_,void* boundaries_)
-   // Pack the fully aggregated facts into leaves using prefix compression
-{
-   DatabaseBuilder::FactsReader& factsReader=*static_cast<DatabaseBuilder::FactsReader*>(reader_);
-   std::vector<DatabaseBuilder::Triple>& boundaries=*static_cast<std::vector<DatabaseBuilder::Triple>*>(boundaries_);
-
-   DatabaseBuilder::PageChainer chainer(8);
-   unsigned char buffer[BufferReference::pageSize];
-   unsigned bufferPos=headerSize;
-   unsigned lastSubject=0;
-
-   DatabaseBuilder::PutbackReader reader(factsReader);
-   unsigned subject,predicate,object;
-   while (reader.next(subject,predicate,object)) {
-      // Count
-      unsigned nextSubject,nextPredicate,nextObject,count=1;
-      while (reader.next(nextSubject,nextPredicate,nextObject)) {
-         if (nextSubject!=subject) {
-            reader.putBack(nextSubject,nextPredicate,nextObject);
-            break;
-         }
-         if ((nextPredicate==predicate)&&(nextObject==object))
-            continue;
-         predicate=nextPredicate;
-         object=nextObject;
-         count++;
-      }
-
-      // Try to pack it on the current page
-      unsigned len;
-      if (((subject-lastSubject)<16)&&(count<=8))
-         len=1; else
-         len=1+bytes0(subject-lastSubject-1)+bytes0(count-1);
-
-      // Tuple too big or first element on the page?
-      if ((bufferPos==headerSize)||(bufferPos+len>BufferReference::pageSize)) {
-         // Write the partial page
-         if (bufferPos>headerSize) {
-            for (unsigned index=0;index<headerSize;index++)
-               buffer[index]=0;
-            for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-               buffer[index]=0;
-            chainer.store(this,buffer);
-            DatabaseBuilder::Triple t; t.subject=lastSubject; t.predicate=0; t.object=chainer.getPageNo();
-            boundaries.push_back(t);
-         }
-         // Write the first element fully
-         bufferPos=headerSize;
-         writeUint32(buffer+bufferPos,subject); bufferPos+=4;
-         writeUint32(buffer+bufferPos,count); bufferPos+=4;
-      } else {
-         // No, pack them
-         if (((subject-lastSubject)<16)&&(count<=8)) {
-            buffer[bufferPos++]=((count-1)<<4)|(subject-lastSubject);
-         } else {
-            buffer[bufferPos++]=0x80|((bytes0(subject-lastSubject-1)*5)+bytes0(count-1));
-            bufferPos=writeDelta0(buffer,bufferPos,subject-lastSubject-1);
-            bufferPos=writeDelta0(buffer,bufferPos,count-1);
-         }
-      }
-
-      // Update the values
-      lastSubject=subject;
-   }
-   // Flush the last page
-   for (unsigned index=0;index<headerSize;index++)
-      buffer[index]=0;
-   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-      buffer[index]=0;
-   chainer.store(this,buffer);
-   DatabaseBuilder::Triple t; t.subject=lastSubject; t.predicate=0; t.object=chainer.getPageNo();
-   boundaries.push_back(t);
-   chainer.finish();
-   tableStart=chainer.getFirstPageNo();
-   setSegmentData(slotTableStart,tableStart);
-
-   pages=chainer.getPages();
-   setSegmentData(slotPages,pages);
-}
-//---------------------------------------------------------------------------
-void FullyAggregatedFactsSegment::packFullyAggregatedInner(const void* data_,void* boundaries_)
-   // Create inner nodes
-{
-   const vector<DatabaseBuilder::Triple>& data=*static_cast<const vector<DatabaseBuilder::Triple>*>(data_);
-   vector<DatabaseBuilder::Triple>& boundaries=*static_cast<vector<DatabaseBuilder::Triple>*>(boundaries_);
-   boundaries.clear();
-
-   const unsigned headerSize = 24; // LSN+marker+next+count+padding
-   DatabaseBuilder::PageChainer chainer(8+4);
-   unsigned char buffer[BufferReference::pageSize];
-   unsigned bufferPos=headerSize,bufferCount=0;
-
-   for (vector<DatabaseBuilder::Triple>::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
-      // Do we have to start a new page?
-      if ((bufferPos+8)>BufferReference::pageSize) {
-         for (unsigned index=0;index<8;index++)
-            buffer[index]=0;
-         writeUint32(buffer+8,0xFFFFFFFF);
-         writeUint32(buffer+12,0);
-         writeUint32(buffer+16,bufferCount);
-         writeUint32(buffer+20,0);
-         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-            buffer[index]=0;
-         chainer.store(this,buffer);
-         DatabaseBuilder::Triple t=*(iter-1); t.object=chainer.getPageNo();
-         boundaries.push_back(t);
-         bufferPos=headerSize; bufferCount=0;
-      }
-      // Write the entry
-      writeUint32(buffer+bufferPos,(*iter).subject); bufferPos+=4;
-      writeUint32(buffer+bufferPos,(*iter).object); bufferPos+=4;
-      bufferCount++;
-   }
-   // Write the least page
-   for (unsigned index=0;index<8;index++)
-      buffer[index]=0;
-   writeUint32(buffer+8,0xFFFFFFFF);
-   writeUint32(buffer+12,0);
-   writeUint32(buffer+16,bufferCount);
-   writeUint32(buffer+20,0);
-   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-      buffer[index]=0;
-   chainer.store(this,buffer);
-   DatabaseBuilder::Triple t=data.back(); t.object=chainer.getPageNo();
-   boundaries.push_back(t);
-   chainer.finish();
-}
-//---------------------------------------------------------------------------
-void FullyAggregatedFactsSegment::loadFullyAggregatedFacts(void* reader_)
+void FullyAggregatedFactsSegment::loadFullyAggregatedFacts(Source& reader)
    // Load the triples aggregated into the database
 {
-   DatabaseBuilder::FactsReader& reader=*static_cast<DatabaseBuilder::FactsReader*>(reader_);
-
-   // Write the leaf nodes
-   vector<DatabaseBuilder::Triple> boundaries;
-   packFullyAggregatedLeaves(&reader,&boundaries);
-
-   // Only one leaf node? Special case this
-   if (boundaries.size()==1) {
-      vector<DatabaseBuilder::Triple> newBoundaries;
-      packFullyAggregatedInner(&boundaries,&newBoundaries);
-      swap(boundaries,newBoundaries);
-   } else {
-      // Write the inner nodes
-      while (boundaries.size()>1) {
-         vector<DatabaseBuilder::Triple> newBoundaries;
-         packFullyAggregatedInner(&boundaries,&newBoundaries);
-         swap(boundaries,newBoundaries);
-      }
-   }
-
-   // Remember the index root
-   indexRoot=boundaries.back().object;
-   setSegmentData(slotIndexRoot,indexRoot);
+   Index::LeafEntrySource source(reader);
+   Index(*this).performBulkload(source);
 }
 //---------------------------------------------------------------------------
 void FullyAggregatedFactsSegment::loadCounts(unsigned groups1)
    // Load count statistics
 {
    this->groups1=groups1; setSegmentData(slotGroups1,groups1);
+}
+//---------------------------------------------------------------------------
+void FullyAggregatedFactsSegment::update(FullyAggregatedFactsSegment::Source& reader)
+   // Load new facts into the segment
+{
+   Index::LeafEntrySource source(reader);
+   Index(*this).performUpdate(source);
 }
 //---------------------------------------------------------------------------
 FullyAggregatedFactsSegment::Scan::Hint::Hint()
@@ -315,7 +361,7 @@ bool FullyAggregatedFactsSegment::Scan::first(FullyAggregatedFactsSegment& segme
    // Start a new scan starting from the first entry >= the start condition
 {
    // Lookup the right page
-   if (!segment.lookup(start1,current))
+   if (!Index(segment).findLeaf(current,Index::InnerKey(start1)))
       return false;
 
    // Place the iterator
@@ -351,11 +397,6 @@ bool FullyAggregatedFactsSegment::Scan::find(unsigned value1)
    return pos<posLimit;
 }
 //---------------------------------------------------------------------------
-static inline unsigned readDelta1(const unsigned char* pos) { return pos[0]; }
-static unsigned readDelta2(const unsigned char* pos) { return (pos[0]<<8)|pos[1]; }
-static unsigned readDelta3(const unsigned char* pos) { return (pos[0]<<16)|(pos[1]<<8)|pos[2]; }
-static unsigned readDelta4(const unsigned char* pos) { return (pos[0]<<24)|(pos[1]<<16)|(pos[2]<<8)|pos[3]; }
-//---------------------------------------------------------------------------
 bool FullyAggregatedFactsSegment::Scan::readNextPage()
    // Read the next page
 {
@@ -370,7 +411,7 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
 
    // Decompress the first triple
    const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
-   const unsigned char* reader=page+headerSize,*limit=page+BufferReference::pageSize;
+   const unsigned char* reader=page+Index::leafHeaderSize,*limit=page+BufferReference::pageSize;
    unsigned value1=readUint32Aligned(reader); reader+=4;
    unsigned count=readUint32Aligned(reader); reader+=4;
    Triple* writer=triples;
@@ -396,31 +437,31 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
       // Decode the parts
       value1+=1;
       switch (info&127) {
-         case 0: count=1; break;
-         case 1: count=readDelta1(reader); reader+=1; break;
-         case 2: count=readDelta2(reader); reader+=2; break;
-         case 3: count=readDelta3(reader); reader+=3; break;
-         case 4: count=readDelta4(reader); reader+=4; break;
-         case 5: value1+=readDelta1(reader); count=1; reader+=1; break;
-         case 6: value1+=readDelta1(reader); count=readDelta1(reader+1)+1; reader+=2; break;
-         case 7: value1+=readDelta1(reader); count=readDelta2(reader+1)+1; reader+=3; break;
-         case 8: value1+=readDelta1(reader); count=readDelta3(reader+1)+1; reader+=4; break;
-         case 9: value1+=readDelta1(reader); count=readDelta4(reader+1)+1; reader+=5; break;
-         case 10: value1+=readDelta2(reader); count=1; reader+=2; break;
-         case 11: value1+=readDelta2(reader); count=readDelta1(reader+2)+1; reader+=3; break;
-         case 12: value1+=readDelta2(reader); count=readDelta2(reader+2)+1; reader+=4; break;
-         case 13: value1+=readDelta2(reader); count=readDelta3(reader+2)+1; reader+=5; break;
-         case 14: value1+=readDelta2(reader); count=readDelta4(reader+2)+1; reader+=6; break;
-         case 15: value1+=readDelta3(reader); count=1; reader+=3; break;
-         case 16: value1+=readDelta3(reader); count=readDelta1(reader+3)+1; reader+=4; break;
-         case 17: value1+=readDelta3(reader); count=readDelta2(reader+3)+1; reader+=5; break;
-         case 18: value1+=readDelta3(reader); count=readDelta3(reader+3)+1; reader+=6; break;
-         case 19: value1+=readDelta3(reader); count=readDelta4(reader+3)+1; reader+=7; break;
-         case 20: value1+=readDelta4(reader); count=1; reader+=4; break;
-         case 21: value1+=readDelta4(reader); count=readDelta1(reader+4)+1; reader+=5; break;
-         case 22: value1+=readDelta4(reader); count=readDelta2(reader+4)+1; reader+=6; break;
-         case 23: value1+=readDelta4(reader); count=readDelta3(reader+4)+1; reader+=7; break;
-         case 24: value1+=readDelta4(reader); count=readDelta4(reader+4)+1; reader+=8; break;
+         case 0: value1+=1; count=1; break;
+         case 1: value1+=1; count=readDelta1(reader)+1; reader+=1; break;
+         case 2: value1+=1; count=readDelta2(reader)+1; reader+=2; break;
+         case 3: value1+=1; count=readDelta3(reader)+1; reader+=3; break;
+         case 4: value1+=1; count=readDelta4(reader)+1; reader+=4; break;
+         case 5: value1+=readDelta1(reader)+1; count=1; reader+=1; break;
+         case 6: value1+=readDelta1(reader)+1; count=readDelta1(reader+1)+1; reader+=2; break;
+         case 7: value1+=readDelta1(reader)+1; count=readDelta2(reader+1)+1; reader+=3; break;
+         case 8: value1+=readDelta1(reader)+1; count=readDelta3(reader+1)+1; reader+=4; break;
+         case 9: value1+=readDelta1(reader)+1; count=readDelta4(reader+1)+1; reader+=5; break;
+         case 10: value1+=readDelta2(reader)+1; count=1; reader+=2; break;
+         case 11: value1+=readDelta2(reader)+1; count=readDelta1(reader+2)+1; reader+=3; break;
+         case 12: value1+=readDelta2(reader)+1; count=readDelta2(reader+2)+1; reader+=4; break;
+         case 13: value1+=readDelta2(reader)+1; count=readDelta3(reader+2)+1; reader+=5; break;
+         case 14: value1+=readDelta2(reader)+1; count=readDelta4(reader+2)+1; reader+=6; break;
+         case 15: value1+=readDelta3(reader)+1; count=1; reader+=3; break;
+         case 16: value1+=readDelta3(reader)+1; count=readDelta1(reader+3)+1; reader+=4; break;
+         case 17: value1+=readDelta3(reader)+1; count=readDelta2(reader+3)+1; reader+=5; break;
+         case 18: value1+=readDelta3(reader)+1; count=readDelta3(reader+3)+1; reader+=6; break;
+         case 19: value1+=readDelta3(reader)+1; count=readDelta4(reader+3)+1; reader+=7; break;
+         case 20: value1+=readDelta4(reader)+1; count=1; reader+=4; break;
+         case 21: value1+=readDelta4(reader)+1; count=readDelta1(reader+4)+1; reader+=5; break;
+         case 22: value1+=readDelta4(reader)+1; count=readDelta2(reader+4)+1; reader+=6; break;
+         case 23: value1+=readDelta4(reader)+1; count=readDelta3(reader+4)+1; reader+=7; break;
+         case 24: value1+=readDelta4(reader)+1; count=readDelta4(reader+4)+1; reader+=8; break;
       }
       (*writer).value1=value1;
       (*writer).count=count;
@@ -441,7 +482,7 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
          // No entry on this page?
          const Triple* oldPos=pos;
          if (!find(next1)) {
-            if (!seg->lookup(next1,current))
+            if (!Index(*seg).findLeaf(current,Index::InnerKey(next1)))
                return false;
             pos=posLimit=0;
             ++pos;

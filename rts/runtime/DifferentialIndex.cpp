@@ -916,6 +916,51 @@ void AggregatedTriplesLoader::markAsDuplicate()
 {
 }
 //---------------------------------------------------------------------------
+/// Loads triples for consumption
+class FullyAggregatedTriplesLoader : public FullyAggregatedFactsSegment::Source
+{
+   private:
+   /// The range
+   set<DifferentialIndex::VersionedTriple>::iterator iter,limit;
+
+   public:
+   /// Constructor
+   FullyAggregatedTriplesLoader(set<DifferentialIndex::VersionedTriple>::iterator iter,set<DifferentialIndex::VersionedTriple>::iterator limit) : iter(iter),limit(limit) {}
+
+   /// Get the next triple
+   bool next(unsigned& value1,unsigned& count);
+   /// Mark the last entry as duplicate
+   void markAsDuplicate();
+};
+//---------------------------------------------------------------------------
+bool FullyAggregatedTriplesLoader::next(unsigned& value1,unsigned& count)
+   // Get the next triple
+{
+   // Make sure the current entry is not a duplicate
+   while (true) {
+      if (iter==limit)
+         return false;
+      if ((*iter).deleted!=0)
+         break;
+      ++iter;
+   }
+
+   value1=(*iter).value1;
+   count=1;
+   while ((iter!=limit)&&((*iter).value1==value1)) {
+      if ((*iter).deleted!=0)
+         ++count;
+      ++iter;
+   }
+
+   return true;
+}
+//---------------------------------------------------------------------------
+void FullyAggregatedTriplesLoader::markAsDuplicate()
+   // Mark the last entry as duplicate
+{
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DifferentialIndex::sync()
@@ -941,6 +986,10 @@ void DifferentialIndex::sync()
       {
          AggregatedTriplesLoader loader(triples[index].begin(),triples[index].end());
          db.getAggregatedFacts(static_cast<Database::DataOrder>(index)).update(loader);
+      }
+      if ((index&1)==0) {
+         FullyAggregatedTriplesLoader loader(triples[index].begin(),triples[index].end());
+         db.getFullyAggregatedFacts(static_cast<Database::DataOrder>(index)).update(loader);
       }
       triples[index].clear();
    }

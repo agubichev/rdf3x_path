@@ -223,6 +223,7 @@ unsigned AggregatedFactsSegment::Index::packLeafEntries(unsigned char* writer,un
          writer=writeDelta0(writer,value2);
          writer=writeDelta0(writer,count-1);
       }
+      lastValue1=value1; lastValue2=value2;
    }
 
    // Done, everything fitted
