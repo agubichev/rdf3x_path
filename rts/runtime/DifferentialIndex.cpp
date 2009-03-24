@@ -843,12 +843,12 @@ class TriplesLoader : public FactsSegment::Source
    TriplesLoader(set<DifferentialIndex::VersionedTriple>::iterator iter,set<DifferentialIndex::VersionedTriple>::iterator limit) : iter(iter),limit(limit) {}
 
    /// Get the next triple
-   bool next(unsigned& value1,unsigned& value2,unsigned& value3);
+   bool next(unsigned& value1,unsigned& value2,unsigned& value3,unsigned& created,unsigned& deleted);
    /// Mark the last entry as duplicate
    void markAsDuplicate();
 };
 //---------------------------------------------------------------------------
-bool TriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& value3)
+bool TriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& value3,unsigned& created,unsigned& deleted)
    // Get the next triple
 {
    if (iter==limit)
@@ -857,6 +857,8 @@ bool TriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& value3)
    value1=(*iter).value1;
    value2=(*iter).value2;
    value3=(*iter).value3;
+   created=(*iter).created;
+   deleted=(*iter).deleted;
    ++iter;
 
    return true;

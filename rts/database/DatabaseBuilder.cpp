@@ -148,10 +148,17 @@ class FactsSegmentSource : public FactsSegment::Source
    FactsSegmentSource(DatabaseBuilder::FactsReader& reader) : reader(reader) {}
 
    /// Get the next entry
-   bool next(unsigned& value1,unsigned& value2,unsigned& value3) { return reader.next(value1,value2,value3); }
+   bool next(unsigned& value1,unsigned& value2,unsigned& value3,unsigned& created,unsigned& deleted);
    /// Mark as duplicate
    void markAsDuplicate() {}
 };
+//---------------------------------------------------------------------------
+bool FactsSegmentSource::next(unsigned& value1,unsigned& value2,unsigned& value3,unsigned& created,unsigned& deleted)
+   // Get the next entry
+{
+   created=0; deleted=~0u; // initial bulkload versions
+   return reader.next(value1,value2,value3);
+}
 //---------------------------------------------------------------------------
 /// A source for the aggregated facts segment
 class AggregatedFactsSegmentSource : public AggregatedFactsSegment::Source

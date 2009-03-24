@@ -32,7 +32,7 @@ class FactsSegment : public Segment
       virtual ~Source();
 
       /// Get the next triples
-      virtual bool next(unsigned& value1,unsigned& value2,unsigned& value3) = 0;
+      virtual bool next(unsigned& value1,unsigned& value2,unsigned& value3,unsigned& created,unsigned& deleted) = 0;
       /// Mark the last triple as duplicate
       virtual void markAsDuplicate() = 0;
    };

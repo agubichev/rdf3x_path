@@ -65,12 +65,10 @@ class FactsSegment::Index : public BTree<Index>
    /// A leaf entry
    struct LeafEntry {
       /// The values
-      unsigned value1,value2,value3;
+      unsigned value1,value2,value3,created,deleted;
 
       /// Compare
-      bool operator==(const LeafEntry& o) const { return (value1==o.value1)&&(value2==o.value2)&&(value3==o.value3); }
-      /// Compare
-      bool operator<(const LeafEntry& o) const { return (value1<o.value1)||((value1==o.value1)&&((value2<o.value2)||((value2==o.value2)&&(value3<o.value3)))); }
+      bool operator<(const LeafEntry& o) const { return (value1<o.value1)||((value1==o.value1)&&((value2<o.value2)||((value2==o.value2)&&((value3<o.value3)||((value3==o.value3)&&(created<o.created)))))); }
       /// Compare
       bool operator<(const InnerKey& o) const { return (value1<o.value1)||((value1==o.value1)&&((value2<o.value2)||((value2==o.value2)&&(value3<o.value3)))); }
    };
@@ -85,7 +83,7 @@ class FactsSegment::Index : public BTree<Index>
       LeafEntrySource(FactsSegment::Source& source) : source(source) {}
 
       /// Read the next entry
-      bool next(LeafEntry& l) { return source.next(l.value1,l.value2,l.value3); }
+      bool next(LeafEntry& l) { return source.next(l.value1,l.value2,l.value3,l.created,l.deleted); }
       /// Mark last entry as conflict
       void markAsConflict() { source.markAsDuplicate(); }
    };
@@ -122,7 +120,7 @@ class FactsSegment::Index : public BTree<Index>
    void updateLeafInfo(unsigned firstLeaf,unsigned leafCount);
 
    /// Check for duplicates/conflicts and "merge" if equired
-   static bool mergeConflictWith(const LeafEntry& newEntry,LeafEntry& oldEntry) { return newEntry==oldEntry; }
+   static bool mergeConflictWith(const LeafEntry& newEntry,LeafEntry& oldEntry) { return (newEntry.value1==oldEntry.value1)&&(newEntry.value2==oldEntry.value2)&&(newEntry.value3==oldEntry.value3)&&(!~oldEntry.deleted); }
 
    /// Pack leaf entries
    static unsigned packLeafEntries(unsigned char* writer,unsigned char* limit,vector<LeafEntry>::const_iterator entriesStart,vector<LeafEntry>::const_iterator entriesLimit);
@@ -187,6 +185,7 @@ unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned cha
 {
    unsigned lastValue1,lastValue2,lastValue3;
    unsigned value1,value2,value3;
+   unsigned created=0,deleted=~0u,lc=created,ld=deleted;
 
    // Store the first entry
    if (entriesStart==entriesLimit)
@@ -197,6 +196,15 @@ unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned cha
    Segment::writeUint32Aligned(writer+4,lastValue2=(*entriesStart).value2);
    Segment::writeUint32Aligned(writer+8,lastValue3=(*entriesStart).value3);
    writer+=12;
+   if (((*entriesStart).created!=created)||((*entriesStart).deleted!=deleted)) {
+      if ((writer+9)>writerLimit)
+         return 0;
+      *(writer)=0x80|28; writer++;
+      created=(*entriesStart).created;
+      deleted=(*entriesStart).deleted;
+      Segment::writeUint32(writer,created); writer+=4;
+      Segment::writeUint32(writer,deleted); writer+=4;
+   }
 
    // Store the remaining entries
    for (vector<LeafEntry>::const_iterator iter=entriesStart+1;iter!=entriesLimit;++iter) {
@@ -207,7 +215,46 @@ unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned cha
          if (value2==lastValue2) {
             if (value3==lastValue3) {
                // Skipping a duplicate
-               continue;
+               if (((*iter).created==created)&&((*iter).deleted==deleted))
+                  continue;
+
+               // Both stamp must change, otherwise we get inconsistent data!
+               assert(((*iter).created!=created)&&((*iter).deleted!=deleted));
+
+               // Compute the representation
+               if ((*iter).created==lc) {
+                  if ((*iter).deleted==ld) {
+                     if ((writer+2)<writerLimit) {
+                        writer[0]=0x80|22; swap(lc,created);
+                        writer[1]=0x80|27; swap(ld,deleted);
+                        writer+=2;
+                        continue;
+                     }
+                  } else {
+                     if ((writer+6)<writerLimit) {
+                        writer[0]=0x80|22; swap(lc,created);
+                        writer[1]=0x80|25; ld=deleted; Segment::writeUint32(writer+2,deleted=(*iter).deleted);
+                        writer+=2;
+                        continue;
+                     }
+                  }
+               } else if ((*iter).deleted==ld) {
+                  if ((writer+6)<writerLimit) {
+                     writer[0]=0x80|20; lc=created; Segment::writeUint32(writer+1,created=(*iter).created);
+                     writer[5]=0x80|27; swap(ld,deleted);
+                     writer+=6;
+                     continue;
+                  }
+               } else {
+                  if ((writer+10)<writerLimit) {
+                     writer[0]=0x80|20; lc=created; Segment::writeUint32(writer+1,created=(*iter).created);
+                     writer[5]=0x80|25; ld=deleted; Segment::writeUint32(writer+6,deleted=(*iter).deleted);
+                     writer+=10;
+                     continue;
+                  }
+               }
+               // fallback to "does not fit"
+               len=writerLimit-writer+1;
             } else {
                if ((value3-lastValue3)<128)
                   len=1; else
@@ -220,13 +267,45 @@ unsigned FactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned cha
          len=1+bytes(value1-lastValue1)+bytes(value2)+bytes(value3);
       }
 
+      // Compute header for version changes
+      if ((*iter).created!=created) {
+         if ((*iter).created==lc)
+            len+=1; else
+            len+=5;
+      }
+      if ((*iter).deleted!=deleted) {
+         if ((*iter).deleted==ld)
+            len+=1; else
+            len+=5;
+      }
+
       // Entry too big?
       if ((writer+len)>writerLimit) {
          memset(writer,0,writerLimit-writer);
          return iter-entriesStart;
       }
 
-      // No, pack it
+      // No, write versioning info if needed
+      if ((*iter).created!=created) {
+         if ((*iter).created==lc) {
+            writer[0]=0x80|22; swap(lc,created);
+            ++writer;
+         } else {
+            writer[0]=0x80|20; lc=created; Segment::writeUint32(writer+1,created=(*iter).created);
+            writer+=5;
+         }
+      }
+      if ((*iter).deleted!=deleted) {
+         if ((*iter).deleted==ld) {
+            writer[0]=0x80|26; swap(ld,deleted);
+            ++writer;
+         } else {
+            writer[0]=0x80|24; ld=deleted; Segment::writeUint32(writer+1,deleted=(*iter).deleted);
+            writer+=5;
+         }
+      }
+
+      // Pack the triple
       if (value1==lastValue1) {
          if (value2==lastValue2) {
             if (value3==lastValue3) {
@@ -272,8 +351,13 @@ void FactsSegment::Index::unpackLeafEntries(vector<FactsSegment::Index::LeafEntr
    e.value1=readUint32Aligned(reader); reader+=4;
    e.value2=readUint32Aligned(reader); reader+=4;
    e.value3=readUint32Aligned(reader); reader+=4;
-   unsigned created=0,deleted=~0u;
-   unsigned lc=created,ld=deleted;
+   e.created=0; e.deleted=~0u;
+   unsigned lc=e.created,ld=e.deleted;
+   if ((reader<limit)&&(reader[0]==(0x80|28))) {
+      reader++;
+      e.created=Segment::readUint32(reader); reader+=4;
+      e.deleted=Segment::readUint32(reader); reader+=4;
+   }
    entries.push_back(e);
 
    // Decompress the remainder of the page
@@ -310,15 +394,16 @@ void FactsSegment::Index::unpackLeafEntries(vector<FactsSegment::Index::LeafEntr
          case 17: e.value2+=readDelta4(reader); e.value3=readDelta2(reader+4); reader+=6; break;
          case 18: e.value2+=readDelta4(reader); e.value3=readDelta3(reader+4); reader+=7; break;
          case 19: e.value2+=readDelta4(reader); e.value3=readDelta4(reader+4); reader+=8; break;
-         case 20: lc=created; created=readUint32(reader); reader+=4; continue;
-         case 21: lc=created; created=readUint32(reader); reader+=4; break;
-         case 22: swap(created,lc); continue;
-         case 23: swap(created,lc); break;
-         case 24: ld=deleted; deleted=readUint32(reader); reader+=4; continue;
-         case 25: ld=deleted; deleted=readUint32(reader); reader+=4; break;
-         case 26: swap(deleted,ld); continue;
-         case 27: swap(deleted,ld); break;
-         case 28: case 29: case 30: case 31: break;
+         case 20: lc=e.created; e.created=readUint32(reader); reader+=4; continue;
+         case 21: lc=e.created; e.created=readUint32(reader); reader+=4; break;
+         case 22: swap(e.created,lc); continue;
+         case 23: swap(e.created,lc); break;
+         case 24: ld=e.deleted; e.deleted=readUint32(reader); reader+=4; continue;
+         case 25: ld=e.deleted; e.deleted=readUint32(reader); reader+=4; break;
+         case 26: swap(e.deleted,ld); continue;
+         case 27: swap(e.deleted,ld); break;
+         case 28: // Time marker in header, must not occur in compressed stream!
+         case 29: case 30: case 31: break;
          case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39: case 40: case 41: case 42: case 43:
          case 44: case 45: case 46: case 47: case 48: case 49: case 50: case 51: case 52: case 53: case 54: case 55:
          case 56: case 57: case 58: case 59: case 60: case 61: case 62: case 63:
@@ -565,7 +650,8 @@ static bool skipInTime(const unsigned char*& oreader,const unsigned char* limit,
          case 25: ld=deleted; deleted=Segment::readUint32(reader); reader+=4; if ((created>time)||(time>=deleted)) continue; else { produce=true; goto done; }
          case 26: swap(deleted,ld); if ((created>time)||(time>=deleted)) continue; else goto done;
          case 27: swap(deleted,ld); if ((created>time)||(time>=deleted)) continue; else { produce=true; goto done; }
-         case 28: case 29: case 30: case 31: break;
+         case 28: // first version marker, must not occur in triple stream!
+         case 29: case 30: case 31: break;
          case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39: case 40: case 41: case 42: case 43:
          case 44: case 45: case 46: case 47: case 48: case 49: case 50: case 51: case 52: case 53: case 54: case 55:
          case 56: case 57: case 58: case 59: case 60: case 61: case 62: case 63:
@@ -653,10 +739,17 @@ static FactsSegment::Triple* decompress(const unsigned char* reader,const unsign
    unsigned value3=Segment::readUint32Aligned(reader); reader+=4;
    unsigned created=0,deleted=~0u;
    unsigned lc=created,ld=deleted;
-   (*writer).value1=value1;
-   (*writer).value2=value2;
-   (*writer).value3=value3;
-   ++writer;
+   if ((reader<limit)&&(reader[0]==(0x80|28))) {
+      reader++;
+      created=Segment::readUint32(reader); reader+=4;
+      deleted=Segment::readUint32(reader); reader+=4;
+   }
+   if (((created<=time)&&(time<deleted))||(skipInTime(reader,limit,value1,value2,value3,created,deleted,lc,ld,time))) {
+      (*writer).value1=value1;
+      (*writer).value2=value2;
+      (*writer).value3=value3;
+      ++writer;
+   }
 
    // Decompress the remainder of the page
    while (reader<limit) {
@@ -707,7 +800,8 @@ static FactsSegment::Triple* decompress(const unsigned char* reader,const unsign
             if (skipInTime(reader,limit,value1,value2,value3,created,deleted,lc,ld,time))
                break;
             continue;
-         case 28: case 29: case 30: case 31: break;
+         case 28: // first version marker, but not occur in compressed stream!
+         case 29: case 30: case 31: break;
          case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39: case 40: case 41: case 42: case 43:
          case 44: case 45: case 46: case 47: case 48: case 49: case 50: case 51: case 52: case 53: case 54: case 55:
          case 56: case 57: case 58: case 59: case 60: case 61: case 62: case 63:
