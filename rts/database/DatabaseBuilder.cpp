@@ -328,26 +328,112 @@ void DatabaseBuilder::loadFacts(unsigned order,FactsReader& reader)
       fullyAggregatedFacts->loadCounts(groups1);
 }
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Reader string entries
+class DictionaryStringReader : public DictionarySegment::StringSource
+{
+   private:
+   /// The source
+   DatabaseBuilder::StringsReader& reader;
+
+   public:
+   /// Constructor
+   DictionaryStringReader(DatabaseBuilder::StringsReader& reader) : reader(reader) {}
+
+   /// Get a new string
+   bool next(unsigned& len,const char*& data);
+   /// Remember a string position and hash
+   void rememberInfo(unsigned page,unsigned ofs,unsigned hash);
+};
+//---------------------------------------------------------------------------
+bool DictionaryStringReader::next(unsigned& len,const char*& data)
+   // Get a new string
+{
+   return reader.next(len,data);
+}
+//---------------------------------------------------------------------------
+void DictionaryStringReader::rememberInfo(unsigned page,unsigned ofs,unsigned hash)
+   // Remember a string position and hash
+{
+   reader.rememberInfo(page,ofs,hash);
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
 void DatabaseBuilder::loadStrings(StringsReader& reader)
    // Load the raw strings (must be in id order)
 {
    DictionarySegment* seg=new DictionarySegment(out.getFirstPartition());
    out.getFirstPartition().addSegment(seg,DatabasePartition::Tag_Dictionary);
-   seg->loadStrings(&reader);
+   DictionaryStringReader source(reader);
+   seg->loadStrings(source);
+}
+//---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Reader for (id) -> page,ofsLen mappings
+class IdInfoReader : public DictionarySegment::IdSource
+{
+   private:
+   /// The source
+   DatabaseBuilder::StringInfoReader& reader;
+
+   public:
+   /// Constructor
+   IdInfoReader(DatabaseBuilder::StringInfoReader& reader) : reader(reader) {}
+
+   /// Get the next entry
+   bool next(unsigned& page,unsigned& ofsLen);
+};
+//---------------------------------------------------------------------------
+bool IdInfoReader::next(unsigned& page,unsigned& ofsLen)
+   // Get the next entry
+{
+   return reader.next(page,ofsLen);
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DatabaseBuilder::loadStringMappings(DatabaseBuilder::StringInfoReader& reader)
    // Load the string mappings (must be in id order)
 {
    DictionarySegment* seg=out.getFirstPartition().lookupSegment<DictionarySegment>(DatabasePartition::Tag_Dictionary);
-   seg->loadStringMappings(&reader);
+   IdInfoReader source(reader);
+   seg->loadStringMappings(source);
+}
+//---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Reader for hash -> page mappings
+class HashInfoReader : public DictionarySegment::HashSource
+{
+   private:
+   /// The source
+   DatabaseBuilder::StringInfoReader& reader;
+
+   public:
+   /// Constructor
+   HashInfoReader(DatabaseBuilder::StringInfoReader& reader) : reader(reader) {}
+
+   /// Get the next entry
+   bool next(unsigned& hash,unsigned& page);
+};
+//---------------------------------------------------------------------------
+bool HashInfoReader::next(unsigned& hash,unsigned& page)
+   // Get the next entry
+{
+   return reader.next(hash,page);
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DatabaseBuilder::loadStringHashes(StringInfoReader& reader)
    // Write the string index
 {
    DictionarySegment* seg=out.getFirstPartition().lookupSegment<DictionarySegment>(DatabasePartition::Tag_Dictionary);
-   seg->loadStringHashes(&reader);
+   HashInfoReader source(reader);
+   seg->loadStringHashes(source);
 }
 //---------------------------------------------------------------------------
 static void buildCountMap(Database& db,const char* fileName)

@@ -19,7 +19,41 @@ class DatabaseBuilder;
 /// A dictionary mapping strings to ids and backwards
 class DictionarySegment : public Segment
 {
+   public:
+   /// A source for strings
+   class StringSource
+   {
+      public:
+      /// Destructor
+      virtual ~StringSource();
+
+      /// Get a new string
+      virtual bool next(unsigned& len,const char*& data) = 0;
+      /// Remember a string position and hash
+      virtual void rememberInfo(unsigned page,unsigned ofs,unsigned hash) = 0;
+   };
+   /// A source for (id) -> hash,ofsLen updates
+   class IdSource {
+      public:
+      /// Destructor
+      virtual ~IdSource();
+
+      /// Get the next entry
+      virtual bool next(unsigned& page,unsigned& ofsLen) = 0;
+   };
+   /// A source for hash->page updates
+   class HashSource {
+      public:
+      /// Destructor
+      virtual ~HashSource();
+
+      /// Get the next entry
+      virtual bool next(unsigned& hash,unsigned& page) = 0;
+   };
+
    private:
+   class HashIndex;
+
    /// The start of the raw string table
    unsigned tableStart;
    /// The next id after the existing ones
@@ -35,15 +69,11 @@ class DictionarySegment : public Segment
    bool lookupOnPage(unsigned pageNo,const std::string& text,unsigned hash,unsigned& id);
 
    /// Load the raw strings (must be in id order)
-   void loadStrings(void* reader);
+   void loadStrings(StringSource& source);
    /// Load the string mappings (must be in id order)
-   void loadStringMappings(void* reader);
-   /// Write the leaf nodes of the string index
-   void writeStringLeaves(void* reader,void* boundaries);
-   /// Write inner nodes
-   void writeStringInner(const void* data,void* boundaries);
-   /// Write the string index
-   void loadStringHashes(void* reader);
+   void loadStringMappings(IdSource& source);
+   /// Write the string index (must be in hash order)
+   void loadStringHashes(HashSource& source);
 
    friend class DatabaseBuilder;
 

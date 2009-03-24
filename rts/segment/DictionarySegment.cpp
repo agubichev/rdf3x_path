@@ -1,6 +1,6 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/buffer/BufferReference.hpp"
-#include "rts/database/DatabaseBuilder.hpp"
+#include "rts/segment/BTree.hpp"
 #include "infra/util/Hash.hpp"
 #include <vector>
 #include <cstring>
@@ -23,11 +23,172 @@ static const unsigned slotNextId = 1;
 static const unsigned slotMappingStart = 2;
 static const unsigned slotIndexRoot = 3;
 //---------------------------------------------------------------------------
-/// Helper functions
-static inline unsigned readInnerHash(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+8*slot); }
-static inline unsigned readInnerPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+24+8*slot+4); }
-static inline unsigned readLeafHash(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot); }
-static inline unsigned readLeafPage(const unsigned char* page,unsigned slot) { return Segment::readUint32Aligned(page+16+8*slot+4); }
+/// Index hash-value -> string
+class DictionarySegment::HashIndex : public BTree<HashIndex>
+{
+   public:
+   /// The size of an inner key
+   static const unsigned innerKeySize = 4;
+   /// An inner key
+   struct InnerKey {
+      /// The values
+      unsigned hash;
+
+      /// Constructor
+      InnerKey() : hash(0) {}
+      /// Constructor
+      InnerKey(unsigned hash) : hash(hash) {}
+
+      /// Compare
+      bool operator==(const InnerKey& o) const { return (hash==o.hash); }
+      /// Compare
+      bool operator<(const InnerKey& o) const { return (hash<o.hash); }
+   };
+   /// Read an inner key
+   static void readInnerKey(InnerKey& key,const unsigned char* ptr) {
+      key.hash=Segment::readUint32Aligned(ptr);
+   }
+   /// Write an inner key
+   static void writeInnerKey(unsigned char* ptr,const InnerKey& key) {
+      Segment::writeUint32Aligned(ptr,key.hash);
+   }
+   /// A leaf entry
+   struct LeafEntry {
+      /// The key value
+      unsigned hash;
+      /// The payload
+      unsigned page;
+
+      /// Compare
+      bool operator==(const LeafEntry& o) const { return (hash==o.hash); }
+      /// Compare
+      bool operator<(const LeafEntry& o) const { return (hash<o.hash); }
+      /// Compare
+      bool operator<(const InnerKey& o) const { return (hash<o.hash); }
+   };
+   /// A leaf entry source
+   class LeafEntrySource {
+      private:
+      /// The real source
+      DictionarySegment::HashSource& source;
+
+      public:
+      /// Constructor
+      LeafEntrySource(DictionarySegment::HashSource& source) : source(source) {}
+
+      /// Read the next entry
+      bool next(LeafEntry& l) { return source.next(l.hash,l.page); }
+      /// Mark last entry as conflict
+      void markAsConflict() { }
+   };
+   /// Derive an inner key
+   static InnerKey deriveInnerKey(const LeafEntry& e) { return InnerKey(e.hash); }
+   /// Read the first leaf entry
+   static void readFirstLeafEntryKey(InnerKey& key,const unsigned char* ptr) {
+      key.hash=Segment::readUint32Aligned(ptr);
+   }
+
+   private:
+   /// The segment
+   DictionarySegment& segment;
+
+   public:
+   /// Constructor
+   explicit HashIndex(DictionarySegment& segment) : segment(segment) {}
+
+   /// Get the segment
+   Segment& getSegment() const { return segment; }
+   /// Read a specific page
+   BufferRequest readShared(unsigned page) const { return segment.readShared(page); }
+   /// Read a specific page
+   BufferRequestExclusive readExclusive(unsigned page) const { return segment.readExclusive(page); }
+   /// Allocate a new page
+   bool allocPage(BufferReferenceModified& page) { return segment.allocPage(page); }
+   /// Get the root page
+   unsigned getRootPage() const { return segment.indexRoot; }
+   /// Set the root page
+   void setRootPage(unsigned page);
+   /// Store info about the leaf pages
+   void updateLeafInfo(unsigned firstLeaf,unsigned leafCount);
+
+   /// Check for duplicates/conflicts and "merge" if equired
+   static bool mergeConflictWith(const LeafEntry& newEntry,LeafEntry& oldEntry) { return (oldEntry.hash==newEntry.hash)&&(oldEntry.page==newEntry.page); }
+
+   /// Pack leaf entries
+   static unsigned packLeafEntries(unsigned char* writer,unsigned char* limit,vector<LeafEntry>::const_iterator entriesStart,vector<LeafEntry>::const_iterator entriesLimit);
+   /// Unpack leaf entries
+   static void unpackLeafEntries(vector<LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit);
+
+   /// Size of the leaf header (used for scans)
+   using BTree<HashIndex>::leafHeaderSize;
+};
+//---------------------------------------------------------------------------
+void DictionarySegment::HashIndex::setRootPage(unsigned page)
+   // Se the root page
+{
+   segment.indexRoot=page;
+   segment.setSegmentData(slotIndexRoot,segment.indexRoot);
+}
+//---------------------------------------------------------------------------
+void DictionarySegment::HashIndex::updateLeafInfo(unsigned /*firstLeaf*/,unsigned /*leafCount*/)
+   // Store info about the leaf pages
+{
+}
+//---------------------------------------------------------------------------
+unsigned DictionarySegment::HashIndex::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<DictionarySegment::HashIndex::LeafEntry>::const_iterator entriesStart,vector<DictionarySegment::HashIndex::LeafEntry>::const_iterator entriesLimit)
+   // Store the hash/page pairs
+{
+   // Too small?
+   if ((writerLimit-writer)<4)
+      return 0;
+
+   // Compute the output len
+   unsigned maxLen=((writerLimit-writer)-4)/8;
+   unsigned inputLen=entriesLimit-entriesStart;
+   unsigned len=min(maxLen,inputLen);
+
+   // Write the count
+   Segment::writeUint32Aligned(writer,len); writer+=4;
+
+   // Store the entries
+   for (unsigned index=0;index<len;++index,++entriesStart) {
+      Segment::writeUint32Aligned(writer,(*entriesStart).hash); writer+=4;
+      Segment::writeUint32Aligned(writer,(*entriesStart).page); writer+=4;
+   }
+
+   // Pad the remaining space
+   memset(writer,0,writerLimit-writer);
+   return len;
+}
+//---------------------------------------------------------------------------
+void DictionarySegment::HashIndex::unpackLeafEntries(vector<DictionarySegment::HashIndex::LeafEntry>& entries,const unsigned char* reader,const unsigned char* /*limit*/)
+   // Read the hash/page pairs
+{
+   // Read the len
+   unsigned len=Segment::readUint32Aligned(reader); reader+=4;
+
+   // Read the entries
+   entries.resize(len);
+   for (unsigned index=0;index<len;index++) {
+      entries[index].hash=Segment::readUint32Aligned(reader); reader+=4;
+      entries[index].page=Segment::readUint32Aligned(reader); reader+=4;
+   }
+}
+//---------------------------------------------------------------------------
+DictionarySegment::StringSource::~StringSource()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+DictionarySegment::IdSource::~IdSource()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+DictionarySegment::HashSource::~HashSource()
+   // Destructor
+{
+}
 //---------------------------------------------------------------------------
 DictionarySegment::DictionarySegment(DatabasePartition& partition)
    : Segment(partition),tableStart(0),nextId(0),mappingStart(0),indexRoot(0)
@@ -79,65 +240,45 @@ bool DictionarySegment::lookup(const string& text,unsigned& id)
    // Determine the hash value
    unsigned hash=Hash::hash(text);
 
-   // Traverse the B-Tree
-   BufferReference ref(readShared(indexRoot));
-   while (true) {
-      const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
-      // Inner node?
-      if (readUint32Aligned(page+8)==0xFFFFFFFF) {
-         // Perform a binary search. The test is more complex as we only have the upper bound for ranges
-         unsigned left=0,right=readUint32Aligned(page+16);
-         while (left!=right) {
-            unsigned middle=(left+right)/2;
-            unsigned hashAtMiddle=readInnerHash(page,middle);
-            if (hash>hashAtMiddle) {
-               left=middle+1;
-            } else if ((!middle)||(hash>readInnerHash(page,middle-1))) {
-               ref=readShared(readInnerPage(page,middle));
-               break;
-            } else {
-               right=middle;
-            }
-         }
-         // Unsuccessful search?
-         if (left==right)
-            return false;
-      } else {
-         // A leaf node. Perform a binary search on the exact value.
-         unsigned left=0,right=readUint32Aligned(page+12);
-         while (left!=right) {
-            unsigned middle=(left+right)/2;
-            unsigned hashAtMiddle=readLeafHash(page,middle);
-            if (hash>hashAtMiddle) {
-               left=middle+1;
-            } else if (hash<hashAtMiddle) {
-               right=middle;
-            } else {
-               // We found a match. Adjust the bounds as there can be collisions
-               left=middle;
-               right=readUint32Aligned(page+12);
-               while (left&&(readLeafHash(page,left-1)==hash))
-                  --left;
-               break;
-            }
-         }
-         // Unsuccessful search?
-         if (left==right)
-            return false;
+   // Find the leaf page
+   BufferReference ref;
+   if (!HashIndex(*this).findLeaf(ref,HashIndex::InnerKey(hash)))
+      return false;
 
-         // Scan all candidates in the collision list
-         for (;left<right;++left) {
-            // End of the collision list?
-            if (readLeafHash(page,left)!=hash)
-               return false;
-            // No, lookup the candidate
-            if (lookupOnPage(readLeafPage(page,left),text,hash,id))
-               return true;
-         }
-         // We reached the end of the page
-         return false;
+   // A leaf node. Perform a binary search on the exact value.
+   const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
+   unsigned left=0,right=readUint32Aligned(page+HashIndex::leafHeaderSize);
+   while (left!=right) {
+      unsigned middle=(left+right)/2;
+      unsigned hashAtMiddle=readUint32Aligned(page+HashIndex::leafHeaderSize+4+8*middle);
+      if (hash>hashAtMiddle) {
+         left=middle+1;
+      } else if (hash<hashAtMiddle) {
+         right=middle;
+      } else {
+         // We found a match. Adjust the bounds as there can be collisions
+         left=middle;
+         right=readUint32Aligned(page+HashIndex::leafHeaderSize);
+         while (left&&(readUint32Aligned(page+HashIndex::leafHeaderSize+4+8*(left-1))==hash))
+            --left;
+         break;
       }
    }
+   // Unsuccessful search?
+   if (left==right)
+      return false;
+
+   // Scan all candidates in the collision list
+   for (;left<right;++left) {
+      // End of the collision list?
+      if (readUint32Aligned(page+HashIndex::leafHeaderSize+4+8*left)!=hash)
+         return false;
+      // No, lookup the candidate
+      if (lookupOnPage(readUint32Aligned(page+HashIndex::leafHeaderSize+4+(8*left)+4),text,hash,id))
+         return true;
+   }
+   // We reached the end of the page
+   return false;
 }
 //---------------------------------------------------------------------------
 bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& stop)
@@ -184,10 +325,9 @@ string DictionarySegment::mapId(unsigned id)
       return string();
 }
 //---------------------------------------------------------------------------
-void DictionarySegment::loadStrings(void* reader_)
+void DictionarySegment::loadStrings(StringSource& reader)
    // Load the raw strings (must be in id order)
 {
-   DatabaseBuilder::StringsReader& reader=*static_cast<DatabaseBuilder::StringsReader*>(reader_);
    static const unsigned pageSize = BufferReference::pageSize;
 
    // Prepare the buffer
@@ -279,11 +419,9 @@ void DictionarySegment::loadStrings(void* reader_)
    setSegmentData(slotNextId,nextId);
 }
 //---------------------------------------------------------------------------
-void DictionarySegment::loadStringMappings(void* reader_)
+void DictionarySegment::loadStringMappings(IdSource& reader)
    // Load the string mappings (must be in id order)
 {
-   DatabaseBuilder::StringInfoReader& reader=*static_cast<DatabaseBuilder::StringInfoReader*>(reader_);
-
    // Prepare the buffer
    unsigned char buffer[BufferReference::pageSize]={0};
    unsigned bufferPos=8+8;
@@ -325,138 +463,11 @@ void DictionarySegment::loadStringMappings(void* reader_)
    setSegmentData(slotMappingStart,mappingStart);
 }
 //---------------------------------------------------------------------------
-void DictionarySegment::writeStringLeaves(void* reader_,void* boundaries_)
-   // Write the leaf nodes of the string index
-{
-   DatabaseBuilder::StringInfoReader& reader=*static_cast<DatabaseBuilder::StringInfoReader*>(reader_);
-   vector<pair<unsigned,unsigned> >& boundaries=*static_cast<vector<pair<unsigned,unsigned> >*>(boundaries_);
-
-   // Prepare the buffer
-   const unsigned headerSize = 16; // LSN+next+count
-   DatabaseBuilder::PageChainer chainer(8);
-   unsigned char buffer[BufferReference::pageSize];
-   unsigned bufferPos=headerSize,bufferCount=0;
-
-   // Scan the strings
-   vector<unsigned> pages;
-   unsigned stringHash=0,stringPage=0,lastStringHash=0,lastStringPage=0,previousHash=0;
-   bool hasLast=false;
-   while (hasLast||reader.next(stringHash,stringPage)) {
-      // Collect all identical hash values
-      if (hasLast) { stringHash=lastStringHash; stringPage=lastStringPage; hasLast=false; }
-      pages.clear();
-      pages.push_back(stringPage);
-      unsigned nextStringHash,nextStringPage;
-      while (reader.next(nextStringHash,nextStringPage)) {
-         if (nextStringHash!=stringHash) {
-            lastStringHash=nextStringHash; lastStringPage=nextStringPage;
-            hasLast=true;
-            break;
-         } else {
-            pages.push_back(nextStringPage);
-         }
-      }
-
-      // Too big for the current page?
-      if ((bufferPos+8*pages.size())>BufferReference::pageSize) {
-         // Too big for any page?
-         if ((headerSize+8*pages.size())>BufferReference::pageSize) {
-            cout << "error: too many hash collisions in string table, chaining currently not implemented." << endl;
-            throw;
-         }
-         // Write the current page
-         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-            buffer[index]=0;
-         writeUint32(buffer+12,bufferCount);
-         chainer.store(this,buffer);
-         boundaries.push_back(pair<unsigned,unsigned>(previousHash,chainer.getPageNo()));
-         bufferPos=headerSize; bufferCount=0;
-      }
-      // Write the chain
-      for (vector<unsigned>::const_iterator iter=pages.begin(),limit=pages.end();iter!=limit;++iter) {
-         writeUint32(buffer+bufferPos,stringHash); bufferPos+=4;
-         writeUint32(buffer+bufferPos,*iter); bufferPos+=4;
-         bufferCount++;
-      }
-      previousHash=stringHash;
-   }
-
-   // Flush the last page
-   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-      buffer[index]=0;
-   writeUint32(buffer+12,bufferCount);
-   chainer.store(this,buffer);
-   boundaries.push_back(pair<unsigned,unsigned>(previousHash,chainer.getPageNo()));
-   chainer.finish();
-}
-//---------------------------------------------------------------------------
-void DictionarySegment::writeStringInner(const void* data_,void* boundaries_)
-   // Write inner nodes
-{
-   const vector<pair<unsigned,unsigned> >& data=*static_cast<const vector<pair<unsigned,unsigned> >*>(data_);
-   vector<pair<unsigned,unsigned> >& boundaries=*static_cast<vector<pair<unsigned,unsigned> >*>(boundaries_);
-
-   const unsigned headerSize = 24; // LSN+marker+next+count+padding
-   DatabaseBuilder::PageChainer chainer(12);
-   unsigned char buffer[BufferReference::pageSize];
-   unsigned bufferPos=headerSize,bufferCount=0;
-
-   for (vector<pair<unsigned,unsigned> >::const_iterator iter=data.begin(),limit=data.end();iter!=limit;++iter) {
-      // Do we have to start a new page?
-      if ((bufferPos+8)>BufferReference::pageSize) {
-         writeUint32(buffer+8,0xFFFFFFFF);
-         writeUint32(buffer+12,0);
-         writeUint32(buffer+16,bufferCount);
-         writeUint32(buffer+20,0);
-         for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-            buffer[index]=0;
-         chainer.store(this,buffer);
-         boundaries.push_back(pair<unsigned,unsigned>((*(iter-1)).first,chainer.getPageNo()));
-         bufferPos=headerSize; bufferCount=0;
-      }
-      // Write the entry
-      writeUint32(buffer+bufferPos,(*iter).first); bufferPos+=4;
-      writeUint32(buffer+bufferPos,(*iter).second); bufferPos+=4;
-      bufferCount++;
-   }
-   // Write the least page
-   writeUint32(buffer+8,0xFFFFFFFF);
-   writeUint32(buffer+12,0);
-   writeUint32(buffer+16,bufferCount);
-   writeUint32(buffer+20,0);
-   for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
-      buffer[index]=0;
-   chainer.store(this,buffer);
-   boundaries.push_back(pair<unsigned,unsigned>(data.back().first,chainer.getPageNo()));
-   chainer.finish();
-}
-//---------------------------------------------------------------------------
-void DictionarySegment::loadStringHashes(void* reader_)
+void DictionarySegment::loadStringHashes(HashSource& reader)
    // Write the string index
 {
-   DatabaseBuilder::StringInfoReader& reader=*static_cast<DatabaseBuilder::StringInfoReader*>(reader_);
-
-   // Write the leaf nodes
-   vector<pair<unsigned,unsigned> > boundaries;
-   writeStringLeaves(&reader,&boundaries);
-
-   // Only one leaf node? Special case this
-   if (boundaries.size()==1) {
-      vector<pair<unsigned,unsigned> > newBoundaries;
-      writeStringInner(&boundaries,&newBoundaries);
-      swap(boundaries,newBoundaries);
-   } else {
-      // Write the inner nodes
-      while (boundaries.size()>1) {
-         vector<pair<unsigned,unsigned> > newBoundaries;
-         writeStringInner(&boundaries,&newBoundaries);
-         swap(boundaries,newBoundaries);
-      }
-   }
-
-   // Remember the index root
-   indexRoot=boundaries.back().second;
-   setSegmentData(slotIndexRoot,indexRoot);
+   HashIndex::LeafEntrySource source(reader);
+   HashIndex(*this).performBulkload(source);
 }
 //---------------------------------------------------------------------------
 namespace {
