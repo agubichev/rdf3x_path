@@ -611,8 +611,11 @@ template <class T> template <class S> void BTree<T>::performUpdate(S& source)
             } else {
                // We found a duplicate, merge the added value
                mergedEntries.push_back(*(currentEntriesIter++));
-               T::mergeConflictWith(current,mergedEntries.back());
-               source.markAsConflict();
+               if (T::mergeConflictWith(current,mergedEntries.back())) {
+                  source.markAsConflict();
+               } else {
+                  mergedEntries.push_back(current);
+               }
                hasCurrent=false;
             }
          }
