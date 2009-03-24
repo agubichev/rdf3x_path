@@ -118,6 +118,8 @@ string escapeCopy(const string& s)
          case '\"': result+="\\\""; break;
          case '\'': result+="\\\'"; break;
          case '\t': result+="\\\t"; break;
+         case '\n': result+="\\\n"; break;
+         case '\r': result+="\\\r"; break;
          case '\0': result+="\\x00"; break;
          default:
             /* if (c<' ') {
