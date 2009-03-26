@@ -80,7 +80,7 @@ bool Segment::allocPage(BufferReferenceModified& page)
    if (freeList) {
       page=partition.modifyExclusive(freeList);
       freeList=readUint32(static_cast<unsigned char*>(page.getPage())+8);
-      partition.getSegmentInventory()->getFreeList(id);
+      partition.getSegmentInventory()->setFreeList(id,freeList);
       return true;
    }
 
@@ -97,6 +97,54 @@ bool Segment::allocPage(BufferReferenceModified& page)
    page=partition.modifyExclusive(freeBlockStart);
    freeBlockStart++; freeBlockLen--;
    partition.getSegmentInventory()->setFreeBlock(id,freeBlockStart,freeBlockLen);
+   return true;
+}
+//---------------------------------------------------------------------------
+bool Segment::allocPageRange(unsigned minSize,unsigned preferredSize,unsigned& start,unsigned& len)
+   // Allocate a range of pages
+{
+   // Sanity checks
+   if ((preferredSize<minSize)||(!preferredSize))
+      return false;
+
+   // Single page?
+   if ((preferredSize==1)&&(freeList)) {
+      BufferReferenceExclusive page(readExclusive(freeList));
+      freeList=readUint32(static_cast<const unsigned char*>(page.getPage())+8);
+      partition.getSegmentInventory()->setFreeList(id,freeList);
+      start=page.getPageNo();
+      len=1;
+      return true;
+   }
+
+   // Space available?
+   if (freeBlockLen>=minSize) {
+      start=freeBlockStart;
+      if (freeBlockLen>preferredSize) {
+         len=preferredSize;
+         freeBlockStart+=preferredSize;
+         freeBlockLen-=preferredSize;
+      } else {
+         len=freeBlockLen;
+         freeBlockStart+=freeBlockLen;
+         freeBlockLen=0;
+      }
+      partition.getSegmentInventory()->setFreeBlock(id,freeBlockStart,freeBlockLen);
+      return true;
+   }
+
+   // No, grow the segment
+   if (!partition.getSpaceInventory()->growSegment(id,preferredSize,start,len))
+      return false;
+
+   // Reuse space if possible
+   if ((!freeBlockLen)&&(len>preferredSize)) {
+      freeBlockStart=start+preferredSize;
+      freeBlockLen=len-preferredSize;
+      len=preferredSize;
+      partition.getSegmentInventory()->setFreeBlock(id,freeBlockStart,freeBlockLen);
+   }
+
    return true;
 }
 //---------------------------------------------------------------------------

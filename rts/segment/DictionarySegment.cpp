@@ -2,9 +2,10 @@
 #include "rts/buffer/BufferReference.hpp"
 #include "rts/segment/BTree.hpp"
 #include "infra/util/Hash.hpp"
-#include <vector>
+#include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <vector>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -22,6 +23,9 @@ static const unsigned slotTableStart = 0;
 static const unsigned slotNextId = 1;
 static const unsigned slotMappingStart = 2;
 static const unsigned slotIndexRoot = 3;
+//---------------------------------------------------------------------------
+const unsigned entriesOnFirstMappingPage = (BufferReference::pageSize-16)/8;
+const unsigned entriesPerMappingPage = (BufferReference::pageSize-8)/8;
 //---------------------------------------------------------------------------
 /// Index hash-value -> string
 class DictionarySegment::HashIndex : public BTree<HashIndex>
@@ -175,6 +179,15 @@ void DictionarySegment::HashIndex::unpackLeafEntries(vector<DictionarySegment::H
    }
 }
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+LOGACTION3(DictionarySegment,UpdateMapping,uint32_t,slot,LogData,oldValue,LogData,newValue)
+//---------------------------------------------------------------------------
+void UpdateMapping::redo(void* page) const { memcpy(static_cast<unsigned char*>(page)+8+8*slot,newValue.ptr,newValue.len); }
+void UpdateMapping::undo(void* page) const { memcpy(static_cast<unsigned char*>(page)+8+8*slot,oldValue.ptr,oldValue.len); }
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
 DictionarySegment::StringSource::~StringSource()
    // Destructor
 {
@@ -191,7 +204,7 @@ DictionarySegment::HashSource::~HashSource()
 }
 //---------------------------------------------------------------------------
 DictionarySegment::DictionarySegment(DatabasePartition& partition)
-   : Segment(partition),tableStart(0),nextId(0),mappingStart(0),indexRoot(0)
+   : Segment(partition),tableStart(0),nextId(0),indexRoot(0)
    // Constructor
 {
 }
@@ -207,8 +220,26 @@ void DictionarySegment::refreshInfo()
 {
    tableStart=getSegmentData(slotTableStart);
    nextId=getSegmentData(slotNextId);
-   mappingStart=getSegmentData(slotMappingStart);
+   mappings.push_back(pair<unsigned,unsigned>(getSegmentData(slotMappingStart),0));
    indexRoot=getSegmentData(slotIndexRoot);
+}
+//---------------------------------------------------------------------------
+void DictionarySegment::refreshMapping()
+   // Refresh the mapping table if needed
+{
+   // Check if we only know the start mapge
+   if ((mappings.size()==1)&&(mappings[0].second==0)) {
+      unsigned iter=mappings[0].second;
+      mappings.clear();
+      // Walk the chain
+      for (;iter;) {
+         BufferReference ref(readShared(iter));
+         unsigned next=Segment::readUint32Aligned(static_cast<const unsigned char*>(ref.getPage())+8);
+         unsigned len=Segment::readUint32Aligned(static_cast<const unsigned char*>(ref.getPage())+8+4);
+         mappings.push_back(pair<unsigned,unsigned>(next,len));
+         iter=next;
+      }
+   }
 }
 //---------------------------------------------------------------------------
 bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,unsigned hash,unsigned& id)
@@ -284,16 +315,31 @@ bool DictionarySegment::lookup(const string& text,unsigned& id)
 bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& stop)
    // Lookup a string for a given id
 {
+   // Fill the mappings if needed
+   refreshMapping();
+
+   // Find the relevant mapping chunk
+   unsigned mappingStart,relId=id;
+   for (vector<pair<unsigned,unsigned> >::const_iterator iter=mappings.begin(),limit=mappings.end();;++iter) {
+      if (iter==limit)
+         return false;
+      unsigned mappingsInChunk=entriesOnFirstMappingPage+(((*iter).second-1)*entriesPerMappingPage);
+      if (relId<mappingsInChunk) {
+         mappingStart=(*iter).first;
+         break;
+      } else {
+         relId-=mappingsInChunk;
+      }
+   }
+
    // Compute position in directory
-   const unsigned entriesOnFirstPage = (BufferReference::pageSize-16)/8;
-   const unsigned entriesPerPage = (BufferReference::pageSize-8)/8;
    unsigned dirPage,dirSlot;
-   if (id<entriesOnFirstPage) {
+   if (relId<entriesOnFirstMappingPage) {
       dirPage=mappingStart;
-      dirSlot=id+1;
+      dirSlot=relId+1;
    } else {
-      dirPage=mappingStart+1+((id-entriesOnFirstPage)/entriesPerPage);
-      dirSlot=(id-entriesOnFirstPage)%entriesPerPage;
+      dirPage=mappingStart+1+((relId-entriesOnFirstMappingPage)/entriesPerMappingPage);
+      dirSlot=(relId-entriesOnFirstMappingPage)%entriesPerMappingPage;
    }
 
    // Lookup the direct mapping entry
@@ -459,8 +505,8 @@ void DictionarySegment::loadStringMappings(IdSource& reader)
    currentPage.unfixWithoutRecovery();
 
    // And remember the start
-   mappingStart=firstPage;
-   setSegmentData(slotMappingStart,mappingStart);
+   mappings.push_back(pair<unsigned,unsigned>(firstPage,lastPage-firstPage+1));
+   setSegmentData(slotMappingStart,firstPage);
 }
 //---------------------------------------------------------------------------
 void DictionarySegment::loadStringHashes(HashSource& reader)
@@ -480,6 +526,33 @@ struct EntryInfo {
    EntryInfo(unsigned page,unsigned ofsLen,unsigned hash) : page(page),ofsLen(ofsLen),hash(hash) {}
 };
 //---------------------------------------------------------------------------
+struct SortByHash { bool operator()(const EntryInfo& a,const EntryInfo& b) const { return a.hash<b.hash; } };
+//---------------------------------------------------------------------------
+class EntryInfoReader {
+   private:
+   /// Iterator
+   vector<EntryInfo>::const_iterator iter,limit;
+
+   public:
+   /// Constructor
+   EntryInfoReader(vector<EntryInfo>::const_iterator iter,vector<EntryInfo>::const_iterator limit) : iter(iter),limit(limit) {}
+
+   /// The next entry
+   bool next(DictionarySegment::HashIndex::LeafEntry& e);
+   /// Mark as conflict
+   void markAsConflict() {}
+};
+//---------------------------------------------------------------------------
+bool EntryInfoReader::next(DictionarySegment::HashIndex::LeafEntry& e)
+   // The next entry
+{
+   if (iter!=limit) {
+      e.hash=(*iter).hash;
+      e.page=(*iter).page;
+      return true;
+   } else return false;
+}
+//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
@@ -494,7 +567,7 @@ void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
    unsigned bufferPos=headerSize,bufferCount=0;
 
    // Read the strings
-   unsigned id=nextId;
+   unsigned id=nextId,oldNextId=nextId;
    vector<EntryInfo> info;
    info.reserve(strings.size());
    for (vector<string>::const_iterator iter=strings.begin(),limit=strings.end();iter!=limit;++iter) {
@@ -579,7 +652,86 @@ void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
    nextId=id;
    setSegmentData(slotNextId,nextId);
 
-   // XXX load id->pos mapping (stored in info, sort by id)
-   // XXX load hash->pos mapping (stored in info, sort by hash)
+   // Store ids in the existing mapping if possible
+   refreshMapping();
+   unsigned mappingSize=0,mappingIds=0;
+   for (vector<pair<unsigned,unsigned> >::const_iterator iter=mappings.begin(),limit=mappings.end();iter!=limit;++iter) {
+      mappingSize+=(*iter).second;
+      mappingIds+=entriesOnFirstMappingPage+(((*iter).second-1)*entriesPerMappingPage);
+   }
+   if (oldNextId<mappingIds) {
+      unsigned lastStart=mappings.back().first;
+      unsigned lastIdStart=mappingIds-(entriesOnFirstMappingPage+((mappings.back().second-1)*entriesPerMappingPage));
+      unsigned page,slot;
+      if ((oldNextId-lastIdStart)>=entriesOnFirstMappingPage) {
+         unsigned relId=oldNextId-lastIdStart-entriesOnFirstMappingPage;
+         page=lastStart+1+(relId/entriesPerMappingPage);
+         slot=relId%entriesPerMappingPage;
+      } else {
+         page=lastStart;
+         slot=(oldNextId-lastIdStart)+1;
+      }
+      for (unsigned index=0,limit=min(mappingIds-oldNextId,nextId-oldNextId);index<limit;) {
+         BufferReferenceModified ref(modifyExclusive(page));
+         unsigned char newEntries[BufferReference::pageSize];
+         unsigned chunk=min(entriesPerMappingPage-slot,limit-index);
+         for (unsigned index2=0;index2<chunk;++index2) {
+            Segment::writeUint32Aligned(newEntries+(8*index2),info[index+index2].page);
+            Segment::writeUint32Aligned(newEntries+(8*index2)+4,info[index+index2].ofsLen);
+         }
+         UpdateMapping(slot,LogData(static_cast<const unsigned char*>(ref.getPage())+8+(8*slot),8*chunk),LogData(newEntries,8*chunk)).apply(ref);
+         index+=chunk;
+         slot=0;
+      }
+   }
+
+   // Create a new mapping for additional entries if necessary
+   if (nextId>mappingIds) {
+      // Compute the required number of pages
+      unsigned extraIds=(nextId-mappingIds),requiredPages;
+      if (extraIds>entriesOnFirstMappingPage)
+         requiredPages=1+(extraIds-entriesOnFirstMappingPage+entriesPerMappingPage-1)/entriesPerMappingPage; else
+         requiredPages=1;
+
+      // Allocate a range
+      unsigned start,len;
+      allocPageRange(requiredPages,max(requiredPages,mappingSize/2),start,len);
+
+      // Write the pages
+      unsigned slot=1;
+      for (unsigned index=oldNextId-mappingIds,limit=nextId-oldNextId,page=start;index<limit;++page) {
+         BufferReferenceModified ref(modifyExclusive(page));
+         unsigned char newEntries[BufferReference::pageSize];
+         unsigned chunk=min(entriesPerMappingPage-slot,limit-index);
+         if (chunk<(entriesPerMappingPage-slot))
+            memset(newEntries,0,sizeof(newEntries));
+         if (slot==1) {
+            Segment::writeUint32Aligned(newEntries,0);
+            Segment::writeUint32Aligned(newEntries,len);
+         }
+         for (unsigned index2=0;index2<chunk;++index2) {
+            Segment::writeUint32Aligned(newEntries+(8*index2),info[index+index2].page);
+            Segment::writeUint32Aligned(newEntries+(8*index2)+4,info[index+index2].ofsLen);
+         }
+         UpdateMapping(0,LogData(static_cast<const unsigned char*>(ref.getPage())+8,BufferReference::pageSize-8),LogData(newEntries,BufferReference::pageSize-8)).apply(ref);
+         index+=chunk;
+         slot=0;
+      }
+
+      // Update the chain
+      {
+         BufferReferenceModified ref(modifyExclusive(mappings.back().first));
+         unsigned char newHeader[8];
+         memcpy(newHeader,static_cast<const unsigned char*>(ref.getPage())+8,8);
+         Segment::writeUint32Aligned(newHeader,start);
+         UpdateMapping(0,LogData(static_cast<const unsigned char*>(ref.getPage())+8,8),LogData(newHeader,8)).apply(ref);
+      }
+      mappings.push_back(pair<unsigned,unsigned>(start,len));
+   }
+
+   // Kiad hash->pos mapping
+   sort(info.begin(),info.end(),SortByHash());
+   EntryInfoReader reader(info.begin(),info.end());
+   HashIndex(*this).performUpdate(reader);
 }
 //---------------------------------------------------------------------------

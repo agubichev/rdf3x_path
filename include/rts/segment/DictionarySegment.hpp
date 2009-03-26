@@ -20,6 +20,11 @@ class DatabaseBuilder;
 class DictionarySegment : public Segment
 {
    public:
+   /// The segment id
+   static const Segment::Type ID = Segment::Type_Dictionary;
+   /// Possible actions
+   enum Action { Action_UpdateMapping };
+
    /// A source for strings
    class StringSource
    {
@@ -51,20 +56,22 @@ class DictionarySegment : public Segment
       virtual bool next(unsigned& hash,unsigned& page) = 0;
    };
 
-   private:
    class HashIndex;
 
+   private:
    /// The start of the raw string table
    unsigned tableStart;
    /// The next id after the existing ones
    unsigned nextId;
-   /// The start of the mapping table (id->page)
-   unsigned mappingStart;
+   /// The mapping table(s) (id->page)
+   std::vector<std::pair<unsigned,unsigned> > mappings;
    /// The root of the index b-tree
    unsigned indexRoot;
 
    /// Refresh segment info stored in the partition
    void refreshInfo();
+   /// Refresh the mapping table if needed
+   void refreshMapping();
    /// Lookup an id for a given string on a certain page in the raw string table
    bool lookupOnPage(unsigned pageNo,const std::string& text,unsigned hash,unsigned& id);
 
