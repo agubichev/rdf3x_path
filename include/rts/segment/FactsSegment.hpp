@@ -113,6 +113,8 @@ class FactsSegment : public Segment
       Triple triples[maxCount];
       /// The scan hint
       Hint* hint;
+      /// The point in (version-)time where the scan should take place
+      unsigned time;
 
       /// Perform a binary search
       bool find(unsigned value1,unsigned value2,unsigned value3);
@@ -124,7 +126,7 @@ class FactsSegment : public Segment
 
       public:
       /// Constructor
-      explicit Scan(Hint* hint=0);
+      explicit Scan(Hint* hint=0,unsigned time=(~0u)-1);
       /// Destructor
       ~Scan();
 

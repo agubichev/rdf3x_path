@@ -536,8 +536,8 @@ FactsSegment::Scan::Hint::~Hint()
 {
 }
 //---------------------------------------------------------------------------
-FactsSegment::Scan::Scan(Hint* hint)
-   : seg(0),hint(hint)
+FactsSegment::Scan::Scan(Hint* hint,unsigned time)
+   : seg(0),hint(hint),time(time)
    // Constructor
 {
 }
@@ -881,6 +881,8 @@ static FactsSegment::Triple* decompress(const unsigned char* reader,const unsign
 bool FactsSegment::Scan::readNextPage()
    // Read the next entry
 {
+   readNext:
+
    // Alread read the first page? Then read the next one
    if (pos-1) {
       const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
@@ -891,10 +893,13 @@ bool FactsSegment::Scan::readNextPage()
    }
 
    // Decompress the triples
-   static const unsigned time = 0; // XXX use transaction time
    const unsigned char* page=static_cast<const unsigned char*>(current.getPage());
    pos=triples;
    posLimit=decompress(page+Index::leafHeaderSize,page+BufferReference::pageSize,triples,time);
+
+   // Empty page? Can happen due to versioning
+   if (pos==posLimit)
+      goto readNext;
 
    // Check if we should make a skip
    if (hint) {
@@ -910,7 +915,7 @@ bool FactsSegment::Scan::readNextPage()
                return false;
             pos=posLimit=0;
             ++pos;
-            return readNextPage();
+            goto readNext;
          }
 
          // Stop if we are at a suitable position
