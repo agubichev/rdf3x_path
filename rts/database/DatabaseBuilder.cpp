@@ -25,8 +25,6 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-const unsigned pageSize = BufferReference::pageSize;
-//---------------------------------------------------------------------------
 bool DatabaseBuilder::PutbackReader::next(unsigned& subject,unsigned& predicate,unsigned& object)
    // Get the next triple
 {
