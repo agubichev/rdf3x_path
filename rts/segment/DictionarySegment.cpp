@@ -229,14 +229,14 @@ void DictionarySegment::refreshMapping()
 {
    // Check if we only know the start mapge
    if ((mappings.size()==1)&&(mappings[0].second==0)) {
-      unsigned iter=mappings[0].second;
+      unsigned iter=mappings[0].first;
       mappings.clear();
       // Walk the chain
       for (;iter;) {
          BufferReference ref(readShared(iter));
          unsigned next=Segment::readUint32Aligned(static_cast<const unsigned char*>(ref.getPage())+8);
          unsigned len=Segment::readUint32Aligned(static_cast<const unsigned char*>(ref.getPage())+8+4);
-         mappings.push_back(pair<unsigned,unsigned>(next,len));
+         mappings.push_back(pair<unsigned,unsigned>(iter,len));
          iter=next;
       }
    }
