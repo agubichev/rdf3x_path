@@ -9,7 +9,7 @@ PREFIX:=bin/
 
 #############################################################################
 # Default target
-all: $(PREFIX)rdf3xdump$(EXEEXT) $(PREFIX)rdf3xload$(EXEEXT) $(PREFIX)rdf3xquery$(EXEEXT)
+all: $(PREFIX)rdf3xdump$(EXEEXT) $(PREFIX)rdf3xload$(EXEEXT) $(PREFIX)rdf3xquery$(EXEEXT) $(PREFIX)rdf3xupdate$(EXEEXT)
 
 #############################################################################
 # Collect all sources

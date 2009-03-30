@@ -12,6 +12,7 @@ include tools/dumpyago/LocalMakefile
 include tools/factstest/LocalMakefile
 include tools/rdf3xdump/LocalMakefile
 include tools/rdf3xload/LocalMakefile
+include tools/rdf3xupdate/LocalMakefile
 include tools/rdf3xquery/LocalMakefile
 include tools/runbenchmark/LocalMakefile
 include tools/statisticstest/LocalMakefile
@@ -32,6 +33,7 @@ src_tools:=				\
 	$(src_tools_factstest)		\
 	$(src_tools_rdf3xdump)		\
 	$(src_tools_rdf3xload)		\
+	$(src_tools_rdf3xupdate)	\
 	$(src_tools_rdf3xquery)		\
 	$(src_tools_statisticstest)	\
 	$(src_tools_translatesparql)	\
