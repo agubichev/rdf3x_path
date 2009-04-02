@@ -146,9 +146,7 @@ BufferFrame* BufferManager::findBufferFrame(Partition* partition,unsigned pageNo
    // And initialize it
    BufferFrame& result=*frame;
    result.buffer=this;
-   if (exclusive)
-      result.latch.lockExclusive(); else
-      result.latch.lockShared();
+   result.latch.lockExclusive();
    result.intentionLock=0;
    result.data=0;
    result.partition=partition;
