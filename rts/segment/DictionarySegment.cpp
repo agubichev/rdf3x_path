@@ -549,6 +549,7 @@ bool EntryInfoReader::next(DictionarySegment::HashIndex::LeafEntry& e)
    if (iter!=limit) {
       e.hash=(*iter).hash;
       e.page=(*iter).page;
+      ++iter;
       return true;
    } else return false;
 }
