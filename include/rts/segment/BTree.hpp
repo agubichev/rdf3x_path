@@ -127,6 +127,9 @@ template <class T> template <class V> bool BTree<T>::findLeaf(BufferReference& r
             if (innerKey<key) {
                left=middle+1;
             } else if (!middle) {
+               ref=impl().readShared(getInnerChildPage(page,middle));
+               break;
+            } else {
                T::readInnerKey(innerKey,getInnerPtr(page,middle-1));
                if (innerKey<key) {
                   ref=impl().readShared(getInnerChildPage(page,middle));
@@ -134,8 +137,6 @@ template <class T> template <class V> bool BTree<T>::findLeaf(BufferReference& r
                } else {
                   right=middle;
                }
-            } else {
-               right=middle;
             }
          }
          // Unsuccessful search?
@@ -352,6 +353,9 @@ template <class T> void BTree<T>::Updater::lookup(const typename T::InnerKey& ke
             if (innerKey<key) {
                left=middle+1;
             } else if (!middle) {
+               left=middle;
+               break;
+            } else {
                T::readInnerKey(innerKey,getInnerPtr(page,middle-1));
                if (innerKey<key) {
                   left=middle;
@@ -359,8 +363,6 @@ template <class T> void BTree<T>::Updater::lookup(const typename T::InnerKey& ke
                } else {
                   right=middle;
                }
-            } else {
-               right=middle;
             }
          }
          // Unsuccessful search? Then pick the right-most entry
