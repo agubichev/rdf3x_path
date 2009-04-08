@@ -1,8 +1,10 @@
 #include "rts/database/DatabaseBuilder.hpp"
+#include "infra/osdep/MemoryMappedFile.hpp"
+#include "../rdf3xload/Sorter.hpp"
+#include "../rdf3xload/TempFile.hpp"
 #include <fstream>
 #include <iostream>
-#include <vector>
-#include <algorithm>
+#include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -17,22 +19,7 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
-/// A RDF triple
-struct Triple {
-   /// The values as IDs
-   unsigned subject,predicate,object;
-};
-//---------------------------------------------------------------------------
-/// Order a RDF triple lexicographically
-struct OrderTriple {
-   bool operator()(const Triple& a,const Triple& b) const {
-      return (a.subject<b.subject)||
-             ((a.subject==b.subject)&&((a.predicate<b.predicate)||
-             ((a.predicate==b.predicate)&&(a.object<b.object))));
-   }
-};
-//---------------------------------------------------------------------------
-bool readFacts(vector<Triple>& facts,const char* fileName)
+bool readFacts(TempFile& facts,const char* fileName)
    // Read the facts table
 {
    ifstream in(fileName);
@@ -41,150 +28,195 @@ bool readFacts(vector<Triple>& facts,const char* fileName)
       return false;
    }
 
-   facts.clear();
    while (true) {
-      Triple t;
-      in >> t.subject >> t.predicate >> t.object;
+      unsigned subject,predicate,object;
+      in >> subject >> predicate >> object;
       if (!in.good()) break;
-      facts.push_back(t);
+      facts.writeId(subject);
+      facts.writeId(predicate);
+      facts.writeId(object);
    }
 
    return true;
 }
 //---------------------------------------------------------------------------
-/// Loader for facts
-class FactsLoader : public DatabaseBuilder::FactsReader
+static const char* skipIdIdId(const char* reader)
+   // Skip a materialized id/id/id
 {
-   private:
-   /// The facts
-   vector<Triple>::const_iterator iter,limit,start;
+   return TempFile::skipId(TempFile::skipId(TempFile::skipId(reader)));
+}
+//---------------------------------------------------------------------------
+static int compareValue(const char* left,const char* right)
+   // Sort by integer value
+{
+   uint64_t leftId,rightId;
+   TempFile::readId(left,leftId);
+   TempFile::readId(right,rightId);
+   if (leftId<rightId)
+      return -1;
+   if (leftId>rightId)
+      return 1;
+   return 0;
+}
+//---------------------------------------------------------------------------
+static inline int cmpValue(uint64_t l,uint64_t r) { return (l<r)?-1:((l>r)?1:0); }
+//---------------------------------------------------------------------------
+static inline int cmpTriples(uint64_t l1,uint64_t l2,uint64_t l3,uint64_t r1,uint64_t r2,uint64_t r3)
+   // Compar two triples
+{
+   int c=cmpValue(l1,r1);
+   if (c) return c;
+   c=cmpValue(l2,r2);
+   if (c) return c;
+   return cmpValue(l3,r3);
+}
+//---------------------------------------------------------------------------
+static inline void loadTriple(const char* data,uint64_t& v1,uint64_t& v2,uint64_t& v3)
+   // Load a triple
+{
+   TempFile::readId(TempFile::readId(TempFile::readId(data,v1),v2),v3);
+}
+//---------------------------------------------------------------------------
+static int compare123(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l1,l2,l3,r1,r2,r3);
+}
+//---------------------------------------------------------------------------
+static int compare132(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l1,l3,l2,r1,r3,r2);
+}
+//---------------------------------------------------------------------------
+static int compare213(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l2,l1,l3,r2,r1,r3);
+}
+//---------------------------------------------------------------------------
+static int compare231(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l2,l3,l1,r2,r3,r1);
+}
+//---------------------------------------------------------------------------
+static int compare312(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l3,l1,l2,r3,r1,r2);
+}
+//---------------------------------------------------------------------------
+static int compare321(const char* left,const char* right)
+   // Sort by id
+{
+   uint64_t l1,l2,l3,r1,r2,r3;
+   loadTriple(left,l1,l2,l3);
+   loadTriple(right,r1,r2,r3);
+
+   return cmpTriples(l3,l2,l1,r3,r2,r1);
+}
+//---------------------------------------------------------------------------
+class FactsLoader : public DatabaseBuilder::FactsReader {
+   protected:
+   /// Map to the input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
+
+   /// Read an id
+   static const char* readId(const char* d,unsigned& v) { uint64_t x; d=TempFile::readId(d,x); v=x; return d; }
 
    public:
    /// Constructor
-   FactsLoader(const vector<Triple>& facts) : iter(facts.begin()),limit(facts.end()),start(iter) {}
+   FactsLoader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
-   /// Get the next fact
-   bool next(unsigned& subject,unsigned& predicate,unsigned& object);
-   /// Reset the reader
-   void reset();
+   /// Reset
+   void reset() { iter=in.getBegin(); }
 };
+class Load123 : public FactsLoader { public: Load123(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v1),v2),v3); return true; } else return false; } };
+class Load132 : public FactsLoader { public: Load132(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v1),v3),v2); return true; } else return false; } };
+class Load213 : public FactsLoader { public: Load213(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v2),v1),v3); return true; } else return false; } };
+class Load231 : public FactsLoader { public: Load231(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v3),v1),v2); return true; } else return false; } };
+class Load312 : public FactsLoader { public: Load312(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v2),v3),v1); return true; } else return false; } };
+class Load321 : public FactsLoader { public: Load321(TempFile& file) : FactsLoader(file) {} bool next(unsigned& v1,unsigned& v2,unsigned& v3) { if (iter!=limit) { iter=readId(readId(readId(iter,v3),v2),v1); return true; } else return false; } };
 //---------------------------------------------------------------------------
-bool FactsLoader::next(unsigned& subject,unsigned& predicate,unsigned& object)
-   // Get the next fact
-{
-   if (iter==limit)
-      return false;
-   subject=(*iter).subject;
-   predicate=(*iter).predicate;
-   object=(*iter).object;
-   ++iter;
-   return true;
-}
-//---------------------------------------------------------------------------
-void FactsLoader::reset()
-   // Reset the reader
-{
-   iter=start;
-}
-//---------------------------------------------------------------------------
-void dumpFacts(DatabaseBuilder& builder,vector<Triple>& facts)
+void dumpFacts(DatabaseBuilder& builder,TempFile& facts)
    // Dump all 6 orderings into the database
 {
-   // Produce the different orderings
-   for (unsigned index=0;index<6;index++) {
-      cout << "Dumping ordering " << (index+1) << endl;
+   cout << "Loading triples..." << endl;
 
-      // Change the values to fit the desired order
-      switch (index) {
-         case 0: // subject,predicate,object
-            break;
-         case 1: // subject,object,predicate
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-               std::swap((*iter).object,(*iter).predicate);
-            break;
-         case 2: // object,predicate,subject
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-               std::swap((*iter).object,(*iter).subject);
-            break;
-         case 3: // object,subject,predicate
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-               std::swap((*iter).object,(*iter).subject);
-               std::swap((*iter).object,(*iter).predicate);
-            }
-            break;
-         case 4: // predicate,subject,object
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-               std::swap((*iter).subject,(*iter).predicate);
-            break;
-         case 5: // predicate,object,subject
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-               std::swap((*iter).subject,(*iter).predicate);
-               std::swap((*iter).object,(*iter).predicate);
-            }
-            break;
-      }
-
-      // Sort the facts accordingly
-      sort(facts.begin(),facts.end(),OrderTriple());
-
-      // And load them
-      FactsLoader loader(facts);
-      builder.loadFacts(index,loader);
-
-      // Change the values back to the original order
-      switch (index) {
-         case 0: // subject,predicate,object
-            break;
-         case 1: // subject,object,predicate
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-               std::swap((*iter).object,(*iter).predicate);
-            break;
-         case 2: // object,predicate,subject
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-               std::swap((*iter).object,(*iter).subject);
-            break;
-         case 3: // object,subject,predicate
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-               std::swap((*iter).object,(*iter).predicate);
-               std::swap((*iter).object,(*iter).subject);
-            }
-            break;
-         case 4: // predicate,subject,object
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter)
-               std::swap((*iter).subject,(*iter).predicate);
-            break;
-         case 5: // predicate,object,subject
-            for (vector<Triple>::iterator iter=facts.begin(),limit=facts.end();iter!=limit;++iter) {
-               std::swap((*iter).object,(*iter).predicate);
-               std::swap((*iter).subject,(*iter).predicate);
-            }
-            break;
-      }
+   // Order 0
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare123);
+      Load123 loader(sorted);
+      builder.loadFacts(0,loader);
+   }
+   // Order 1
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare132);
+      Load132 loader(sorted);
+      builder.loadFacts(1,loader);
+   }
+   // Order 2
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare321);
+      Load321 loader(sorted);
+      builder.loadFacts(2,loader);
+   }
+   // Order 3
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare312);
+      Load312 loader(sorted);
+      builder.loadFacts(3,loader);
+   }
+   // Order 4
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare213);
+      Load213 loader(sorted);
+      builder.loadFacts(4,loader);
+   }
+   // Order 5
+   {
+      TempFile sorted(facts.getBaseFile());
+      Sorter::sort(facts,sorted,skipIdIdId,compare231);
+      Load231 loader(sorted);
+      builder.loadFacts(5,loader);
    }
 }
-//---------------------------------------------------------------------------
-/// A string description
-struct StringEntry {
-   /// The page the string is put on
-   unsigned page;
-   /// Offset and len
-   unsigned ofsLen;
-   /// The hash value of the string
-   unsigned hash;
-};
-//---------------------------------------------------------------------------
-/// Order a string entry by hash
-struct OrderStringByHash {
-   bool operator()(const StringEntry& a,const StringEntry& b) const { return a.hash<b.hash; }
-};
 //---------------------------------------------------------------------------
 /// Read strings from a file
 class StringReader : public DatabaseBuilder::StringsReader {
    private:
    /// The input
    ifstream& in;
-   /// The remebered data
-   vector<StringEntry>& strings;
+   /// The remembered data
+   TempFile& stringInfo;
    /// The next id
    unsigned id;
    /// The next string
@@ -192,7 +224,7 @@ class StringReader : public DatabaseBuilder::StringsReader {
 
    public:
    /// Constructor
-   StringReader(ifstream& in,vector<StringEntry>& strings) : in(in),strings(strings),id(0) {}
+   StringReader(ifstream& in,TempFile& stringInfo) : in(in),stringInfo(stringInfo),id(0) {}
 
    /// Read the next string
    bool next(unsigned& len,const char*& data);
@@ -225,64 +257,68 @@ bool StringReader::next(unsigned& len,const char*& data)
 void StringReader::rememberInfo(unsigned page,unsigned ofs,unsigned hash)
    // Remember a string position and hash
 {
-   StringEntry s;
-   s.page=page; s.ofsLen=ofs; s.hash=hash;
-   strings.push_back(s);
+   stringInfo.writeId(hash);
+   stringInfo.writeId(page);
+   stringInfo.writeId(ofs);
 }
 //---------------------------------------------------------------------------
-/// Read the mapping information
+/// Read the string mapping
 class StringMappingReader : public DatabaseBuilder::StringInfoReader
 {
    private:
-   /// The range
-   vector<StringEntry>::const_iterator iter,limit;
+   /// The input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
 
    public:
    /// Constructor
-   StringMappingReader(const vector<StringEntry>& strings) : iter(strings.begin()),limit(strings.end()) {}
+   StringMappingReader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Read the next entry
    bool next(unsigned& v1,unsigned& v2);
 };
 //---------------------------------------------------------------------------
 bool StringMappingReader::next(unsigned& v1,unsigned& v2)
-   // Read the next enty
+   // Read the next entry
 {
    if (iter==limit)
       return false;
-   v1=(*iter).page;
-   v2=(*iter).ofsLen;
-   ++iter;
+   uint64_t i1,i2,i3;
+   iter=TempFile::readId(TempFile::readId(TempFile::readId(iter,i1),i2),i3);
+   v1=i2; v2=i3;
    return true;
 }
 //---------------------------------------------------------------------------
-/// Read the hash information
-class StringHashReader : public DatabaseBuilder::StringInfoReader
+/// Read the string hashes
+class StringHashesReader : public DatabaseBuilder::StringInfoReader
 {
    private:
-   /// The range
-   vector<StringEntry>::const_iterator iter,limit;
+   /// The input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
 
    public:
    /// Constructor
-   StringHashReader(const vector<StringEntry>& strings) : iter(strings.begin()),limit(strings.end()) {}
+   StringHashesReader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Read the next entry
    bool next(unsigned& v1,unsigned& v2);
 };
 //---------------------------------------------------------------------------
-bool StringHashReader::next(unsigned& v1,unsigned& v2)
-   // Read the next enty
+bool StringHashesReader::next(unsigned& v1,unsigned& v2)
+   // Read the next entry
 {
    if (iter==limit)
       return false;
-   v1=(*iter).hash;
-   v2=(*iter).page;
-   ++iter;
+   uint64_t i1,i2,i3;
+   iter=TempFile::readId(TempFile::readId(TempFile::readId(iter,i1),i2),i3);
+   v1=i1; v2=i2;
    return true;
 }
 //---------------------------------------------------------------------------
-static bool readAndPackStrings(DatabaseBuilder& builder,const char* fileName,vector<StringEntry>& strings)
+static bool readAndPackStrings(DatabaseBuilder& builder,const char* fileName,TempFile& stringInfo)
    // Read the facts table and pack it into the output file
 {
    ifstream in(fileName);
@@ -293,21 +329,21 @@ static bool readAndPackStrings(DatabaseBuilder& builder,const char* fileName,vec
 
    // Scan the strings and dump them
    {
-      StringReader reader(in,strings);
+      StringReader reader(in,stringInfo);
       builder.loadStrings(reader);
    }
 
    return true;
 }
 //---------------------------------------------------------------------------
-bool buildDatabase(DatabaseBuilder& builder,const char* factsFile,const char* stringsFile)
+bool buildDatabase(DatabaseBuilder& builder,const char* target,const char* factsFile,const char* stringsFile)
    // Build the initial database
 {
    // Process the facts
    {
       // Read the facts table
       cout << "Reading the facts table..." << endl;
-      vector<Triple> facts;
+      TempFile facts(target);
       if (!readFacts(facts,factsFile))
          return false;
 
@@ -319,22 +355,23 @@ bool buildDatabase(DatabaseBuilder& builder,const char* factsFile,const char* st
    {
       // Read the strings table
       cout << "Reading the strings table..." << endl;
-      vector<StringEntry> strings;
-      if (!readAndPackStrings(builder,stringsFile,strings))
+      TempFile stringInfo(target);
+      if (!readAndPackStrings(builder,stringsFile,stringInfo))
          return 1;
 
       // Write the string mapping
       cout << "Writing the string mapping..." << endl;
       {
-         StringMappingReader reader(strings);
+         StringMappingReader reader(stringInfo);
          builder.loadStringMappings(reader);
       }
 
       // Write the string index
       cout << "Writing the string index..." << endl;
       {
-         std::sort(strings.begin(),strings.end(),OrderStringByHash());
-         StringHashReader reader(strings);
+         TempFile sortedByHash(stringInfo.getBaseFile());
+         Sorter::sort(stringInfo,sortedByHash,skipIdIdId,compareValue);
+         StringHashesReader reader(sortedByHash);
          builder.loadStringHashes(reader);
       }
    }
@@ -365,7 +402,7 @@ int main(int argc,char* argv[])
 
    // Build the initial database
    DatabaseBuilder builder(argv[3]);
-   if (!buildDatabase(builder,argv[1],argv[2]))
+   if (!buildDatabase(builder,argv[3],argv[1],argv[2]))
       return 1;
 
    // Compute the missing statistics
