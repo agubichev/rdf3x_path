@@ -143,7 +143,7 @@ int main(int argc,char* argv[])
       {
          FactsSegment::Scan scan;
          if (scan.first(db.getFacts(Database::Order_Subject_Predicate_Object))) do {
-            cout << scan.getValue1() << " " << scan.getValue2() << " " << scan.getValue3() << std::endl;
+            cout << scan.getValue1() << " " << scan.getValue2() << " " << scan.getValue3() << "\n";
             maxId=max(maxId,scan.getValue1());
             maxId=max(maxId,scan.getValue2());
             maxId=max(maxId,scan.getValue3());
@@ -153,6 +153,7 @@ int main(int argc,char* argv[])
       {
          const char* start,*stop;
          DictionarySegment& dic=db.getDictionary();
+         cerr << nounitbuf;
          for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop);++id) {
             cerr << id << " ";
 	    for (const char* iter=start;iter!=stop;++iter) {
@@ -168,7 +169,7 @@ int main(int argc,char* argv[])
 	          default: cerr << c; break;
 	       }
 	    }
-	    cerr << endl;
+	    cerr << "\n";
          }
       }
       return 0;
