@@ -138,6 +138,8 @@ int main(int argc,char* argv[])
 
    // Raw dump?
    if (rawDump) {
+      cerr.sync_with_stdio(false);
+      cerr << nounitbuf;
       // Dump the facts
       unsigned maxId=0;
       {
@@ -153,7 +155,6 @@ int main(int argc,char* argv[])
       {
          const char* start,*stop;
          DictionarySegment& dic=db.getDictionary();
-         cerr << nounitbuf;
          for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop);++id) {
             cerr << id << " ";
 	    for (const char* iter=start;iter!=stop;++iter) {
@@ -187,7 +188,7 @@ int main(int argc,char* argv[])
          dumpPredicate(dic,predicate.value);
          cout << " ";
          dumpObject(dic,object.value);
-         cout << "." << endl;
+         cout << "." << "\n";
       } while (scan->next());
    } else if (scan->first()) {
       // Write the first triple
@@ -205,13 +206,13 @@ int main(int argc,char* argv[])
                cout << " , ";
                dumpObject(dic,object.value);
             } else {
-               cout << ";" << endl << "  ";
+               cout << ";\n  ";
                dumpPredicate(dic,predicate.value);
                cout << " ";
                dumpObject(dic,object.value);
             }
          } else {
-            cout << "." << endl;
+            cout << ".\n";
             dumpSubject(dic,subject.value);
             cout << " ";
             dumpPredicate(dic,predicate.value);
