@@ -531,7 +531,7 @@ unsigned IndexScan::ScanPrefix123::first()
    if (!scan.first(facts,stop1,stop2,stop3))
       return false;
    if ((scan.getValue1()>stop1)||((scan.getValue1()==stop1)&&
-       ((scan.getValue2()>stop2)||((scan.getValue2()==stop2)&&(scan.getValue3()==stop3)))))
+       ((scan.getValue2()>stop2)||((scan.getValue2()==stop2)&&(scan.getValue3()>stop3)))))
       return false;
    return 1;
 }
@@ -542,7 +542,7 @@ unsigned IndexScan::ScanPrefix123::next()
    if (!scan.next())
       return false;
    if ((scan.getValue1()>stop1)||((scan.getValue1()==stop1)&&
-       ((scan.getValue2()>stop2)||((scan.getValue2()==stop2)&&(scan.getValue3()==stop3)))))
+       ((scan.getValue2()>stop2)||((scan.getValue2()==stop2)&&(scan.getValue3()>stop3)))))
       return false;
    return 1;
 }
