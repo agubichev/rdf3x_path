@@ -8,7 +8,6 @@ include tools/extractschema/LocalMakefile
 include tools/extractqueries/LocalMakefile
 include tools/dumpredland/LocalMakefile
 include tools/dumpyago/LocalMakefile
-include tools/factstest/LocalMakefile
 include tools/rdf3xdump/LocalMakefile
 include tools/rdf3xload/LocalMakefile
 include tools/rdf3xupdate/LocalMakefile
@@ -28,7 +27,6 @@ src_tools:=				\
 	$(src_tools_extractqueries)	\
 	$(src_tools_dumpredland)	\
 	$(src_tools_dumpyago)		\
-	$(src_tools_factstest)		\
 	$(src_tools_rdf3xdump)		\
 	$(src_tools_rdf3xload)		\
 	$(src_tools_rdf3xupdate)	\
