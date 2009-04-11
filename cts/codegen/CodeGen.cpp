@@ -114,7 +114,7 @@ static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<un
    bool constSubject,constPredicate,constObject;
    Register* subject,*predicate,*object;
    resolveScanVariable(runtime,context,projection,bindings,registers,0,node,subject,constSubject,(order!=Database::Order_Subject_Predicate_Object)&&(order!=Database::Order_Subject_Object_Predicate));
-   resolveScanVariable(runtime,context,projection,bindings,registers,1,node,predicate,constPredicate,(order!=Database::Order_Predicate_Subject_Object)&&(order==Database::Order_Predicate_Object_Subject));
+   resolveScanVariable(runtime,context,projection,bindings,registers,1,node,predicate,constPredicate,(order!=Database::Order_Predicate_Subject_Object)&&(order!=Database::Order_Predicate_Object_Subject));
    resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject,(order!=Database::Order_Object_Subject_Predicate)&&(order!=Database::Order_Object_Predicate_Subject));
 
    // And return the operator
