@@ -227,20 +227,21 @@ class StringReader : public DatabaseBuilder::StringsReader {
    StringReader(ifstream& in,TempFile& stringInfo) : in(in),stringInfo(stringInfo),id(0) {}
 
    /// Read the next string
-   bool next(unsigned& len,const char*& data);
+   bool next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType);
    /// Remember a string position and hash
    void rememberInfo(unsigned page,unsigned ofs,unsigned hash);
 };
 //---------------------------------------------------------------------------
-bool StringReader::next(unsigned& len,const char*& data)
+bool StringReader::next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType)
    // Read the next string
 {
-   unsigned nextId;
-   in >> nextId;
+   unsigned nextId,typeId;
+   in >> nextId >> typeId >> subType;
    in.get();
    getline(in,s);
    if (!in.good()) return false;
 
+   type=static_cast<Type::ID>(typeId);
    if (id!=nextId) {
       cerr << "error: got id " << nextId << ", expected " << id << endl << "strings must be sorted 0,1,2,..." << endl;
       throw;
