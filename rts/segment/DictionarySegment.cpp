@@ -261,7 +261,7 @@ bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,::Type::
          // Examine the sub-type if any
          unsigned ofs=pos+12;
          bool match=true;
-         if (::Type::hasSubType(type)) {
+         if (::Type::hasSubType(static_cast< ::Type::ID>(currentType))) {
             unsigned currentSubType=readUint32(page+ofs);
             if (subType!=currentSubType)
                match=false;
@@ -273,7 +273,7 @@ bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,::Type::
             return true;
          }
       }
-      pos+=12+len+(::Type::hasSubType(type)?4:0);
+      pos+=12+len+(::Type::hasSubType(static_cast< ::Type::ID>(currentType))?4:0);
    }
    return false;
 }
