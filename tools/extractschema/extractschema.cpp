@@ -163,8 +163,8 @@ int main(int argc,char* argv[])
             out << "  nodeliteral" << (*iter).v1 << "_" << (*iter).v2 << "[shape=none];" << endl;
       }
       for (set<Triple>::const_iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter) {
-         const char* labelStart=0,*labelStop=0;
-         db.getDictionary().lookupById((*iter).v2,labelStart,labelStop);
+         const char* labelStart=0,*labelStop=0; Type::ID type; unsigned subType;
+         db.getDictionary().lookupById((*iter).v2,labelStart,labelStop,type,subType);
          string label(labelStart,labelStop);
          if (!~(*iter).v3)
             out << "  node" << (*iter).v1 << " -> nodeliteral" << (*iter).v1 << "_" << (*iter).v2; else
