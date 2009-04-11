@@ -165,33 +165,11 @@ static void dumpPredicate(ostream& out,const string& str)
    writeURI(out,str);
 }
 //---------------------------------------------------------------------------
-static bool isBlankNode(const string& str)
-   // Looks like a blank node?
-{
-   return (str.size()>2)&&(str[0]=='_')&&(str[1]==':');
-}
-//---------------------------------------------------------------------------
-static bool isURI(const string& str)
-   // Looks like a URI?
-{
-   if (str.size()<5)
-      return false;
-   unsigned limit=str.size()-5;
-   if (limit>10) limit=10;
-   for (unsigned index=0;index<limit;index++) {
-      char c=str[index];
-      if (c==' ') break;
-      if (c==':')
-         return (str[index+1]=='/')&&(str[index+2]=='/');
-   }
-   return false;
-}
-//---------------------------------------------------------------------------
-static void dumpObject(ostream& out,const string& str)
+static void dumpObject(ostream& out,const string& str,Type::ID type,const string& /*subType*/)
    // Write an object entry
 {
    // Blank node or URI?
-   if (isBlankNode(str)||isURI(str)) {
+   if (type==Type::URI) {
       writeURI(out,str);
       return;
    }
@@ -204,15 +182,15 @@ bool RDF3XDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
 {
   {
       ofstream out("updatetest.1.tmp");
-      string subject,predicate,object;
+      string subject,predicate,object; Type::ID objectType; string objectSubType;
       for (unsigned index=0;index<initialSize;index++) {
-         if (!input.parse(subject,predicate,object))
+         if (!input.parse(subject,predicate,object,objectType,objectSubType))
             break;
          dumpSubject(out,subject);
          out << " ";
          dumpPredicate(out,predicate);
          out << " ";
-         dumpObject(out,object);
+         dumpObject(out,object,objectType,objectSubType);
          out << "." << endl;
       }
    }
@@ -235,15 +213,15 @@ void RDF3XDriver::prepareChunk(const string& name,TurtleParser& parser,unsigned 
    // Prepare a chunk of work
 {
    ofstream out(name.c_str());
-   string subject,predicate,object;
+   string subject,predicate,object; Type::ID objectType; string objectSubType;
    for (unsigned index2=0;index2<chunkSize;index2++) {
-      if (!parser.parse(subject,predicate,object))
+      if (!parser.parse(subject,predicate,object,objectType,objectSubType))
          break;
       dumpSubject(out,subject);
       out << " ";
       dumpPredicate(out,predicate);
       out << " ";
-      dumpObject(out,object);
+      dumpObject(out,object,objectType,objectSubType);
       out << "." << endl;
    }
 }
@@ -314,11 +292,11 @@ unsigned RDF3XDriver::processChunk(const string& chunkFile,unsigned delay)
    BulkOperation bulk(diff);
    ifstream in(chunkFile.c_str());
    TurtleParser parser(in);
-   string subject,predicate,object;
+   string subject,predicate,object; Type::ID objectType; string objectSubType;
    while (true) {
-      if (!parser.parse(subject,predicate,object))
+      if (!parser.parse(subject,predicate,object,objectType,objectSubType))
          break;
-      bulk.insert(subject,predicate,object);
+      bulk.insert(subject,predicate,object,objectType,objectSubType);
       processed++;
    }
    if (delay)
@@ -359,11 +337,11 @@ unsigned RDF3XDriver::processQueryAndChunk(const string& query,const string& chu
    BulkOperation bulk(diff);
    ifstream in(chunkFile.c_str());
    TurtleParser parser(in);
-   string subject,predicate,object;
+   string subject,predicate,object; Type::ID objectType; string objectSubType;
    while (true) {
-      if (!parser.parse(subject,predicate,object))
+      if (!parser.parse(subject,predicate,object,objectType,objectSubType))
          break;
-      bulk.insert(subject,predicate,object);
+      bulk.insert(subject,predicate,object,objectType,objectSubType);
       processed++;
    }
 
@@ -525,9 +503,9 @@ bool PostgresDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
       out << "create table updatetest.facts(subject int not null, predicate int not null, object int not null);" << endl;
       out << "copy updatetest.facts from stdin;" << endl;
 
-      string subject,predicate,object;
+      string subject,predicate,object; Type::ID objectType; string objectSubType;
       for (unsigned index=0;index<initialSize;index++) {
-         if (!input.parse(subject,predicate,object))
+         if (!input.parse(subject,predicate,object,objectType,objectSubType))
             break;
          unsigned subjectId,predicateId,objectId;
          if (dictionary.count(subject)) {
@@ -578,10 +556,10 @@ void PostgresDriver::prepareChunk(const string& name,TurtleParser& parser,unsign
    vector<unsigned> triples;
    vector<pair<unsigned,string> > added;
 
-   string subject,predicate,object;
+   string subject,predicate,object; Type::ID objectType; string objectSubType;
    unsigned size=0;
    for (unsigned index2=0;index2<chunkSize;index2++) {
-      if (!parser.parse(subject,predicate,object))
+      if (!parser.parse(subject,predicate,object,objectType,objectSubType))
          break;
 //      out << "select id from updatetest.strings where value=E'" << escapeCopy(subject) << "' \\g /dev/null" << endl;
 //      out << "select id from updatetest.strings where value=E'" << escapeCopy(predicate) << "' \\g /dev/null" << endl;
