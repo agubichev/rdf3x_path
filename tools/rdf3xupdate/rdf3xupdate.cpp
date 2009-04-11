@@ -26,11 +26,12 @@ static void importStream(DifferentialIndex& diff,istream& in)
 {
    BulkOperation bulk(diff);
    TurtleParser parser(in);
-   string subject,predicate,object;
+   string subject,predicate,object,objectSubType;
+   Type::ID objectType;
    while (true) {
-      if (!parser.parse(subject,predicate,object))
+      if (!parser.parse(subject,predicate,object,objectType,objectSubType))
          break;
-      bulk.insert(subject,predicate,object);
+      bulk.insert(subject,predicate,object,objectType,objectSubType);
    }
    bulk.commit();
 }

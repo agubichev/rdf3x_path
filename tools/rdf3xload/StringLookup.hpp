@@ -16,13 +16,21 @@
 /// Lookup cache for early string aggregation
 class StringLookup {
    private:
+   /// An entry
+   struct Entry {
+      /// The string
+      std::string value;
+      /// The id
+      uint64_t id;
+      /// Type info
+      unsigned type,subType;
+   };
+
    /// The hash table size
    static const unsigned lookupSize = 1009433;
 
-   /// Strings seen so far
-   std::string* strings;
-   /// Ids for the strings
-   uint64_t* ids;
+   /// The entries seen so far
+   Entry* entries;
    /// The next IDs
    uint64_t nextPredicate,nextNonPredicate;
 
@@ -35,7 +43,7 @@ class StringLookup {
    /// Lookup a predicate
    unsigned lookupPredicate(TempFile& stringsFile,const std::string& predicate);
    /// Lookup a value
-   unsigned lookupValue(TempFile& stringsFile,const std::string& value);
+   unsigned lookupValue(TempFile& stringsFile,const std::string& value,unsigned type,unsigned subType);
 };
 //---------------------------------------------------------------------------
 #endif

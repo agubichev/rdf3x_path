@@ -1,6 +1,7 @@
 #include "rts/runtime/BulkOperation.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "infra/util/Type.hpp"
 #include <algorithm>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -25,16 +26,45 @@ BulkOperation::~BulkOperation()
 {
 }
 //---------------------------------------------------------------------------
-unsigned BulkOperation::mapString(const std::string& value)
+unsigned BulkOperation::mapString(const DifferentialIndex::Literal& value)
    // Map a string
 {
    // Local?
    if (string2id.count(value))
       return string2id[value];
 
+   // Resolve the sub-type if any
+   unsigned subType=0;
+   if (Type::hasSubType(value.type)) {
+      if (value.type==Type::CustomType) {
+         Type::ID realType=value.type;
+         if (value.subType=="http://www.w3.org/2001/XMLSchema#string") {
+            realType=Type::String;
+         } else if (value.subType=="http://www.w3.org/2001/XMLSchema#integer") {
+            realType=Type::Integer;
+         } else if (value.subType=="http://www.w3.org/2001/XMLSchema#decimal") {
+            realType=Type::Decimal;
+         } else if (value.subType=="http://www.w3.org/2001/XMLSchema#double") {
+            realType=Type::Double;
+         } else if (value.subType=="http://www.w3.org/2001/XMLSchema#boolean") {
+            realType=Type::Boolean;
+         }
+         if (realType!=value.type) {
+            DifferentialIndex::Literal l;
+            l.value=value.value;
+            l.type=realType;
+            return mapString(l);
+         }
+      }
+      DifferentialIndex::Literal l;
+      l.value=value.subType;
+      l.type=Type::getSubTypeType(value.type);
+      subType=mapString(l);
+   };
+
    // Already in db?
    unsigned id;
-   if (differentialIndex.getDatabase().getDictionary().lookup(value,id))
+   if (differentialIndex.getDatabase().getDictionary().lookup(value.value,value.type,subType,id))
       return id;
 
    // Create a temporary id
@@ -45,13 +75,20 @@ unsigned BulkOperation::mapString(const std::string& value)
    return id;
 }
 //---------------------------------------------------------------------------
-void BulkOperation::insert(const string& subject,const string& predicate,const string& object)
+void BulkOperation::insert(const string& subject,const string& predicate,const string& object,Type::ID objectType,const std::string& objectSubType)
    // Add a triple
 {
    DifferentialIndex::Triple t;
-   t.subject=mapString(subject);
-   t.predicate=mapString(predicate);
-   t.object=mapString(object);
+   DifferentialIndex::Literal l;
+   l.value=subject;
+   l.type=Type::URI;
+   t.subject=mapString(l);
+   l.value=predicate;
+   t.predicate=mapString(l);
+   l.value=object;
+   l.type=objectType;
+   l.subType=objectSubType;
+   t.object=mapString(l);
    triples.push_back(t);
 }
 //---------------------------------------------------------------------------
@@ -265,7 +302,7 @@ void BulkOperation::commit()
 {
    // Resolve all temporary ids
    vector<unsigned> realIds;
-   differentialIndex.mapStrings(id2string,realIds);
+   differentialIndex.mapLiterals(id2string,realIds);
    unsigned tempStart=(~0u)-realIds.size();
    for (vector<DifferentialIndex::Triple>::iterator iter=triples.begin(),limit=triples.end();iter!=limit;++iter) {
       if ((*iter).subject>tempStart) (*iter).subject=realIds[(~0u)-(*iter).subject];

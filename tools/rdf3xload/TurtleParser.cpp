@@ -438,9 +438,10 @@ void TurtleParser::parseBlank(std::string& entry)
             token=lexer.next();
             if (token!=Lexer::RBracket) {
                lexer.ungetIgnored(token);
-               std::string predicate,object;
-               parsePredicateObjectList(entry,predicate,object);
-               triples.push_back(Triple(entry,predicate,object));
+               std::string predicate,object,objectSubType;
+               Type::ID objectType;
+               parsePredicateObjectList(entry,predicate,object,objectType,objectSubType);
+               triples.push_back(Triple(entry,predicate,object,objectType,objectSubType));
                if (lexer.next()!=Lexer::RBracket)
                   parseError("']' expected");
             }
@@ -449,11 +450,14 @@ void TurtleParser::parseBlank(std::string& entry)
       case Lexer::LParen:
          {
             // Collection
-            vector<string> entries;
+            vector<string> entries,entrySubTypes;
+            vector<Type::ID> entryTypes;
             while ((token=lexer.next())!=Lexer::RParen) {
                lexer.ungetIgnored(token);
                entries.push_back(string());
-               parseObject(entries.back());
+               entryTypes.push_back(Type::URI);
+               entrySubTypes.push_back(string());
+               parseObject(entries.back(),entryTypes.back(),entrySubTypes.back());
             }
 
             // Empty collection?
@@ -471,8 +475,8 @@ void TurtleParser::parseBlank(std::string& entry)
 
             // Derive triples
             for (unsigned index=0;index<entries.size();index++) {
-               triples.push_back(Triple(nodes[index],"http://www.w3.org/1999/02/22-rdf-syntax-ns#first",entries[index]));
-               triples.push_back(Triple(nodes[index],"http://www.w3.org/1999/02/22-rdf-syntax-ns#rest",nodes[index+1]));
+               triples.push_back(Triple(nodes[index],"http://www.w3.org/1999/02/22-rdf-syntax-ns#first",entries[index],entryTypes[index],entrySubTypes[index]));
+               triples.push_back(Triple(nodes[index],"http://www.w3.org/1999/02/22-rdf-syntax-ns#rest",nodes[index+1],Type::URI,""));
             }
             entry=nodes.front();
          }
@@ -514,19 +518,22 @@ void TurtleParser::parseSubject(Lexer::Token token,std::string& subject)
    }
 }
 //---------------------------------------------------------------------------
-void TurtleParser::parseObject(std::string& object)
+void TurtleParser::parseObject(std::string& object,Type::ID& objectType,std::string& objectSubType)
    // Parse an object
 {
    Lexer::Token token=lexer.next(object);
+   objectSubType="";
    switch (token) {
       case Lexer::URI:
          // URI
          constructAbsoluteURI(object);
+         objectType=Type::URI;
          return;
       case Lexer::Colon:
          // Qualified name with empty prefix?
          lexer.unget(token,object);
          parseQualifiedName("",object);
+         objectType=Type::URI;
          return;
       case Lexer::Name:
          // Qualified name
@@ -534,31 +541,53 @@ void TurtleParser::parseObject(std::string& object)
          if (object=="_") {
             lexer.unget(token,object);
             parseBlank(object);
+            objectType=Type::URI;
             return;
          }
          // No
          parseQualifiedName(object,object);
+         objectType=Type::URI;
          return;
       case Lexer::LBracket: case Lexer::LParen:
          // Opening bracket/parenthesis
          lexer.unget(token,object);
          parseBlank(object);
+         objectType=Type::URI;
          return;
-      case Lexer::Integer: case Lexer::Decimal: case Lexer::Double: case Lexer::A: case Lexer::True: case Lexer::False:
+      case Lexer::Integer:
          // Literal
+         objectType=Type::Integer;
+         return;
+      case Lexer::Decimal:
+         // Literal
+         objectType=Type::Decimal;
+         return;
+      case Lexer::Double:
+         // Literal
+         objectType=Type::Double;
+         return;
+      case Lexer::A:
+         // Literal
+         object="http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+         objectType=Type::URI;
+         return;
+      case Lexer::True:
+         // Literal
+         objectType=Type::Boolean;
+         return;
+      case Lexer::False:
+         // Literal
+         objectType=Type::Boolean;
          return;
       case Lexer::String:
          // String literal
          {
             token=lexer.next();
+            objectType=Type::Literal;
             if (token==Lexer::At) {
-               if (lexer.next()!=Lexer::Name)
+               if (lexer.next(objectSubType)!=Lexer::Name)
                   parseError("language tag expected");
-               static bool warned=false;
-               if (!warned) {
-                  cerr << "warning: language tags are currently ignored" << endl;
-                  warned=true; // XXX
-               }
+               objectType=Type::CustomLanguage;
             } else if (token==Lexer::Type) {
                string type;
                token=lexer.next(type);
@@ -569,10 +598,19 @@ void TurtleParser::parseObject(std::string& object)
                } else if (token==Lexer::Name) {
                   parseQualifiedName(type,type);
                }
-               static bool warned=false;
-               if (!warned) {
-                  cerr << "warning: literal types are currently ignored" << endl;
-                  warned=true; // XXX
+               if (type=="http://www.w3.org/2001/XMLSchema#string") {
+                  objectType=Type::String;
+               } else if (type=="http://www.w3.org/2001/XMLSchema#integer") {
+                  objectType=Type::Integer;
+               } else if (type=="http://www.w3.org/2001/XMLSchema#decimal") {
+                  objectType=Type::Decimal;
+               } else if (type=="http://www.w3.org/2001/XMLSchema#double") {
+                  objectType=Type::Double;
+               } else if (type=="http://www.w3.org/2001/XMLSchema#boolean") {
+                  objectType=Type::Boolean;
+               } else {
+                  objectType=Type::CustomType;
+                  objectSubType=type;
                }
             } else {
                lexer.ungetIgnored(token);
@@ -583,7 +621,7 @@ void TurtleParser::parseObject(std::string& object)
    }
 }
 //---------------------------------------------------------------------------
-void TurtleParser::parsePredicateObjectList(const string& subject,string& predicate,string& object)
+void TurtleParser::parsePredicateObjectList(const string& subject,string& predicate,string& object,Type::ID& objectType,string& objectSubType)
    // Parse a predicate object list
 {
    // Parse the first predicate
@@ -597,14 +635,15 @@ void TurtleParser::parsePredicateObjectList(const string& subject,string& predic
    }
 
    // Parse the object
-   parseObject(object);
+   parseObject(object,objectType,objectSubType);
 
    // Additional objects?
    token=lexer.next();
    while (token==Lexer::Comma) {
-      string additionalObject;
-      parseObject(additionalObject);
-      triples.push_back(Triple(subject,predicate,additionalObject));
+      string additionalObject,additionalObjectSubType;
+      Type::ID additionalObjectType;
+      parseObject(additionalObject,additionalObjectType,additionalObjectSubType);
+      triples.push_back(Triple(subject,predicate,additionalObject,additionalObjectType,additionalObjectSubType));
       token=lexer.next();
    }
 
@@ -621,31 +660,32 @@ void TurtleParser::parsePredicateObjectList(const string& subject,string& predic
       }
 
       // Parse the object
-      string additionalObject;
-      parseObject(additionalObject);
-      triples.push_back(Triple(subject,additionalPredicate,additionalObject));
+      string additionalObject,additionalObjectSubType;
+      Type::ID additionalObjectType;
+      parseObject(additionalObject,additionalObjectType,additionalObjectSubType);
+      triples.push_back(Triple(subject,additionalPredicate,additionalObject,additionalObjectType,additionalObjectSubType));
 
       // Additional objects?
       token=lexer.next();
       while (token==Lexer::Comma) {
-         parseObject(additionalObject);
-         triples.push_back(Triple(subject,additionalPredicate,additionalObject));
+         parseObject(additionalObject,additionalObjectType,additionalObjectSubType);
+         triples.push_back(Triple(subject,additionalPredicate,additionalObject,additionalObjectType,additionalObjectSubType));
          token=lexer.next();
       }
    }
    lexer.ungetIgnored(token);
 }
 //---------------------------------------------------------------------------
-void TurtleParser::parseTriple(Lexer::Token token,std::string& subject,std::string& predicate,std::string& object)
+void TurtleParser::parseTriple(Lexer::Token token,std::string& subject,std::string& predicate,std::string& object,Type::ID& objectType,std::string& objectSubType)
    // Parse a triple
 {
    parseSubject(token,subject);
-   parsePredicateObjectList(subject,predicate,object);
+   parsePredicateObjectList(subject,predicate,object,objectType,objectSubType);
    if (lexer.next()!=Lexer::Dot)
       parseError("'.' expected after triple");
 }
 //---------------------------------------------------------------------------
-bool TurtleParser::parse(std::string& subject,std::string& predicate,std::string& object)
+bool TurtleParser::parse(std::string& subject,std::string& predicate,std::string& object,Type::ID& objectType,std::string& objectSubType)
    // Read the next triple
 {
    // Some triples left?
@@ -653,6 +693,8 @@ bool TurtleParser::parse(std::string& subject,std::string& predicate,std::string
       subject=triples[triplesReader].subject;
       predicate=triples[triplesReader].predicate;
       object=triples[triplesReader].object;
+      objectType=triples[triplesReader].objectType;
+      objectSubType=triples[triplesReader].objectSubType;
       if ((++triplesReader)>=triples.size()) {
          triples.clear();
          triplesReader=0;
@@ -674,7 +716,7 @@ bool TurtleParser::parse(std::string& subject,std::string& predicate,std::string
    }
 
    // No, parse a triple
-   parseTriple(token,subject,predicate,object);
+   parseTriple(token,subject,predicate,object,objectType,objectSubType);
    return true;
 }
 //---------------------------------------------------------------------------

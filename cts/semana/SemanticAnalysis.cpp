@@ -5,6 +5,7 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <set>
+#include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -29,14 +30,51 @@ static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& i
          id=element.id;
          constant=false;
          return true;
-      case SPARQLParser::Element::String:
+      case SPARQLParser::Element::Literal:
+         if (element.subType==SPARQLParser::Element::None) {
+            if (db.getDictionary().lookup(element.value,Type::Literal,0,id)) {
+               constant=true;
+               return true;
+            } else return false;
+         } else if (element.subType==SPARQLParser::Element::CustomLanguage) {
+            unsigned languageId;
+            if (!db.getDictionary().lookup(element.subTypeValue,Type::Literal,0,languageId))
+               return false;
+            if (db.getDictionary().lookup(element.value,Type::CustomLanguage,languageId,id)) {
+               constant=true;
+               return true;
+            } else return false;
+         } else if (element.subType==SPARQLParser::Element::CustomType) {
+            Type::ID type; unsigned subType=0;
+            if (element.subTypeValue=="http://www.w3.org/2001/XMLSchema#string") {
+               type=Type::String;
+            } else if (element.subTypeValue=="http://www.w3.org/2001/XMLSchema#integer") {
+               type=Type::Integer;
+            } else if (element.subTypeValue=="http://www.w3.org/2001/XMLSchema#decimal") {
+               type=Type::Decimal;
+            } else if (element.subTypeValue=="http://www.w3.org/2001/XMLSchema#double") {
+               type=Type::Double;
+            } else if (element.subTypeValue=="http://www.w3.org/2001/XMLSchema#boolean") {
+               type=Type::Boolean;
+            } else {
+               if (!db.getDictionary().lookup(element.subTypeValue,Type::URI,0,subType))
+                  return false;
+               type=Type::CustomType;
+            }
+            if (db.getDictionary().lookup(element.value,type,subType,id)) {
+               constant=true;
+               return true;
+            } else return false;
+         } else {
+            return false;
+         }
       case SPARQLParser::Element::IRI:
-         if (db.getDictionary().lookup(element.value,id)) {
+         if (db.getDictionary().lookup(element.value,Type::URI,0,id)) {
             constant=true;
             return true;
          } else return false;
-      default: return false; // Error, this should not happen!
    }
+   return false;
 }
 //---------------------------------------------------------------------------
 static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
@@ -79,9 +117,11 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
    // Resolve all values
    std::set<unsigned> values;
    for (std::vector<SPARQLParser::Element>::const_iterator iter=input.values.begin(),limit=input.values.end();iter!=limit;++iter) {
-      unsigned id;
-      if (db.getDictionary().lookup((*iter).value,id))
+      unsigned id; bool constant;
+      if (encode(db,(*iter),id,constant)) {
+         assert(constant);
          values.insert(id);
+      }
    }
 
    // Construct the filter
@@ -93,9 +133,9 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
          filter.values.push_back(*iter);
       filter.exclude=(input.type==SPARQLParser::Filter::Exclude);
    } else if (values.size()==2) {
-      unsigned target,via;
-      db.getDictionary().lookup(input.values[0].value,target);
-      db.getDictionary().lookup(input.values[1].value,via);
+      unsigned target,via; bool constant;
+      encode(db,input.values[0],target,constant);
+      encode(db,input.values[1],via,constant);
 
       // Explore the path
       std::set<unsigned> explored;

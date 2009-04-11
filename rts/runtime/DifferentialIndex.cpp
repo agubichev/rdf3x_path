@@ -810,21 +810,44 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples)
    latches[5].unlock();
 }
 //---------------------------------------------------------------------------
-void DifferentialIndex::mapStrings(const std::vector<std::string>& strings,std::vector<unsigned>& ids)
-   // Map strings to ids
+void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids)
+   // Map literals to ids
 {
-   ids.resize(strings.size());
+   ids.resize(literals.size());
 
    latches[6].lockExclusive();
 
-   for (unsigned index=0,limit=strings.size();index<limit;index++)
-      if (string2id.count(strings[index])) {
-         ids[index]=string2id[strings[index]];
+   for (unsigned index=0,limit=literals.size();index<limit;index++) {
+      // Check the sub-type first
+      unsigned subType=0;
+      if (Type::hasSubType(literals[index].type)) {
+         DictionarySegment::Literal l;
+         l.str=literals[index].subType;
+         l.type=Type::getSubTypeType(literals[index].type);
+         l.subType=0;
+         if (string2id.count(l)) {
+            // already known, do nothing
+            subType=string2id[l];
+         } else {
+            // Allocate a new id for the sub-type
+            unsigned id=db.getDictionary().getNextId()+string2id.size();
+            string2id[l]=subType=id;
+            id2string.push_back(l);
+         }
+      }
+      // Now check the literal
+      DictionarySegment::Literal l;
+      l.str=literals[index].value;
+      l.type=literals[index].type;
+      l.subType=subType;
+      if (string2id.count(l)) {
+         ids[index]=string2id[l];
       } else {
          unsigned id=db.getDictionary().getNextId()+string2id.size();
-         string2id[strings[index]]=ids[index]=id;
-         id2string.push_back(strings[index]);
+         string2id[l]=ids[index]=id;
+         id2string.push_back(l);
       }
+   }
 
    latches[6].unlock();
 }
@@ -973,7 +996,7 @@ void DifferentialIndex::sync()
 
    // Load the new strings
    if (!id2string.empty())
-      db.getDictionary().appendStrings(id2string);
+      db.getDictionary().appendLiterals(id2string);
    id2string.clear();
    string2id.clear();
 

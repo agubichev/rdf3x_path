@@ -25,12 +25,12 @@ class BulkOperation
    /// The triples
    std::vector<DifferentialIndex::Triple> triples;
    /// The temporary dictionary
-   std::map<std::string,unsigned> string2id;
+   std::map<DifferentialIndex::Literal,unsigned> string2id;
    /// The temporary dictionary
-   std::vector<std::string> id2string;
+   std::vector<DifferentialIndex::Literal> id2string;
 
    /// Map a string
-   unsigned mapString(const std::string& value);
+   unsigned mapString(const DifferentialIndex::Literal& value);
 
    public:
    /// Constructor
@@ -39,7 +39,7 @@ class BulkOperation
    ~BulkOperation();
 
    /// Add a triple
-   void insert(const std::string& subject,const std::string& predicate,const std::string& object);
+   void insert(const std::string& subject,const std::string& predicate,const std::string& object,Type::ID objectType,const std::string& objectSubType);
    /// Build a lock cover
    void buildCover(unsigned maxSize,std::vector<PredicateLockManager::Box>& boxes);
 

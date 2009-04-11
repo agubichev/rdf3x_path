@@ -37,6 +37,18 @@ TempFile::~TempFile()
    discard();
 }
 //---------------------------------------------------------------------------
+void TempFile::swap(TempFile& other)
+   // Swap two file references
+{
+   // We only support filed files
+   assert(!out.is_open());
+   assert(!other.out.is_open());
+
+   // Swap the names
+   baseName.swap(other.baseName);
+   fileName.swap(other.fileName);
+}
+//---------------------------------------------------------------------------
 void TempFile::flush()
    // Flush the file
 {

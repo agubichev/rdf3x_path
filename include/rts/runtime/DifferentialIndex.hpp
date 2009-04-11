@@ -3,10 +3,9 @@
 //---------------------------------------------------------------------------
 #include "infra/osdep/Latch.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/segment/DictionarySegment.hpp"
 #include <map>
 #include <set>
-#include <string>
-#include <vector>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -45,6 +44,20 @@ class DifferentialIndex
       /// Compare
       bool operator<(const VersionedTriple& v) const { return (value1<v.value1)||((value1==v.value1)&&((value2<v.value2)||((value2==v.value2)&&((value3<v.value3)||((value3==v.value3)&&(created<v.created)))))); }
    };
+   /// A new literal
+   struct Literal {
+      /// The value
+      std::string value;
+      /// The type
+      Type::ID type;
+      /// The sub-type (if any)
+      std::string subType;
+
+      /// Comparison
+      bool operator==(const Literal& l) const { return (type==l.type)&&(value==l.value)&&(subType==l.subType); }
+      /// Comparison
+      bool operator<(const Literal& l) const { return (type<l.type)||((type==l.type)&&((value<l.value)||((value==l.value)&&(subType<l.subType)))); }
+   };
 
    private:
    /// The underlying database
@@ -52,9 +65,9 @@ class DifferentialIndex
    /// Triples
    std::set<VersionedTriple> triples[6];
    /// Dictionary
-   std::map<std::string,unsigned> string2id;
+   std::map<DictionarySegment::Literal,unsigned> string2id;
    /// Dictionary
-   std::vector<std::string> id2string;
+   std::vector<DictionarySegment::Literal> id2string;
    /// The latches
    Latch latches[7];
 
@@ -69,8 +82,8 @@ class DifferentialIndex
 
    /// Load new triples
    void load(const std::vector<Triple>& triples);
-   /// Map strings to ids
-   void mapStrings(const std::vector<std::string>& strings,std::vector<unsigned>& ids);
+   /// Map literals to ids
+   void mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids);
 
    /// Synchronize with the underlying database
    void sync();

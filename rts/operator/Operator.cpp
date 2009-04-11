@@ -34,8 +34,8 @@ void Operator::printRegister(DictionarySegment& dict,const Register* reg)
 {
    // A constant?
    if (~(reg->value)) {
-      const char* start,*stop;
-      if (dict.lookupById(reg->value,start,stop)) {
+      const char* start,*stop; Type::ID type; unsigned subType;
+      if (dict.lookupById(reg->value,start,stop,type,subType)) {
          std::cout << '\"';
          for (const char* iter=start;iter!=stop;++iter)
            std::cout << *iter;

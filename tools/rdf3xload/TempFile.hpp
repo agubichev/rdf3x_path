@@ -41,11 +41,17 @@ class TempFile
    /// Construct a new suffix
    static std::string newSuffix();
 
+   TempFile(const TempFile&);
+   void operator=(const TempFile&);
+
    public:
    /// Constructor
    TempFile(const std::string& baseName);
    /// Destructor
    ~TempFile();
+
+   /// Swap two file references
+   void swap(TempFile& other);
 
    /// Get the base file name
    const std::string& getBaseFile() const { return baseName; }

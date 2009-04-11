@@ -19,25 +19,29 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
+#define ensure(x) if (!(x)) assert(false)
+//---------------------------------------------------------------------------
 bool smallAddressSpace()
    // Is the address space too small?
 {
    return sizeof(void*)<8;
 }
 //---------------------------------------------------------------------------
-static bool parse(istream& in,const char* name,StringLookup& lookup,TempFile& facts,TempFile& strings)
+static bool parse(istream& in,const char* name,StringLookup& lookup,TempFile& facts,TempFile& strings,map<unsigned,unsigned>& subTypes)
    // Parse the input and store it into temporary files
 {
    cerr << "Parsing " << name << "..." << endl;
 
    TurtleParser parser(in);
+   map<string,unsigned> languages,types;
 
    // Read the triples
    try {
-      string subject,predicate,object;
+      string subject,predicate,object,objectSubType;
+      Type::ID objectType;
       while (true) {
          try {
-            if (!parser.parse(subject,predicate,object))
+            if (!parser.parse(subject,predicate,object,objectType,objectSubType))
 	       break;
          } catch (const TurtleParser::Exception& e) {
             // recover...
@@ -45,9 +49,25 @@ static bool parse(istream& in,const char* name,StringLookup& lookup,TempFile& fa
             continue;
          }
          // Construct IDs
-         unsigned subjectId=lookup.lookupValue(strings,subject);
+         unsigned subjectId=lookup.lookupValue(strings,subject,Type::URI,0);
          unsigned predicateId=lookup.lookupPredicate(strings,predicate);
-         unsigned objectId=lookup.lookupValue(strings,object);
+         unsigned subType=0;
+         if (objectType==Type::CustomLanguage) {
+            if (languages.count(objectSubType)) {
+               subType=languages[objectSubType];
+            } else {
+               subType=languages[objectSubType]=lookup.lookupValue(strings,objectSubType,Type::Literal,0);
+               subTypes[subType]=subType;
+            }
+         } else if (objectType==Type::CustomType) {
+            if (types.count(objectSubType)) {
+               subType=types[objectSubType];
+            } else {
+               subType=types[objectSubType]=lookup.lookupValue(strings,objectSubType,Type::URI,0);
+               subTypes[subType]=subType;
+            }
+         }
+         unsigned objectId=lookup.lookupValue(strings,object,objectType,subType);
 
          // And write the triple
          facts.writeId(subjectId);
@@ -61,16 +81,16 @@ static bool parse(istream& in,const char* name,StringLookup& lookup,TempFile& fa
    return true;
 }
 //---------------------------------------------------------------------------
-static const char* skipStringId(const char* reader)
+static const char* skipStringIdId(const char* reader)
    // Skip a materialized string/id pair
 {
-   return TempFile::skipId(TempFile::skipString(reader));
+   return TempFile::skipId(TempFile::skipId(TempFile::skipString(reader)));
 }
 //---------------------------------------------------------------------------
-static const char* skipIdString(const char* reader)
-   // Skip a materialized id/string pair
+static const char* skipIdStringId(const char* reader)
+   // Skip a materialized id/string/id triple
 {
-   return TempFile::skipString(TempFile::skipId(reader));
+   return TempFile::skipId(TempFile::skipString(TempFile::skipId(reader)));
 }
 //---------------------------------------------------------------------------
 static const char* skipIdId(const char* reader)
@@ -100,8 +120,8 @@ static int cmpIds(uint64_t leftId,uint64_t rightId)
    return 0;
 }
 //---------------------------------------------------------------------------
-static int compareStringId(const char* left,const char* right)
-   // Sort by string and within same strings by id
+static int compareStringIdId(const char* left,const char* right)
+   // Sort by string, type, and within same strings/types by id
 {
    // Read the string length
    uint64_t leftLen,rightLen;
@@ -115,6 +135,13 @@ static int compareStringId(const char* left,const char* right)
    if (leftLen>rightLen) return 1;
    left+=leftLen;
    right+=rightLen;
+
+   // Compare the types
+   uint64_t leftType,rightType;
+   left=TempFile::readId(left,leftType);
+   right=TempFile::readId(right,rightType);
+   if (leftType<rightType) return -1;
+   if (leftType>rightType) return 1;
 
    // Compare the ids
    uint64_t leftId,rightId;
@@ -145,36 +172,38 @@ static int compareValue(const char* left,const char* right)
    return 0;
 }
 //---------------------------------------------------------------------------
-static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile& stringIds)
+static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile& stringIds,map<unsigned,unsigned>& subTypes)
    // Build the dictionary
 {
    cerr << "Building the dictionary..." << endl;
 
    // Sort the strings to resolve duplicates
    TempFile sortedStrings(rawStrings.getBaseFile());
-   Sorter::sort(rawStrings,sortedStrings,skipStringId,compareStringId);
+   Sorter::sort(rawStrings,sortedStrings,skipStringIdId,compareStringIdId);
    rawStrings.discard();
 
    // Build the id map and the string list
    TempFile rawIdMap(rawStrings.getBaseFile()),stringList(rawStrings.getBaseFile());
    {
       MemoryMappedFile strings;
-      assert(strings.open(sortedStrings.getFile().c_str()));
-      uint64_t lastId=0; unsigned lastLen=0; const char* lastStr=0;
+      ensure(strings.open(sortedStrings.getFile().c_str()));
+      uint64_t lastId=0; unsigned lastLen=0; const char* lastStr=0; uint64_t lastType=0;
       for (const char* iter=strings.getBegin(),*limit=strings.getEnd();iter!=limit;) {
          // Read the entry
          unsigned stringLen; const char* stringStart;
          iter=TempFile::readString(iter,stringLen,stringStart);
-         uint64_t id;
+         uint64_t id,type;
+         iter=TempFile::readId(iter,type);
          iter=TempFile::readId(iter,id);
 
          // A new one?
-         if ((!lastStr)||(stringLen!=lastLen)||(memcmp(lastStr,stringStart,stringLen)!=0)) {
+         if ((!lastStr)||(stringLen!=lastLen)||(memcmp(lastStr,stringStart,stringLen)!=0)||(type!=lastType)) {
             stringList.writeId(id);
             stringList.writeString(stringLen,stringStart);
+            stringList.writeId(type);
             rawIdMap.writeId(id);
             rawIdMap.writeId(id);
-            lastId=id; lastLen=stringLen; lastStr=stringStart;
+            lastId=id; lastLen=stringLen; lastStr=stringStart; lastType=type;
          } else {
             rawIdMap.writeId(lastId);
             rawIdMap.writeId(id);
@@ -184,7 +213,7 @@ static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile&
    sortedStrings.discard();
 
    // Sort the string list
-   Sorter::sort(stringList,stringTable,skipIdString,compareId);
+   Sorter::sort(stringList,stringTable,skipIdStringId,compareId);
    stringList.discard();
 
    // Sort the ID map
@@ -196,7 +225,7 @@ static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile&
    TempFile newIds(rawStrings.getBaseFile());
    {
       MemoryMappedFile in;
-      assert(in.open(idMap.getFile().c_str()));
+      ensure(in.open(idMap.getFile().c_str()));
       uint64_t lastId=0,newId=0;
       for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;) {
          uint64_t firstId,currentId;
@@ -208,12 +237,39 @@ static void buildDictionary(TempFile& rawStrings,TempFile& stringTable,TempFile&
          }
          newIds.writeId(currentId);
          newIds.writeId(newId);
+         if (subTypes.count(currentId))
+            subTypes[currentId]=newId;
       }
    }
 
    // And a final sort
    Sorter::sort(newIds,stringIds,skipIdId,compareValue);
    newIds.discard();
+
+   // Resolve the subtypes if necessary
+   if (!subTypes.empty()) {
+      TempFile fixedTypes(rawStrings.getBaseFile());
+      MemoryMappedFile in;
+      ensure(in.open(stringTable.getFile().c_str()));
+      for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;) {
+         uint64_t id,typeInfo;
+         const char* value; unsigned valueLen;
+         iter=TempFile::readId(TempFile::readString(TempFile::readId(iter,id),valueLen,value),typeInfo);
+         unsigned type=typeInfo&0xFF,subType=(typeInfo>>8);
+         if (Type::hasSubType(static_cast<Type::ID>(type))) {
+            assert(subTypes.count(subType));
+            typeInfo=type|(subTypes[subType]<<8);
+         } else {
+            assert(subType==0);
+         }
+         fixedTypes.writeId(id);
+         fixedTypes.writeString(valueLen,value);
+         fixedTypes.writeId(typeInfo);
+      }
+
+      fixedTypes.close();
+      fixedTypes.swap(stringTable);
+   }
 }
 //---------------------------------------------------------------------------
 static inline int cmpValue(uint64_t l,uint64_t r) { return (l<r)?-1:((l>r)?1:0); }
@@ -300,7 +356,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    cout << "Resolving string ids..." << endl;
 
    MemoryMappedFile map;
-   assert(map.open(stringIds.getFile().c_str()));
+   ensure(map.open(stringIds.getFile().c_str()));
 
    // Sort by subject
    TempFile sortedBySubject(rawFacts.getBaseFile());
@@ -311,7 +367,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    TempFile subjectResolved(rawFacts.getBaseFile());
    {
       MemoryMappedFile in;
-      assert(in.open(sortedBySubject.getFile().c_str()));
+      ensure(in.open(sortedBySubject.getFile().c_str()));
       uint64_t from=0,to=0;
       const char* reader=map.getBegin();
       for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;) {
@@ -337,7 +393,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    TempFile predicateResolved(rawFacts.getBaseFile());
    {
       MemoryMappedFile in;
-      assert(in.open(sortedByPredicate.getFile().c_str()));
+      ensure(in.open(sortedByPredicate.getFile().c_str()));
       uint64_t from=0,to=0;
       const char* reader=map.getBegin();
       for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;) {
@@ -363,7 +419,7 @@ static void resolveIds(TempFile& rawFacts,TempFile& stringIds,TempFile& facts)
    TempFile objectResolved(rawFacts.getBaseFile());
    {
       MemoryMappedFile in;
-      assert(in.open(sortedByObject.getFile().c_str()));
+      ensure(in.open(sortedByObject.getFile().c_str()));
       uint64_t from=0,to=0;
       const char* reader=map.getBegin();
       for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;) {
@@ -397,7 +453,7 @@ class FactsLoader : public DatabaseBuilder::FactsReader {
 
    public:
    /// Constructor
-   FactsLoader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   FactsLoader(TempFile& file) { file.close(); ensure(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Reset
    void reset() { iter=in.getBegin(); }
@@ -470,7 +526,7 @@ class StringReader : public DatabaseBuilder::StringsReader {
 
    public:
    /// Constructor
-   StringReader(TempFile& file) : out(file.getBaseFile()) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   StringReader(TempFile& file) : out(file.getBaseFile()) { file.close(); ensure(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Close the input
    void closeIn() { in.close(); }
@@ -478,17 +534,21 @@ class StringReader : public DatabaseBuilder::StringsReader {
    TempFile& getOut() { out.close(); return out; }
 
    /// Read the next entry
-   bool next(unsigned& len,const char*& data);
+   bool next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType);
    /// Remember string info
    void rememberInfo(unsigned page,unsigned ofs,unsigned hash);
 };
 //---------------------------------------------------------------------------
-bool StringReader::next(unsigned& len,const char*& data)
+bool StringReader::next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType)
    // Read the next entry
 {
    if (iter==limit)
       return false;
    iter=TempFile::readString(TempFile::skipId(iter),len,data);
+   uint64_t typeInfo;
+   iter=TempFile::readId(iter,typeInfo);
+   type=static_cast<Type::ID>(typeInfo&0xFF);
+   subType=static_cast<unsigned>(typeInfo>>8);
    return true;
 }
 //---------------------------------------------------------------------------
@@ -511,7 +571,7 @@ class StringMappingReader : public DatabaseBuilder::StringInfoReader
 
    public:
    /// Constructor
-   StringMappingReader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   StringMappingReader(TempFile& file) { file.close(); ensure(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Read the next entry
    bool next(unsigned& v1,unsigned& v2);
@@ -539,7 +599,7 @@ class StringHashesReader : public DatabaseBuilder::StringInfoReader
 
    public:
    /// Constructor
-   StringHashesReader(TempFile& file) { file.close(); assert(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
+   StringHashesReader(TempFile& file) { file.close(); ensure(in.open(file.getFile().c_str())); iter=in.getBegin(); limit=in.getEnd(); }
 
    /// Read the next entry
    bool next(unsigned& v1,unsigned& v2);
@@ -628,6 +688,7 @@ int main(int argc,char* argv[])
 
    // Parse the input
    TempFile rawFacts(argv[1]),rawStrings(argv[1]);
+   map<unsigned,unsigned> subTypes;
    if (argc>=3) {
       StringLookup lookup;
       for (int index=2;index<argc;index++) {
@@ -636,18 +697,18 @@ int main(int argc,char* argv[])
             cerr << "Unable to open " << argv[2] << endl;
             return 1;
          }
-         if (!parse(in,argv[index],lookup,rawFacts,rawStrings))
+         if (!parse(in,argv[index],lookup,rawFacts,rawStrings,subTypes))
             return 1;
       }
    } else {
       StringLookup lookup;
-      if (!parse(cin,"stdin",lookup,rawFacts,rawStrings))
+      if (!parse(cin,"stdin",lookup,rawFacts,rawStrings,subTypes))
          return 1;
    }
 
    // Build the string dictionary
    TempFile stringTable(argv[1]),stringIds(argv[1]);
-   buildDictionary(rawStrings,stringTable,stringIds);
+   buildDictionary(rawStrings,stringTable,stringIds,subTypes);
 
    // Resolve the ids
    TempFile facts(argv[1]);

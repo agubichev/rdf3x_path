@@ -265,8 +265,26 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
       result.type=Element::Variable;
       result.id=nameVariable(lexer.getTokenValue());
    } else if (token==SPARQLLexer::String) {
-      result.type=Element::String;
+      result.type=Element::Literal;
+      result.subType=Element::None;
       result.value=lexer.getTokenValue();
+      token=lexer.getNext();
+      if (token==SPARQLLexer::At) {
+         if (lexer.getNext()!=SPARQLLexer::Identifier)
+            throw ParserException("language tag expected after '@'");
+         result.subType=Element::CustomLanguage;
+         result.subTypeValue=lexer.getTokenValue();
+      } else if (token==SPARQLLexer::Type) {
+         token=lexer.getNext();
+         if (token==SPARQLLexer::IRI) {
+            result.subType=Element::CustomType;
+            result.subTypeValue=lexer.getTokenValue();
+         } else {
+            throw ParserException("type URI expeted after '^^'");
+         }
+      } else {
+         lexer.unget(token);
+      }
    } else if (token==SPARQLLexer::IRI) {
       result.type=Element::IRI;
       result.value=lexer.getTokenValue();

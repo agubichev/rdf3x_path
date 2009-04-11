@@ -347,15 +347,15 @@ class DictionaryStringReader : public DictionarySegment::StringSource
    DictionaryStringReader(DatabaseBuilder::StringsReader& reader) : reader(reader) {}
 
    /// Get a new string
-   bool next(unsigned& len,const char*& data);
+   bool next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType);
    /// Remember a string position and hash
    void rememberInfo(unsigned page,unsigned ofs,unsigned hash);
 };
 //---------------------------------------------------------------------------
-bool DictionaryStringReader::next(unsigned& len,const char*& data)
+bool DictionaryStringReader::next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType)
    // Get a new string
 {
-   return reader.next(len,data);
+   return reader.next(len,data,type,subType);
 }
 //---------------------------------------------------------------------------
 void DictionaryStringReader::rememberInfo(unsigned page,unsigned ofs,unsigned hash)

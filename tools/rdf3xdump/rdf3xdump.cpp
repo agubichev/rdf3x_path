@@ -54,60 +54,67 @@ static void writeLiteral(const char* start,const char* stop)
 static void dumpSubject(DictionarySegment& dic,unsigned id)
    // Write a subject entry
 {
-   const char* start,*stop;
-   if (!dic.lookupById(id,start,stop)) {
+   const char* start,*stop; Type::ID type; unsigned subType;
+   if (!dic.lookupById(id,start,stop,type,subType)) {
       cerr << "consistency error: encountered unknown id " << id << endl;
       throw;
    }
+   if (type!=Type::URI)
+      cerr << "consistency error: subjects must be URIs" << endl;
    writeURI(start,stop);
 }
 //---------------------------------------------------------------------------
 static void dumpPredicate(DictionarySegment& dic,unsigned id)
    // Write a predicate entry
 {
-   const char* start,*stop;
-   if (!dic.lookupById(id,start,stop)) {
+   const char* start,*stop; Type::ID type; unsigned subType;
+   if (!dic.lookupById(id,start,stop,type,subType)) {
       cerr << "consistency error: encountered unknown id " << id << endl;
       throw;
    }
+   if (type!=Type::URI)
+      cerr << "consistency error: subjects must be URIs" << endl;
    writeURI(start,stop);
-}
-//---------------------------------------------------------------------------
-static bool isBlankNode(const char* start,const char* stop)
-   // Looks like a blank node? XXX store in dictionary
-{
-   return (start+2>stop)&&(start[0]=='_')&&(start[1]==':');
-}
-//---------------------------------------------------------------------------
-static bool isURI(const char* start,const char* stop)
-   // Looks like a URI? XXX store in dictionary
-{
-   const char* limit=stop-5;
-   if (limit>start+10) limit=start+10;
-   for (;start<limit;++start) {
-      char c=*start;
-      if (c==' ') break;
-      if (c==':')
-         return (start[1]=='/')&&(start[2]=='/');
-   }
-   return false;
 }
 //---------------------------------------------------------------------------
 static void dumpObject(DictionarySegment& dic,unsigned id)
    // Write an object entry
 {
-   const char* start,*stop;
-   if (!dic.lookupById(id,start,stop)) {
+   const char* start,*stop; Type::ID type; unsigned subType;
+   if (!dic.lookupById(id,start,stop,type,subType)) {
       cerr << "consistency error: encountered unknown id " << id << endl;
       throw;
    }
-   // Blank node or URI?
-   if (isBlankNode(start,stop)||isURI(start,stop)) {
-      writeURI(start,stop);
-      return;
+   switch (type) {
+      case Type::URI: writeURI(start,stop); break;
+      case Type::Literal: writeLiteral(start,stop); break;
+      case Type::CustomLanguage: {
+         const char* start2,*stop2; Type::ID type2; unsigned subType2;
+         if (!dic.lookupById(subType,start2,stop2,type2,subType2)) {
+            cerr << "consistency error: encountered unknown language " << subType << endl;
+            throw;
+         }
+         writeLiteral(start,stop);
+         cout << "@";
+         for (const char* iter=start2;iter!=stop2;++iter)
+            cout << (*iter);
+         } break;
+      case Type::CustomType: {
+         const char* start2,*stop2; Type::ID type2; unsigned subType2;
+         if (!dic.lookupById(subType,start2,stop2,type2,subType2)) {
+            cerr << "consistency error: encountered unknown type " << subType << endl;
+            throw;
+         }
+         writeLiteral(start,stop);
+         cout << "^^";
+         writeURI(start2,stop2);
+         } break;
+      case Type::String: writeLiteral(start,stop); cout << "^^<http://www.w3.org/2001/XMLSchema#string>"; break;
+      case Type::Integer: writeLiteral(start,stop); cout << "^^<http://www.w3.org/2001/XMLSchema#integer>"; break;
+      case Type::Decimal: writeLiteral(start,stop); cout << "^^<http://www.w3.org/2001/XMLSchema#decimal>"; break;
+      case Type::Double: writeLiteral(start,stop); cout << "^^<http://www.w3.org/2001/XMLSchema#double>"; break;
+      case Type::Boolean: writeLiteral(start,stop); cout << "^^<http://www.w3.org/2001/XMLSchema#boolean>"; break;
    }
-   // No, a literal value
-   writeLiteral(start,stop);
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
@@ -153,10 +160,10 @@ int main(int argc,char* argv[])
       }
       // Dump the strings
       {
-         const char* start,*stop;
+         const char* start,*stop; Type::ID type; unsigned subType;
          DictionarySegment& dic=db.getDictionary();
-         for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop);++id) {
-            cerr << id << " ";
+         for (unsigned id=0;(id<=maxId)&&dic.lookupById(id,start,stop,type,subType);++id) {
+            cerr << id << " " << type << " " << subType << " ";
 	    for (const char* iter=start;iter!=stop;++iter) {
 	       char c=*iter;
 	       if (c<=0) {

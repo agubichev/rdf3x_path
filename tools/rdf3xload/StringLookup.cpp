@@ -1,6 +1,7 @@
 #include "StringLookup.hpp"
 #include "TempFile.hpp"
 #include "infra/util/Hash.hpp"
+#include "infra/util/Type.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -15,53 +16,61 @@
 using namespace std;
 //---------------------------------------------------------------------------
 StringLookup::StringLookup()
-   : strings(new string[lookupSize]),ids(new uint64_t[lookupSize]),nextPredicate(0),nextNonPredicate(0)
+   : entries(new Entry[lookupSize]),nextPredicate(0),nextNonPredicate(0)
    // Constructor
 {
    for (unsigned index=0;index<lookupSize;index++)
-      ids[index]=~static_cast<uint64_t>(0);
+      entries[index].id=~static_cast<uint64_t>(0);
 }
 //---------------------------------------------------------------------------
 StringLookup::~StringLookup()
    // Destructor
 {
-   delete[] ids;
-   delete[] strings;
+   delete[] entries;
 }
 //---------------------------------------------------------------------------
 unsigned StringLookup::lookupPredicate(TempFile& stringFile,const string& predicate)
    // Lookup a predicate
 {
+   unsigned type=Type::URI;
+   unsigned subType=0;
+
    // Already known?
-   unsigned slot=Hash::hash(predicate)%lookupSize;
-   if ((strings[slot]==predicate)&&(!(ids[slot]&1)))
-      return ids[slot];
+   unsigned slot=Hash::hash(predicate,(type<<24)^subType)%lookupSize;
+   if ((entries[slot].value==predicate)&&(!(entries[slot].id&1)))
+      return entries[slot].id;
 
    // No, construct a new id
-   strings[slot]=predicate;
-   uint64_t id=ids[slot]=((nextPredicate++)<<1);
+   entries[slot].value=predicate;
+   uint64_t id=entries[slot].id=((nextPredicate++)<<1);
+   entries[slot].type=type;
+   entries[slot].subType=subType;
 
    // And write to file
    stringFile.writeString(predicate.size(),predicate.c_str());
+   stringFile.writeId((static_cast<uint64_t>(subType)<<8)|type);
    stringFile.writeId(id);
 
    return id;
 }
 //---------------------------------------------------------------------------
-unsigned StringLookup::lookupValue(TempFile& stringFile,const string& value)
+unsigned StringLookup::lookupValue(TempFile& stringFile,const string& value,unsigned type,unsigned subType)
    // Lookup a value
 {
    // Already known?
-   unsigned slot=Hash::hash(value)%lookupSize;
-   if ((strings[slot]==value)&&(~ids[slot]))
-      return ids[slot];
+   unsigned slot=Hash::hash(value,(type<<24)^subType)%lookupSize;
+   if ((entries[slot].value==value)&&(entries[slot].type==type)&&(entries[slot].subType==subType)&&(~entries[slot].id))
+      return entries[slot].id;
 
    // No, construct a new id
-   strings[slot]=value;
-   uint64_t id=ids[slot]=((nextNonPredicate++)<<1)|1;
+   entries[slot].value=value;
+   uint64_t id=entries[slot].id=((nextNonPredicate++)<<1)|1;
+   entries[slot].type=type;
+   entries[slot].subType=subType;
 
    // And write to file
    stringFile.writeString(value.size(),value.c_str());
+   stringFile.writeId((static_cast<uint64_t>(subType)<<8)|type);
    stringFile.writeId(id);
 
    return id;

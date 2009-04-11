@@ -12,6 +12,7 @@
 //---------------------------------------------------------------------------
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferReference.hpp"
+#include "infra/util/Type.hpp"
 //---------------------------------------------------------------------------
 class Segment;
 //---------------------------------------------------------------------------
@@ -62,7 +63,7 @@ class DatabaseBuilder
       virtual ~StringsReader();
 
       /// Load a new string
-      virtual bool next(unsigned& len,const char*& data) = 0;
+      virtual bool next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType) = 0;
       /// Remember a string position and hash
       virtual void rememberInfo(unsigned page,unsigned ofs,unsigned hash) = 0;
    };

@@ -242,7 +242,10 @@ void DictionarySegment::refreshMapping()
    }
 }
 //---------------------------------------------------------------------------
-bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,unsigned hash,unsigned& id)
+static inline unsigned getLiteralLen(unsigned header) { return header&0x00FFFFFF; }
+static inline unsigned getLiteralType(unsigned header) { return header>>24; }
+//---------------------------------------------------------------------------
+bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,::Type::ID type,unsigned subType,unsigned hash,unsigned& id)
    // Lookup an id for a given string on a certain page in the raw string table
 {
    BufferReference ref(readShared(pageNo));
@@ -252,24 +255,34 @@ bool DictionarySegment::lookupOnPage(unsigned pageNo,const string& text,unsigned
    for (unsigned index=0;index<count;index++) {
       if (pos+12>BufferReference::pageSize)
          break;
-      unsigned len=readUint32(page+pos+8);
-      if ((readUint32(page+pos+4)==hash)&&(len==text.length())) {
+      unsigned header=readUint32(page+pos+8);
+      unsigned len=getLiteralLen(header),currentType=getLiteralType(header);
+      if ((currentType==static_cast<unsigned>(type))&&(readUint32(page+pos+4)==hash)&&(len==text.length())) {
+         // Examine the sub-type if any
+         unsigned ofs=pos+12;
+         bool match=true;
+         if (::Type::hasSubType(type)) {
+            unsigned currentSubType=readUint32(page+ofs);
+            if (subType!=currentSubType)
+               match=false;
+            ofs+=4;
+         }
          // Check if the string is really identical
-         if (memcmp(page+pos+12,text.c_str(),len)==0) {
+         if (match&&(memcmp(page+ofs,text.c_str(),len)==0)) {
             id=readUint32(page+pos);
             return true;
          }
       }
-      pos+=12+len;
+      pos+=12+len+(::Type::hasSubType(type)?4:0);
    }
    return false;
 }
 //---------------------------------------------------------------------------
-bool DictionarySegment::lookup(const string& text,unsigned& id)
+bool DictionarySegment::lookup(const string& text,::Type::ID type,unsigned subType,unsigned& id)
    // Lookup an id for a given string
 {
    // Determine the hash value
-   unsigned hash=Hash::hash(text);
+   unsigned hash=Hash::hash(text,(type<<24)^subType);
 
    // Find the leaf page
    BufferReference ref;
@@ -305,14 +318,14 @@ bool DictionarySegment::lookup(const string& text,unsigned& id)
       if (readUint32Aligned(page+HashIndex::leafHeaderSize+4+8*left)!=hash)
          return false;
       // No, lookup the candidate
-      if (lookupOnPage(readUint32Aligned(page+HashIndex::leafHeaderSize+4+(8*left)+4),text,hash,id))
+      if (lookupOnPage(readUint32Aligned(page+HashIndex::leafHeaderSize+4+(8*left)+4),text,type,subType,hash,id))
          return true;
    }
    // We reached the end of the page
    return false;
 }
 //---------------------------------------------------------------------------
-bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& stop)
+bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& stop,::Type::ID& type,unsigned& subType)
    // Lookup a string for a given id
 {
    // Fill the mappings if needed
@@ -352,23 +365,23 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    ref=readShared(pageNo);
    const char* page=static_cast<const char*>(ref.getPage());
 
-   // Load the real len for long strings
-   if (len==0xFFFF)
-      len=readUint32(reinterpret_cast<const unsigned char*>(page+ofs-4));
+   // Read the type info
+   unsigned typeLen=readUint32(reinterpret_cast<const unsigned char*>(page+ofs+8));
+   type=static_cast< ::Type::ID>(typeLen>>24);
+   len=(typeLen&0x00FFFFFF);
+
+   // Has a sub type?
+   if (::Type::hasSubType(type)) {
+      ofs+=4;
+      subType=readUint32(reinterpret_cast<const unsigned char*>(page+ofs+8));
+   } else {
+      subType=0;
+   }
 
    // And return the string bounds
-   start=page+ofs; stop=start+len;
+   start=page+ofs+12; stop=start+len;
 
    return true;
-}
-//---------------------------------------------------------------------------
-string DictionarySegment::mapId(unsigned id)
-   // Lookup a string for a given id
-{
-   const char* start,*stop;
-   if (lookupById(id,start,stop))
-      return string(start,stop); else
-      return string();
 }
 //---------------------------------------------------------------------------
 void DictionarySegment::loadStrings(StringSource& reader)
@@ -384,10 +397,11 @@ void DictionarySegment::loadStrings(StringSource& reader)
 
    // Read the strings
    unsigned len; const char* data;
+   ::Type::ID type; unsigned subType;
    unsigned id=0;
-   while (reader.next(len,data)) {
+   while (reader.next(len,data,type,subType)) {
       // Is the page full?
-      if ((bufferPos+12+len>pageSize)&&(bufferCount)) {
+      if ((bufferPos+12+len+(::Type::hasSubType(type)?4:0)>pageSize)&&(bufferCount)) {
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
          writeUint32(buffer+12,bufferCount);
@@ -395,23 +409,28 @@ void DictionarySegment::loadStrings(StringSource& reader)
          bufferPos=headerSize; bufferCount=0;
       }
       // Check the len, handle an overlong string
-      if (bufferPos+12+len>pageSize) {
+      if (bufferPos+12+len+(::Type::hasSubType(type)?4:0)>pageSize) {
          // Write the first page
-         unsigned hash=Hash::hash(data,len);
+         unsigned hash=Hash::hash(data,len,(type<<24)^subType);
          writeUint32(buffer+12,1);
          writeUint32(buffer+bufferPos,id);
          writeUint32(buffer+bufferPos+4,hash);
-         writeUint32(buffer+bufferPos+8,len);
-         memcpy(buffer+bufferPos+12,data,pageSize-(bufferPos+12));
-         reader.rememberInfo(chainer.getPageNo(),(bufferPos<<16)|(0xFFFF),hash);
+         writeUint32(buffer+bufferPos+8,len|(type<<24));
+         bufferPos+=12;
+         if (::Type::hasSubType(type)) {
+            writeUint32(buffer+bufferPos,subType);
+            bufferPos+=4;
+         }
+         memcpy(buffer+bufferPos,data,pageSize-bufferPos);
+         reader.rememberInfo(chainer.getPageNo(),(headerSize<<16)|(0xFFFF),hash);
          buffer=static_cast<unsigned char*>(chainer.nextPage(this));
          ++id;
 
          // Write all intermediate pages
          const char* dataIter=data;
          unsigned iterLen=len;
-         dataIter+=pageSize-(bufferPos+12);
-         iterLen-=pageSize-(bufferPos+12);
+         dataIter+=pageSize-bufferPos;
+         iterLen-=pageSize-bufferPos;
          while (iterLen>(pageSize-headerSize)) {
             writeUint32(buffer+12,0);
             memcpy(buffer+headerSize,dataIter,pageSize-headerSize);
@@ -428,20 +447,25 @@ void DictionarySegment::loadStrings(StringSource& reader)
                buffer[index]=0;
             buffer=static_cast<unsigned char*>(chainer.nextPage(this));
          }
+         bufferPos=headerSize;
 
          continue;
       }
 
       // Hash the current string...
-      unsigned hash=Hash::hash(data,len);
+      unsigned hash=Hash::hash(data,len,(type<<24)^subType);
 
       // ...store it...
       if (!buffer)
          buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+      unsigned ofs=bufferPos;
       writeUint32(buffer+bufferPos,id); bufferPos+=4;
       writeUint32(buffer+bufferPos,hash); bufferPos+=4;
-      writeUint32(buffer+bufferPos,len); bufferPos+=4;
-      unsigned ofs=bufferPos;
+      writeUint32(buffer+bufferPos,len|(type<<24)); bufferPos+=4;
+      if (::Type::hasSubType(type)) {
+         writeUint32(buffer+bufferPos,subType);
+         bufferPos+=4;
+      }
       for (unsigned index=0;index<len;index++)
          buffer[bufferPos++]=data[index];
       ++bufferCount;
@@ -556,7 +580,7 @@ bool EntryInfoReader::next(DictionarySegment::HashIndex::LeafEntry& e)
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
-void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
+void DictionarySegment::appendLiterals(const std::vector<Literal>& literals)
    // Load new strings into the dictionary
 {
    static const unsigned pageSize = BufferReference::pageSize;
@@ -570,12 +594,12 @@ void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
    // Read the strings
    unsigned id=nextId,oldNextId=nextId;
    vector<EntryInfo> info;
-   info.reserve(strings.size());
-   for (vector<string>::const_iterator iter=strings.begin(),limit=strings.end();iter!=limit;++iter) {
-      const char* data=(*iter).c_str();
-      unsigned len=(*iter).size();
+   info.reserve(literals.size());
+   for (vector<Literal>::const_iterator iter=literals.begin(),limit=literals.end();iter!=limit;++iter) {
+      const char* data=(*iter).str.c_str();
+      unsigned len=(*iter).str.size();
       // Is the page full?
-      if ((bufferPos+12+len>pageSize)&&(bufferCount)) {
+      if ((bufferPos+12+len+(::Type::hasSubType((*iter).type)?4:0)>pageSize)&&(bufferCount)) {
          for (unsigned index=bufferPos;index<pageSize;index++)
             buffer[index]=0;
          writeUint32(buffer+12,bufferCount);
@@ -583,23 +607,28 @@ void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
          bufferPos=headerSize; bufferCount=0;
       }
       // Check the len, handle an overlong string
-      if (bufferPos+12+len>pageSize) {
+      if (bufferPos+12+len+(::Type::hasSubType((*iter).type)?4:0)>pageSize) {
          // Write the first page
-         unsigned hash=Hash::hash(data,len);
+         unsigned hash=Hash::hash(data,len,(((*iter).type)<<24)^((*iter).subType));
          writeUint32(buffer+12,1);
          writeUint32(buffer+bufferPos,id);
          writeUint32(buffer+bufferPos+4,hash);
-         writeUint32(buffer+bufferPos+8,len);
-         memcpy(buffer+bufferPos+12,data,pageSize-(bufferPos+12));
-         info.push_back(EntryInfo(chainer.getPageNo(),(bufferPos<<16)|(0xFFFF),hash));
+         writeUint32(buffer+bufferPos+8,len|((*iter).type<<24));
+         bufferPos+=12;
+         if (::Type::hasSubType((*iter).type)) {
+            writeUint32(buffer+bufferPos,(*iter).subType);
+            bufferPos+=4;
+         }
+         memcpy(buffer+bufferPos,data,pageSize-bufferPos);
+         info.push_back(EntryInfo(chainer.getPageNo(),(headerSize<<16)|(0xFFFF),hash));
          buffer=static_cast<unsigned char*>(chainer.nextPage(this));
          ++id;
 
          // Write all intermediate pages
          const char* dataIter=data;
          unsigned iterLen=len;
-         dataIter+=pageSize-(bufferPos+12);
-         iterLen-=pageSize-(bufferPos+12);
+         dataIter+=pageSize-bufferPos;
+         iterLen-=pageSize-bufferPos;
          while (iterLen>(pageSize-headerSize)) {
             writeUint32(buffer+12,0);
             memcpy(buffer+headerSize,dataIter,pageSize-headerSize);
@@ -616,20 +645,25 @@ void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
                buffer[index]=0;
             buffer=static_cast<unsigned char*>(chainer.nextPage(this));
          }
+         bufferPos=headerSize;
 
          continue;
       }
 
       // Hash the current string...
-      unsigned hash=Hash::hash(data,len);
+      unsigned hash=Hash::hash(data,len,(((*iter).type)<<24)^((*iter).subType));
 
       // ...store it...
       if (!buffer)
          buffer=static_cast<unsigned char*>(chainer.nextPage(this));
+      unsigned ofs=bufferPos;
       writeUint32(buffer+bufferPos,id); bufferPos+=4;
       writeUint32(buffer+bufferPos,hash); bufferPos+=4;
-      writeUint32(buffer+bufferPos,len); bufferPos+=4;
-      unsigned ofs=bufferPos;
+      writeUint32(buffer+bufferPos,len|(((*iter).type)<<24)); bufferPos+=4;
+      if (::Type::hasSubType((*iter).type)) {
+         writeUint32(buffer+bufferPos,(*iter).subType);
+         bufferPos+=4;
+      }
       for (unsigned index=0;index<len;index++)
          buffer[bufferPos++]=data[index];
       ++bufferCount;
@@ -730,7 +764,7 @@ void DictionarySegment::appendStrings(const std::vector<std::string>& strings)
       mappings.push_back(pair<unsigned,unsigned>(start,len));
    }
 
-   // Kiad hash->pos mapping
+   // Load hash->pos mapping
    sort(info.begin(),info.end(),SortByHash());
    EntryInfoReader reader(info.begin(),info.end());
    HashIndex(*this).performUpdate(reader);

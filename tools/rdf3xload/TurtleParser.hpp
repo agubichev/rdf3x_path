@@ -10,6 +10,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+#include "infra/util/Type.hpp"
 #include <istream>
 #include <string>
 #include <map>
@@ -88,10 +89,12 @@ class TurtleParser
    /// A triple
    struct Triple {
       /// The entries
-      std::string subject,predicate,object;
+      std::string subject,predicate,object,objectSubType;
+      /// Type for the object
+      Type::ID objectType;
 
       /// Constructor
-      Triple(const std::string& subject,const std::string& predicate,const std::string& object) : subject(subject),predicate(predicate),object(object) {}
+      Triple(const std::string& subject,const std::string& predicate,const std::string& object,Type::ID objectType,const std::string& objectSubType) : subject(subject),predicate(predicate),object(object),objectSubType(objectSubType),objectType(objectType) {}
    };
 
    /// The lexer
@@ -123,13 +126,13 @@ class TurtleParser
    /// Parse a subject
    void parseSubject(Lexer::Token token,std::string& subject);
    /// Parse an object
-   void parseObject(std::string& object);
+   void parseObject(std::string& object,Type::ID& objectType,std::string& objectSubType);
    /// Parse a predicate object list
-   void parsePredicateObjectList(const std::string& subject,std::string& predicate,std::string& object);
+   void parsePredicateObjectList(const std::string& subject,std::string& predicate,std::string& object,Type::ID& objectType,std::string& objectSubType);
    /// Parse a directive
    void parseDirective();
    /// Parse a new triple
-   void parseTriple(Lexer::Token token,std::string& subject,std::string& predicate,std::string& object);
+   void parseTriple(Lexer::Token token,std::string& subject,std::string& predicate,std::string& object,Type::ID& objectType,std::string& objectSubType);
 
    public:
    /// Constructor
@@ -138,7 +141,7 @@ class TurtleParser
    ~TurtleParser();
 
    /// Read the next triple
-   bool parse(std::string& subject,std::string& predicate,std::string& object);
+   bool parse(std::string& subject,std::string& predicate,std::string& object,Type::ID& objectType,std::string& objectSubType);
 };
 //---------------------------------------------------------------------------
 #endif

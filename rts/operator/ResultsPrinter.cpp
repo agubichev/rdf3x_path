@@ -4,6 +4,7 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include <iostream>
 #include <map>
+#include <set>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -34,18 +35,40 @@ namespace {
 struct CacheEntry {
    /// The string boundaries
    const char* start,*stop;
+   /// The type
+   Type::ID type;
+   /// The sub-type
+   unsigned subType;
 
    /// Constructor
    CacheEntry() : start(0),stop(0) {}
+   /// Print the raw value
+   void printValue() const;
    /// Print it
-   void print() const;
+   void print(const map<unsigned,CacheEntry>& stringCache) const;
 };
 //---------------------------------------------------------------------------
-void CacheEntry::print() const
-   // Print it
+void CacheEntry::printValue() const
+   // Print the raw value
 {
    for (const char* iter=start,*limit=stop;iter!=limit;++iter)
       cout << *iter;
+}
+//---------------------------------------------------------------------------
+void CacheEntry::print(const map<unsigned,CacheEntry>& stringCache) const
+   // Print it
+{
+   switch (type) {
+      case Type::URI: cout << '<'; printValue(); cout << '>'; break;
+      case Type::Literal: cout << '"'; printValue(); cout << '"'; break;
+      case Type::CustomLanguage: cout << '"'; printValue(); cout << "\"@"; (*stringCache.find(subType)).second.printValue(); break;
+      case Type::CustomType: cout << '"'; printValue(); cout << "\"^^<"; (*stringCache.find(subType)).second.printValue(); cout << ">"; break;
+      case Type::String: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#string>"; break;
+      case Type::Integer: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#integer>"; break;
+      case Type::Decimal: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#decimal>"; break;
+      case Type::Double: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#double>"; break;
+      case Type::Boolean: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#boolean>"; break;
+   }
 }
 //---------------------------------------------------------------------------
 static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::const_iterator start,vector<unsigned>::const_iterator stop)
@@ -54,12 +77,12 @@ static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::
    if (start==stop) return;
    if (!~(*start))
       cout << "NULL"; else
-      stringCache[*start].print();
+      stringCache[*start].print(stringCache);
    for (++start;start!=stop;++start) {
       cout << ' ';
       if (!~(*start))
          cout << "NULL"; else
-         stringCache[*start].print();
+         stringCache[*start].print(stringCache);
    }
 }
 //---------------------------------------------------------------------------
@@ -93,9 +116,16 @@ unsigned ResultsPrinter::first()
    } while ((count=input->next())!=0);
 
    // Lookup the strings
+   set<unsigned> subTypes;
    for (map<unsigned,CacheEntry>::iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter) {
       CacheEntry& c=(*iter).second;
-      dictionary.lookupById((*iter).first,c.start,c.stop);
+      dictionary.lookupById((*iter).first,c.start,c.stop,c.type,c.subType);
+      if (Type::hasSubType(c.type))
+         subTypes.insert(c.subType);
+   }
+   for (set<unsigned>::const_iterator iter=subTypes.begin(),limit=subTypes.end();iter!=limit;++iter) {
+      CacheEntry& c=stringCache[*iter];
+      dictionary.lookupById(*iter,c.start,c.stop,c.type,c.subType);
    }
 
    // Skip printing the results?

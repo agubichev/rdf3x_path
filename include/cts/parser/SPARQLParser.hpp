@@ -35,10 +35,16 @@ class SPARQLParser
    /// An element in a graph pattern
    struct Element {
       /// Possible types
-      enum Type { Variable, String, IRI };
+      enum Type { Variable, Literal, IRI };
+      /// Possible sub-types for literals
+      enum SubType { None, CustomLanguage, CustomType };
       /// The type
       Type type;
-      /// The string value
+      /// The sub-type
+      SubType subType;
+      /// The value of the sub-type
+      std::string subTypeValue;
+      /// The literal value
       std::string value;
       /// The id for variables
       unsigned id;
