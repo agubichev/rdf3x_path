@@ -38,8 +38,8 @@ static bool contains(const vector<unsigned>& allNodes,unsigned id)
 static string lookupId(Database& db,unsigned id)
    // Lookup a string id
 {
-   const char* start=0,*stop=0;
-   db.getDictionary().lookupById(id,start,stop);
+   const char* start=0,*stop=0; Type::ID type; unsigned subType;
+   db.getDictionary().lookupById(id,start,stop,type,subType);
    return string(start,stop);
 }
 //---------------------------------------------------------------------------
@@ -68,6 +68,8 @@ class LookupFilter : public Operator {
    void print(DictionarySegment& dict,unsigned indent);
    /// Handle a merge hint
    void addMergeHint(Register* l,Register* r);
+   /// Register parts of the tree that can be executed asynchronous
+   void getAsyncInputCandidates(Scheduler& scheduler);
 };
 //---------------------------------------------------------------------------
 unsigned LookupFilter::first()
@@ -111,6 +113,12 @@ void LookupFilter::addMergeHint(Register* l,Register* r)
    // Handle a merge hint
 {
    input->addMergeHint(l,r);
+}
+//---------------------------------------------------------------------------
+void LookupFilter::getAsyncInputCandidates(Scheduler& scheduler)
+   // Register parts of the tree that can be executed asynchronous
+{
+   input->getAsyncInputCandidates(scheduler);
 }
 //---------------------------------------------------------------------------
 template <class T> void eliminateDuplicates(vector<T>& data)
@@ -242,38 +250,18 @@ static vector<unsigned> buildChain(unsigned from,const vector<unsigned>& fromIds
 static string lookupURL(Database& db,unsigned id)
    // Lookup a URL
 {
-   const char* start=0,*end=start;
-   db.getDictionary().lookupById(id,start,end);
+   const char* start=0,*end=start; Type::ID type; unsigned subType;
+   db.getDictionary().lookupById(id,start,end,type,subType);
    return "<"+string(start,end)+">";
-}
-//---------------------------------------------------------------------------
-static bool isBlankNode(const char* start,const char* stop)
-   // Looks like a blank node? XXX store in dictionary
-{
-   return (start+2>stop)&&(start[0]=='_')&&(start[1]==':');
-}
-//---------------------------------------------------------------------------
-static bool isURI(const char* start,const char* stop)
-   // Looks like a URI? XXX store in dictionary
-{
-   const char* limit=stop-5;
-   if (limit>start+10) limit=start+10;
-   for (;start<limit;++start) {
-      char c=*start;
-      if (c==' ') break;
-      if (c==':')
-         return (start[1]=='/')&&(start[2]=='/');
-   }
-   return false;
 }
 //---------------------------------------------------------------------------
 static string lookupLiteral(Database& db,unsigned id)
    // Lookup a literal value
 {
-   const char* start=0,*end=start;
-   db.getDictionary().lookupById(id,start,end);
+   const char* start=0,*end=start; Type::ID type; unsigned subType;
+   db.getDictionary().lookupById(id,start,end,type,subType);
 
-   if (isBlankNode(start,end)||isURI(start,end))
+   if (type==Type::URI)
       return "<"+string(start,end)+">"; else
       return "\""+string(start,end)+"\"";
 }
