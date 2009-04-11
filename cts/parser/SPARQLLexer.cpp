@@ -61,6 +61,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case '}': return RCurly;
          case '(': return LParen;
          case ')': return RParen;
+         case '@': return At;
          case '=': return Equal;
          // Not equal
          case '!':
@@ -84,6 +85,12 @@ SPARQLLexer::Token SPARQLLexer::getNext()
             }
             return LBracket;
          case ']': return RBracket;
+         // Type
+         case '^':
+            if ((pos==input.end())||((*pos)!='^'))
+               return Error;
+            ++pos;
+            return Type;
          // IRI Ref
          case '<':
             tokenStart=pos;
