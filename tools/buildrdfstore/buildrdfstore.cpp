@@ -238,8 +238,36 @@ bool StringReader::next(unsigned& len,const char*& data,Type::ID& type,unsigned&
    unsigned nextId,typeId;
    in >> nextId >> typeId >> subType;
    in.get();
-   getline(in,s);
-   if (!in.good()) return false;
+   s.clear();
+   while (true) {
+      char c;
+      if (!in.get(c)) return false;
+      if ((c=='\n')||(c=='\r')) break;
+      if (c=='\\') {
+         if (!in.get(c)) return false;
+         switch (c) {
+            case '\\': s+='\\'; break;
+            case 'n': s+='\n'; break;
+            case 'r': s+='\r'; break;
+            case 't': s+='\t'; break;
+            case 'x': {
+               unsigned high,low;
+               if (!in.get(c)) break;
+               if ((c>='0')&&(c<='9')) high=c-'0'; else
+               if ((c>='A')&&(c<='F')) high=c-'A'+10; else
+               if ((c>='a')&&(c<='f')) high=c-'a'+10; else
+                  high=0;
+               if (!in.get(c)) break;
+               if ((c>='0')&&(c<='9')) low=c-'0'; else
+               if ((c>='A')&&(c<='F')) low=c-'A'+10; else
+               if ((c>='a')&&(c<='f')) low=c-'a'+10; else
+                  low=0;
+               s+=static_cast<char>((high<<4)|low);
+               } break;
+            default: s+=c;
+         }
+      } else s+=c;
+   }
 
    type=static_cast<Type::ID>(typeId);
    if (id!=nextId) {
