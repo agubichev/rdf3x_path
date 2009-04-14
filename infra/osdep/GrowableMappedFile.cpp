@@ -254,6 +254,7 @@ bool GrowableMappedFile::growMapping(ofs_t increment,char*& begin,char*& end)
    void* mapping=mmap(0,increment,PROT_READ|PROT_WRITE,MAP_SHARED,data->file,data->mappedSize);
    if (!mapping) return false;
    begin=static_cast<char*>(mapping);
+   end=begin+increment;
 
    data->mappings.push_back(pair<char*,char*>(begin,end));
 #endif
