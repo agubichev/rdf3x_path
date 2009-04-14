@@ -201,8 +201,8 @@ bool readAndStoreStrings(ofstream& out,const string& name,const char* fileName)
       ofstream out("strings.sql");
       string s;
       while (true) {
-         unsigned id;
-         in >> id;
+         unsigned id,type,subType;
+         in >> id >> type >> subType;
          in.get();
          if (!getEscapedLine(in,s)) break;
 

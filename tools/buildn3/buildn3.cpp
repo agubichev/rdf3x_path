@@ -33,6 +33,10 @@ static bool readStrings(MemoryMappedFile& strings,const char* file,vector<const 
          while ((iter!=limit)&&((*iter)!=' ')&&((*iter)!='\t')) ++iter;
          unsigned id=atoi(string(start,iter).c_str());
          if (iter!=limit) ++iter;
+         while ((iter!=limit)&&((*iter)!=' ')&&((*iter)!='\t')) ++iter;
+         if (iter!=limit) ++iter;
+         while ((iter!=limit)&&((*iter)!=' ')&&((*iter)!='\t')) ++iter;
+         if (iter!=limit) ++iter;
          start=iter;
          while ((iter!=limit)&&((*iter)!='\n'))
             ++iter;

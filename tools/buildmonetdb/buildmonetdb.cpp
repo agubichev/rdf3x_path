@@ -215,8 +215,8 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
       }
       string s;
       while (in) {
-         unsigned id;
-         in >> id;
+         unsigned id,type,subType;
+         in >> id >> type >> subType;
          in.get();
 	 if (!getEscapedLine(in,s)) break;
          unsigned l=s.length();
@@ -246,8 +246,8 @@ bool readAndStoreStrings(ofstream& out,const char* fileName,const set<unsigned>&
    string s;
    out << "copy " << lineCount << " records into \"strings\" from stdin using delimiters '\\t';" << endl;
    while (true) {
-      unsigned id;
-      in >> id;
+      unsigned id,type,subType;
+      in >> id >> type >> subType;
       in.get();
       if (!getEscapedLine(in,s)) break;
 
