@@ -1,7 +1,7 @@
 with parta as (
    select a.subject
    from p0 a, p15 c
-   where a.object=1522 and c.object=1590 and a.subject=c.subject
+   where a.object=1576 and c.object=1851 and a.subject=c.subject
 )
 select pn.name, so.value, g.c from (
 (select 0 as predicate, object, c from (select l.object as object, count(*) as c from p0 l, parta r where l.subject=r.subject group by l.object having count(*)>1) s)
@@ -63,6 +63,6 @@ union all
 where g.object=so.id and pn.id=g.predicate
 ;
 
--- 1522 'http://simile.mit.edu/2006/01/ontologies/mods3#Text'
+-- 1576 'http://simile.mit.edu/2006/01/ontologies/mods3#Text'
 -- 15 <http://simile.mit.edu/2006/01/ontologies/mods3#language>
--- 1590 <http://simile.mit.edu/2006/01/language/iso639-2b/fre>
+-- 1851 <http://simile.mit.edu/2006/01/language/iso639-2b/fre>

@@ -1,10 +1,10 @@
 with parta as (
    (select b.subject as subject
-    from p0 b where b.object=1522)
+    from p0 b where b.object=1576)
    union all
    (select c.subject as subject
-    from p30 c, p0 d
-    where c.object=d.subject and d.object=1522)
+    from p31 c, p0 d
+    where c.object=d.subject and d.object=1576)
 )
 select pn.name, g.c from (
 (select 0 as predicate, c from (select count(*) as c from p0 l, parta r where l.subject=r.subject) s)
@@ -66,7 +66,6 @@ union all
 where g.c>0 and pn.id=g.predicate
 ;
 
--- 1522 'http://simile.mit.edu/2006/01/ontologies/mods3#Text'
+-- 1576 'http://simile.mit.edu/2006/01/ontologies/mods3#Text'
 -- 15 <http://simile.mit.edu/2006/01/ontologies/mods3#language>
--- 1590 <http://simile.mit.edu/2006/01/language/iso639-2b/fre>
--- 30 http://simile.mit.edu/2006/01/ontologies/mods3#records
+-- 31 http://simile.mit.edu/2006/01/ontologies/mods3#records
