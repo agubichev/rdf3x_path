@@ -3,6 +3,9 @@
 #define CONFIG_WINDOWS
 #endif
 #ifdef CONFIG_WINDOWS
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0500
+#endif
 #include <windows.h>
 #else
 #include <sys/mman.h>
@@ -57,14 +60,13 @@ bool MemoryMappedFile::open(const char* name)
    #ifdef CONFIG_WINDOWS
       HANDLE file=CreateFile(name,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);
       if (file==INVALID_HANDLE_VALUE) return false;
-      DWORD sizeHigh=0;
-      DWORD size=GetFileSize(file,&sizeHigh);
-      SIZE_T fullSize=(static_cast<SIZE_T>(sizeHigh)<<(8*sizeof(DWORD)))|static_cast<SIZE_T>(size);
-      HANDLE mapping=CreateFileMapping(file,0,PAGE_READONLY,sizeHigh,size,0);
+      LARGE_INTEGER fullSize;
+      if (!GetFileSizeEx(file,&fullSize)) { CloseHandle(file); return false; }
+      HANDLE mapping=CreateFileMapping(file,0,PAGE_READONLY,fullSize.HighPart,fullSize.LowPart,0);
       if (mapping==INVALID_HANDLE_VALUE) { CloseHandle(file); return false; }
-      begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ,0,0,fullSize));
+      begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ,0,0,fullSize.QuadPart));
       if (!begin) { CloseHandle(mapping); CloseHandle(file); return false; }
-      end=begin+fullSize;
+      end=begin+fullSize.QuadPart;
    #else
       int file=::open(name,O_RDONLY);
       if (file<0) return false;

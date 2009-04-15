@@ -65,17 +65,17 @@ bool GrowableMappedFile::open(const char* name,char*& begin,char*& end,bool read
       HANDLE file;
       if (readOnly)
          file=CreateFile(name,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0); else
-         file=CreateFile(name,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_EXCLUSIVE,0,OPEN_EXISTING,0,0);
+         file=CreateFile(name,GENERIC_READ|GENERIC_WRITE,0,0,OPEN_EXISTING,0,0);
       if (file==INVALID_HANDLE_VALUE) return false;
       DWORD sizeHigh=0;
       DWORD size=GetFileSize(file,&sizeHigh);
-      SIZE_T fullSize=(static_cast<SIZE_T>(sizeHigh)<<(8*sizeof(DWORD)))|static_cast<SIZE_T>(size);
-      if (fullSize) {
-         HANDLE mapping=CreateFileMapping(file,0,readOnly?PAGE_READ:PAGE_READWRITE,sizeHigh,size,0);
+      LARGE_INTEGER fullSize; fullSize.HighPart=sizeHigh; fullSize.LowPart=size;
+      if (fullSize.QuadPart) {
+         HANDLE mapping=CreateFileMapping(file,0,readOnly?PAGE_READONLY:PAGE_READWRITE,sizeHigh,size,0);
          if (mapping==INVALID_HANDLE_VALUE) { CloseHandle(file); return false; }
-         begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ|(readOnly?0:FILE_MAP_WRITE),0,0,fullSize));
+         begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ|(readOnly?0:FILE_MAP_WRITE),0,0,fullSize.QuadPart));
          if (!begin) { CloseHandle(mapping); CloseHandle(file); return false; }
-         end=begin+fullSize;
+         end=begin+fullSize.QuadPart;
 
          data=new Data();
          data->mappings.push_back(pair<HANDLE,char*>(mapping,begin));
@@ -85,7 +85,7 @@ bool GrowableMappedFile::open(const char* name,char*& begin,char*& end,bool read
          data=new Data();
          // create no initial mapping for empty files
       }
-      data->size=fullSize;
+      data->size=fullSize.QuadPart;
    #else
       int file=::open(name,readOnly?O_RDONLY:O_RDWR);
       if (file<0) return false;
@@ -121,7 +121,7 @@ bool GrowableMappedFile::create(const char* name)
    close();
 
    #ifdef CONFIG_WINDOWS
-      HANDLE file=CreateFile(name,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_EXCLUSIVE,0,CREATE_ALWAYS,0,0);
+      HANDLE file=CreateFile(name,GENERIC_READ|GENERIC_WRITE,0,0,CREATE_ALWAYS,0,0);
       if (file==INVALID_HANDLE_VALUE) return false;
    #else
       int file=::open(name,O_RDWR|O_CREAT|O_TRUNC,00640);
@@ -144,7 +144,7 @@ void GrowableMappedFile::close()
 #ifdef CONFIG_WINDOWS
       for (vector<pair<HANDLE,char*> >::const_reverse_iterator iter=data->mappings.rbegin(),limit=data->mappings.rend();iter!=limit;++iter) {
          UnmapViewOfFile((*iter).second);
-         CloseHandle()*iter).first);
+         CloseHandle((*iter).first);
       }
       CloseHandle(data->file);
 #else
@@ -189,8 +189,9 @@ bool GrowableMappedFile::growPhysically(ofs_t increment)
    while (todo>bufferSize) {
       if (!write(pos,buffer,bufferSize)) {
          delete[] buffer;
-         if (SetFilePointerEx(data->handle,data->size,0,FILE_BEGIN))
-            SetEndOfFile(data->handle);
+         LARGE_INTEGER s; s.QuadPart=data->size;
+         if (SetFilePointerEx(data->file,s,0,FILE_BEGIN))
+            SetEndOfFile(data->file);
          return false;
       }
       pos+=bufferSize;
@@ -198,8 +199,9 @@ bool GrowableMappedFile::growPhysically(ofs_t increment)
    }
    if (!write(data->size,buffer,todo)) {
       delete[] buffer;
-      if (SetFilePointerEx(data->handle,data->size,0,FILE_BEGIN))
-         SetEndOfFile(data->handle);
+      LARGE_INTEGER s; s.QuadPart=data->size;
+      if (SetFilePointerEx(data->file,s,0,FILE_BEGIN))
+         SetEndOfFile(data->file);
       return false;
    }
    delete[] buffer;
@@ -239,15 +241,13 @@ bool GrowableMappedFile::growMapping(ofs_t increment,char*& begin,char*& end)
 
    // Create a new mapping
 #ifdef CONFIG_WINDOWS
-   DWORD sizeHigh=static_cast<DWORD>(increment>>(8*sizeof(DWORD)));
-   DWORD size=static_cast<DWORD>(increment);
-   HANDLE mapping=CreateFileMapping(data->file,0,PAGE_READWRITE,sizeHigh,size,0);
+   LARGE_INTEGER size; size.QuadPart=increment;
+   HANDLE mapping=CreateFileMapping(data->file,0,PAGE_READWRITE,size.HighPart,size.LowPart,0);
    if (mapping==INVALID_HANDLE_VALUE) return false;
-   DWORD ofsHigh=static_cast<DWORD>(data->mappedSize>>(8*sizeof(DWORD)));
-   DWORD ofs=static_cast<DWORD>(data->mappedSize);
-   begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ|FILE_MAP_WRITE,ofsHigh,ofsLow,increment));
+   LARGE_INTEGER ofs; ofs.QuadPart=data->mappedSize;
+   begin=static_cast<char*>(MapViewOfFile(mapping,FILE_MAP_READ|FILE_MAP_WRITE,ofs.HighPart,ofs.LowPart,increment));
    if (!begin) { CloseHandle(mapping); return false; }
-   end=begin+fullSize;
+   end=begin+increment;
 
    data->mappings.push_back(pair<HANDLE,char*>(mapping,begin));
 #else
@@ -269,10 +269,11 @@ bool GrowableMappedFile::read(ofs_t ofs,void* data,unsigned len)
 #ifdef CONFIG_WINDOWS
    OVERLAPPED info;
    memset(&info,0,sizeof(info));
-   info.Offset=static_cast<DWORD>(ofs);
-   info.OffsetHigh=static_cast<DWORD>(ofs>>(8*sizeof(DWORD)));
+   LARGE_INTEGER o; o.QuadPart=ofs;
+   info.Offset=o.LowPart;
+   info.OffsetHigh=o.HighPart;
    DWORD result;
-   if (!ReadFile(data->file,data,len,&result,&info))
+   if (!ReadFile(this->data->file,data,len,&result,&info))
       return false;
    return result==len;
 #else
@@ -286,10 +287,11 @@ bool GrowableMappedFile::write(ofs_t ofs,const void* data,unsigned len)
 #ifdef CONFIG_WINDOWS
    OVERLAPPED info;
    memset(&info,0,sizeof(info));
-   info.Offset=static_cast<DWORD>(ofs);
-   info.OffsetHigh=static_cast<DWORD>(ofs>>(8*sizeof(DWORD)));
+   LARGE_INTEGER o; o.QuadPart=ofs;
+   info.Offset=o.LowPart;
+   info.OffsetHigh=o.HighPart;
    DWORD result;
-   if (!WriteFile(data->file,data,len,&result,&info))
+   if (!WriteFile(this->data->file,data,len,&result,&info))
       return false;
    return result==len;
 #else
