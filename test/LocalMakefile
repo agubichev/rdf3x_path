@@ -1,7 +1,9 @@
+include test/infra/LocalMakefile
 include test/rts/LocalMakefile
 
 src_test:=			\
 	test/rdf3xtest.cpp	\
+	$(src_test_infra)	\
 	$(src_test_rts)
 
 $(PREFIX)rdf3xtest$(EXEEXT): $(addprefix $(PREFIX),$(src_test:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)) $(src_gtest:.cpp=$(OBJEXT)))
