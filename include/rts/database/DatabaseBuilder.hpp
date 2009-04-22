@@ -118,48 +118,6 @@ class DatabaseBuilder
    };
 
    private:
-   /// The database directory
-   struct Directory
-   {
-      /// Statistics for a facts table
-      struct FactsStatistics {
-         /// The number of pages
-         unsigned pages;
-         /// The number of aggregated pages
-         unsigned aggregatedPages;
-         /// The number of level 1 groups
-         unsigned groups1;
-         /// The number of level 2 groups
-         unsigned groups2;
-         /// The number of tuples
-         unsigned cardinality;
-      };
-      /// Begin of the facts tables in all orderings
-      unsigned factStarts[6];
-      /// Root of the fact indices in all orderings
-      unsigned factIndices[6];
-      /// Begin of the aggregated facts tables in all orderings
-      unsigned aggregatedFactStarts[6];
-      /// Root of the aggregatedfact indices in all orderings
-      unsigned aggregatedFactIndices[6];
-      /// Begin of the fully aggregated facts tables in all orderings
-      unsigned fullyAggregatedFactStarts[3];
-      /// Root of the fully aggregated facts tables in all orderings
-      unsigned fullyAggregatedFactIndices[3];
-      /// The statistics
-      FactsStatistics factStatistics[6];
-      /// Begin of the string table
-      unsigned stringStart;
-      /// Begin of the string mapping
-      unsigned stringMapping;
-      /// Root of the string index
-      unsigned stringIndex;
-      /// Pages with statistics
-      unsigned statistics[6];
-      /// Pages with path statistics
-      unsigned pathStatistics[2];
-   };
-
    /// The database
    Database out;
    /// The file name
