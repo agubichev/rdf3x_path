@@ -88,6 +88,13 @@ SPARQLLexer::Token SPARQLLexer::getNext()
             }
             return LBracket;
          case ']': return RBracket;
+         // Greater
+         case '>':
+            if ((pos!=input.end())&&((*pos)=='=')) {
+               ++pos;
+               return GreaterOrEqual;
+            }
+            return Greater;
          // Type
          case '^':
             if ((pos==input.end())||((*pos)!='^'))
@@ -128,6 +135,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
 
             // Successful parse?
             if ((pos!=input.end())&&((*pos)=='>')) {
+               ++pos;
                tokenEnd=pos; hasTokenEnd=true;
                return IRI;
             }
