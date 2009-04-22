@@ -67,7 +67,7 @@ class SPARQLParser
          Or, And, Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Plus, Minus, Mul, Div,
          Not, UnaryPlus, UnaryMinus, Literal, Variable, IRI, Function, ArgumentList,
          Builtin_str, Builtin_lang, Builtin_langmatches, Builtin_datatype, Builtin_bound, Builtin_sameterm,
-         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex
+         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex, Builtin_in
       };
 
       /// The type

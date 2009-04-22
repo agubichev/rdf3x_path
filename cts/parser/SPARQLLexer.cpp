@@ -135,8 +135,8 @@ SPARQLLexer::Token SPARQLLexer::getNext()
 
             // Successful parse?
             if ((pos!=input.end())&&((*pos)=='>')) {
-               ++pos;
                tokenEnd=pos; hasTokenEnd=true;
+               ++pos;
                return IRI;
             }
             pos=tokenStart;

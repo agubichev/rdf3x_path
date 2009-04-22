@@ -342,6 +342,35 @@ SPARQLParser::Filter* SPARQLParser::parseBuiltInCall(std::map<std::string,unsign
       }
       if (lexer.getNext()!=SPARQLLexer::RParen)
          throw ParserException("')' expected");
+   } else if (lexer.isKeyword("in")) {
+      result->type=Filter::Builtin_in;
+      if (lexer.getNext()!=SPARQLLexer::LParen)
+         throw ParserException("'(' expected");
+      result->arg1=parseExpression(localVars);
+
+      if (lexer.hasNext(SPARQLLexer::RParen)) {
+         lexer.getNext();
+      } else {
+         if (lexer.getNext()!=SPARQLLexer::Comma)
+            throw ParserException("',' expected");
+         auto_ptr<Filter> args(new Filter);
+         Filter* tail=args.get();
+         tail->type=Filter::ArgumentList;
+         tail->arg1=parseExpression(localVars);
+         while (true) {
+            if (lexer.hasNext(SPARQLLexer::Comma)) {
+               lexer.getNext();
+               tail=tail->arg2=new Filter;
+               tail->type=Filter::ArgumentList;
+               tail->arg1=parseExpression(localVars);
+            } else {
+               if (lexer.getNext()!=SPARQLLexer::RParen)
+                  throw ParserException("')' expected");
+               break;
+            }
+         }
+         result->arg2=args.release();
+      }
    } else {
       throw ParserException("unknown function '"+lexer.getTokenValue()+"'");
    }

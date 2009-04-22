@@ -110,8 +110,14 @@ static bool encodeBinaryFilter(QueryGraph::Filter::Type type,Database& db,const 
 {
    output.type=type;
    output.arg1=new QueryGraph::Filter();
-   output.arg2=new QueryGraph::Filter();
-   return encodeFilter(db,group,*input.arg1,*output.arg1)&&encodeFilter(db,group,*input.arg2,*output.arg2);
+   if (!encodeFilter(db,group,*input.arg1,*output.arg1))
+      return false;
+   if (input.arg2) {
+      output.arg2=new QueryGraph::Filter();
+      if (!encodeFilter(db,group,*input.arg2,*output.arg2))
+         return false;
+   }
+   return true;
 }
 //---------------------------------------------------------------------------
 static bool encodeTernaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
@@ -198,6 +204,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
       case SPARQLParser::Filter::Builtin_isblank: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isblank,db,group,input,output);
       case SPARQLParser::Filter::Builtin_isliteral: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isliteral,db,group,input,output);
       case SPARQLParser::Filter::Builtin_regex: return encodeTernaryFilter(QueryGraph::Filter::Builtin_regex,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_in: return encodeBinaryFilter(QueryGraph::Filter::Builtin_in,db,group,input,output);
    }
    return false; // XXX cannot happen
 }
@@ -216,8 +223,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
 
    // Encode recursively
    output.filters.push_back(QueryGraph::Filter());
-   encodeFilter(db,group,input,output.filters.back());
-   return true;
+   return encodeFilter(db,group,input,output.filters.back());
 }
 //---------------------------------------------------------------------------
 static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& group,QueryGraph::SubQuery& output)
