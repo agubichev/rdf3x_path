@@ -97,19 +97,21 @@ void PlanGen::addPlan(Problem* problem,Plan* plan)
 static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query,Plan* plan,unsigned value1,unsigned value2,unsigned value3)
    // Apply filters to index scans
 {
+   // Collect variables
+   set<unsigned> orderingOnly,allAttributes;
+   if (~(plan->ordering))
+      orderingOnly.insert(plan->ordering);
+   allAttributes.insert(value1);
+   allAttributes.insert(value2);
+   allAttributes.insert(value3);
+
    // Apply a filter on the ordering first
    for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
-      if (((*iter).id==plan->ordering)&&(!(*iter).exclude)) {
+      if ((*iter).isApplicable(orderingOnly)) {
          Plan* p2=plans.alloc();
          double cost1=plan->costs+Costs::filter(plan->cardinality);
-         double cost2=0.5*plan->costs+(*iter).values.size()*Costs::seekBtree();
-         if (cost2<cost1) {
-            p2->op=Plan::NestedLoopFilter;
-            p2->costs=cost2;
-         } else {
-            p2->op=Plan::Filter;
-            p2->costs=cost1;
-         }
+         p2->op=Plan::Filter;
+         p2->costs=cost1;
          p2->opArg=(*iter).id;
          p2->left=plan;
          p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
@@ -120,7 +122,7 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query
       }
    // Apply all other applicable filters
    for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
-      if ((((*iter).id==value1)||((*iter).id==value2)||((*iter).id==value3))&&((*iter).id!=plan->ordering)) {
+      if ((*iter).isApplicable(allAttributes)&&(!(*iter).isApplicable(orderingOnly))) {
          Plan* p2=plans.alloc();
          p2->op=Plan::Filter;
          p2->opArg=(*iter).id;
@@ -373,7 +375,7 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {
       Plan* iter2=iter;
-      while ((iter2->op==Plan::Filter)||(iter2->op==Plan::NestedLoopFilter))
+      while (iter2->op==Plan::Filter)
          iter2=iter2->left;
       iter2->left=static_cast<Plan*>(0)+id;
       iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&node));
@@ -569,23 +571,10 @@ PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,
    return result;
 }
 //---------------------------------------------------------------------------
-static bool isComplexFilterApplicable(const QueryGraph::ComplexFilter& filter,const std::set<unsigned> leftVariables,const std::set<unsigned>& rightVariables)
-   // Check if a complex filter is applicable here
-{
-   if ((leftVariables.count(filter.id1))&&(!rightVariables.count(filter.id1))&&(!leftVariables.count(filter.id2))&&(rightVariables.count(filter.id2)))
-      return true;
-   if ((!leftVariables.count(filter.id1))&&(rightVariables.count(filter.id1))&&(leftVariables.count(filter.id2))&&(!rightVariables.count(filter.id2)))
-      return true;
-   return false;
-}
-//---------------------------------------------------------------------------
-Plan* PlanGen::addComplexFilters(Plan* plan,const QueryGraph::SubQuery& query)
-   // Greedily add complex filter expressions
+static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
+   // Find all filters already applied in a plan
 {
    switch (plan->op) {
-      case Plan::ComplexFilter:
-         // Should never happen!
-         break;
       case Plan::Union:
       case Plan::MergeUnion:
          // A nested subquery starts here, stop
@@ -593,42 +582,22 @@ Plan* PlanGen::addComplexFilters(Plan* plan,const QueryGraph::SubQuery& query)
       case Plan::IndexScan:
       case Plan::AggregatedIndexScan:
       case Plan::FullyAggregatedIndexScan:
+         // We reached a leaf.
+         break;
       case Plan::Filter:
-      case Plan::NestedLoopFilter:
-         // We reached a leaf. XXX check for complex filters involving a single pattern
+         filters.insert(reinterpret_cast<QueryGraph::Filter*>(plan->right));
+         findFilters(plan->left,filters);
          break;
       case Plan::NestedLoopJoin:
       case Plan::MergeJoin:
       case Plan::HashJoin:
-         // A join
-         {
-            plan->left=addComplexFilters(plan->left,query);
-            plan->right=addComplexFilters(plan->right,query);
-            std::set<unsigned> leftVariables,rightVariables;
-            CodeGen::collectVariables(leftVariables,plan->left);
-            CodeGen::collectVariables(rightVariables,plan->right);
-            for (vector<QueryGraph::ComplexFilter>::const_iterator iter=query.complexFilters.begin(),limit=query.complexFilters.end();iter!=limit;++iter) {
-               if (isComplexFilterApplicable(*iter,leftVariables,rightVariables)) {
-                  Plan* p=plans.alloc();
-                  p->op=Plan::ComplexFilter;
-                  p->opArg=0;
-                  p->left=plan;
-                  p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::ComplexFilter*>(&(*iter)));
-                  // XXX derive correct statistics, propagate up!
-                  p->cardinality=plan->cardinality;
-                  p->costs=plan->costs;
-                  p->ordering=plan->ordering;
-                  p->next=0;
-                  plan=p;
-               }
-            }
-         }
+         findFilters(plan->left,filters);
+         findFilters(plan->right,filters);
          break;
       case Plan::HashGroupify:
-         plan->left=addComplexFilters(plan->left,query);
+         findFilters(plan->left,filters);
          break;
    }
-   return plan;
 }
 //---------------------------------------------------------------------------
 Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
@@ -777,9 +746,21 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    if (!plan)
       return 0;
 
-   // Greedily add complex filter predicates
-   if (!query.complexFilters.empty())
-      plan=addComplexFilters(plan,query);
+   // Add all remaining filters
+   set<const QueryGraph::Filter*> appliedFilters;
+   findFilters(plan,appliedFilters);
+   for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
+      if (!appliedFilters.count(&(*iter))) {
+         Plan* p=plans.alloc();
+         p->op=Plan::Filter;
+         p->opArg=0;
+         p->left=plan;
+         p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+         p->cardinality=plan->cardinality; // XXX real computation
+         p->costs=plan->costs;
+         p->ordering=plan->ordering;
+         plan=p;
+      }
 
    // Return the complete plan
    return plan;

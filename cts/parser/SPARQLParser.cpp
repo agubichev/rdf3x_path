@@ -1,5 +1,6 @@
 #include "cts/parser/SPARQLParser.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
+#include <memory>
 #include <cstdlib>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -39,6 +40,56 @@ SPARQLParser::Pattern::Pattern(Element subject,Element predicate,Element object)
 SPARQLParser::Pattern::~Pattern()
    // Destructor
 {
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter::Filter()
+   : arg1(0),arg2(0),arg3(0),valueArg(0)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter::Filter(const Filter& other)
+   : type(other.type),arg1(0),arg2(0),arg3(0),value(other.value),valueType(other.valueType),valueArg(other.valueArg)
+   // Copy-Constructor
+{
+   if (other.arg1)
+      arg1=new Filter(*other.arg1);
+   if (other.arg2)
+      arg2=new Filter(*other.arg2);
+   if (other.arg3)
+      arg3=new Filter(*other.arg3);
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter::~Filter()
+   // Destructor
+{
+   delete arg1;
+   delete arg2;
+   delete arg3;
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter& SPARQLParser::Filter::operator=(const Filter& other)
+   // Assignment
+{
+   if (this!=&other) {
+      type=other.type;
+      delete arg1;
+      if (other.arg1)
+         arg1=new Filter(*other.arg1); else
+         arg1=0;
+      delete arg2;
+      if (other.arg2)
+         arg2=new Filter(*other.arg2); else
+         arg2=0;
+      delete arg3;
+      if (other.arg3)
+         arg3=new Filter(*other.arg3); else
+         arg3=0;
+      value=other.value;
+      valueType=other.valueType;
+      valueArg=other.valueArg;
+   }
+   return *this;
 }
 //---------------------------------------------------------------------------
 SPARQLParser::SPARQLParser(SPARQLLexer& lexer)
@@ -116,7 +167,7 @@ void SPARQLParser::parseProjection()
       SPARQLLexer::Token token=lexer.getNext();
       if (token==SPARQLLexer::Variable) {
          projection.push_back(nameVariable(lexer.getTokenValue()));
-      } else if (token==SPARQLLexer::Star) {
+      } else if (token==SPARQLLexer::Mul) {
          // We do nothing here. Empty projections will be filled with all
          // named variables after parsing
       } else {
@@ -144,73 +195,444 @@ void SPARQLParser::parseFrom()
    }
 }
 //---------------------------------------------------------------------------
-void SPARQLParser::parseFilter(PatternGroup& group,map<string,unsigned>& localVars)
-   // Parse a filter condition
+void SPARQLParser::parseRDFLiteral(std::string& value,Element::SubType& subType,std::string& valueType)
+   // Parse an RDF literal
+{
+   if (lexer.getNext()!=SPARQLLexer::String)
+      throw ParserException("literal expected");
+   subType=Element::None;
+   value=lexer.getTokenValue();
+
+   SPARQLLexer::Token token=lexer.getNext();
+   if (token==SPARQLLexer::At) {
+      if (lexer.getNext()!=SPARQLLexer::Identifier)
+         throw ParserException("language tag expected after '@'");
+      subType=Element::CustomLanguage;
+      valueType=lexer.getTokenValue();
+   } else if (token==SPARQLLexer::Type) {
+      token=lexer.getNext();
+      if (token==SPARQLLexer::IRI) {
+         subType=Element::CustomType;
+         valueType=lexer.getTokenValue();
+      } else {
+         throw ParserException("type URI expeted after '^^'");
+      }
+   } else {
+      lexer.unget(token);
+   }
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseIRIrefOrFunction(std::map<std::string,unsigned>& localVars,bool mustCall)
+   // Parse a "IRIrefOFunction" production
+{
+   // The IRI
+   if (lexer.getNext()!=SPARQLLexer::IRI)
+      throw ParserException("IRI expected");
+   auto_ptr<Filter> result(new Filter);
+   result->type=Filter::IRI;
+   result->value=lexer.getTokenValue();
+
+   // Arguments?
+   if (lexer.hasNext(SPARQLLexer::LParen)) {
+      lexer.getNext();
+      auto_ptr<Filter> call(new Filter);
+      call->type=Filter::Function;
+      call->arg1=result.release();
+      if (lexer.hasNext(SPARQLLexer::RParen)) {
+         lexer.getNext();
+      } else {
+         auto_ptr<Filter> args(new Filter);
+         Filter* tail=args.get();
+         tail->type=Filter::ArgumentList;
+         tail->arg1=parseExpression(localVars);
+         while (true) {
+            if (lexer.hasNext(SPARQLLexer::Comma)) {
+               lexer.getNext();
+               tail=tail->arg2=new Filter;
+               tail->type=Filter::ArgumentList;
+               tail->arg1=parseExpression(localVars);
+               break;
+            } else {
+               if (lexer.getNext()!=SPARQLLexer::RParen)
+                  throw ParserException("')' expected");
+               break;
+            }
+         }
+         call->arg2=args.release();
+      }
+
+      result=call;
+   } else if (mustCall) {
+      throw ParserException("'(' expected");
+   }
+
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseBuiltInCall(std::map<std::string,unsigned>& localVars)
+   // Parse a "BuiltInCall" production
+{
+   if (lexer.getNext()!=SPARQLLexer::Identifier)
+      throw ParserException("function name expected");
+
+   auto_ptr<Filter> result(new Filter);
+   if (lexer.isKeyword("STR")) {
+      result->type=Filter::Builtin_str;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("LANG")) {
+      result->type=Filter::Builtin_lang;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("LANGMATCHES")) {
+      result->type=Filter::Builtin_langmatches;
+      if (lexer.getNext()!=SPARQLLexer::LParen)
+         throw ParserException("'(' expected");
+      result->arg1=parseExpression(localVars);
+      if (lexer.getNext()!=SPARQLLexer::Comma)
+         throw ParserException("',' expected");
+      result->arg2=parseExpression(localVars);
+      if (lexer.getNext()!=SPARQLLexer::RParen)
+         throw ParserException("')' expected");
+   } else if (lexer.isKeyword("DATATYPE")) {
+      result->type=Filter::Builtin_datatype;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("BOUND")) {
+      result->type=Filter::Builtin_bound;
+      if (lexer.getNext()!=SPARQLLexer::LParen)
+         throw ParserException("'(' expected");
+      if (lexer.getNext()!=SPARQLLexer::Variable)
+         throw ParserException("variable expected as argument to BOUND");
+      auto_ptr<Filter> arg(new Filter());
+      arg->type=Filter::Variable;
+      arg->valueArg=nameVariable(lexer.getTokenValue());
+      if (lexer.getNext()!=SPARQLLexer::RParen)
+         throw ParserException("')' expected");
+   } else if (lexer.isKeyword("sameTerm")) {
+      result->type=Filter::Builtin_sameterm;
+      if (lexer.getNext()!=SPARQLLexer::LParen)
+         throw ParserException("'(' expected");
+      result->arg1=parseExpression(localVars);
+      if (lexer.getNext()!=SPARQLLexer::Comma)
+         throw ParserException("',' expected");
+      result->arg2=parseExpression(localVars);
+      if (lexer.getNext()!=SPARQLLexer::RParen)
+         throw ParserException("')' expected");
+   } else if (lexer.isKeyword("isIRI")) {
+      result->type=Filter::Builtin_isiri;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("isURI")) {
+      result->type=Filter::Builtin_isiri;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("isBLANK")) {
+      result->type=Filter::Builtin_isblank;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("isLITERAL")) {
+      result->type=Filter::Builtin_isliteral;
+      result->arg1=parseBrackettedExpression(localVars);
+   } else if (lexer.isKeyword("REGEX")) {
+      result->type=Filter::Builtin_regex;
+      if (lexer.getNext()!=SPARQLLexer::LParen)
+         throw ParserException("'(' expected");
+      result->arg1=parseExpression(localVars);
+      if (lexer.getNext()!=SPARQLLexer::Comma)
+         throw ParserException("',' expected");
+      result->arg2=parseExpression(localVars);
+      if (lexer.hasNext(SPARQLLexer::Comma)) {
+         lexer.getNext();
+         result->arg3=parseExpression(localVars);
+      }
+      if (lexer.getNext()!=SPARQLLexer::RParen)
+         throw ParserException("')' expected");
+   } else {
+      throw ParserException("unknown function '"+lexer.getTokenValue()+"'");
+   }
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parsePrimaryExpression(map<string,unsigned>& localVars)
+   // Parse a "PrimaryExpression" production
+{
+   SPARQLLexer::Token token=lexer.getNext();
+
+   if (token==SPARQLLexer::LParen) {
+      lexer.unget(token);
+      return parseBrackettedExpression(localVars);
+   }
+   if (token==SPARQLLexer::Identifier) {
+      if (lexer.isKeyword("true")) {
+         auto_ptr<Filter> result(new Filter);
+         result->type=Filter::Literal;
+         result->value="true";
+         result->valueType="http://www.w3.org/2001/XMLSchema#boolean";
+         result->valueArg=Element::CustomType;
+         return result.release();
+      } else if (lexer.isKeyword("false")) {
+         auto_ptr<Filter> result(new Filter);
+         result->type=Filter::Literal;
+         result->value="false";
+         result->valueType="http://www.w3.org/2001/XMLSchema#boolean";
+         result->valueArg=Element::CustomType;
+         return result.release();
+      }
+      lexer.unget(token);
+      return parseBuiltInCall(localVars);
+   }
+   if (token==SPARQLLexer::IRI) {
+      lexer.unget(token);
+      return parseIRIrefOrFunction(localVars,false);
+   }
+   if (token==SPARQLLexer::String) {
+      lexer.unget(token);
+      auto_ptr<Filter> result(new Filter);
+      Element::SubType type;
+      parseRDFLiteral(result->value,type,result->valueType);
+      result->valueArg=type;
+      return result.release();
+   }
+   if (token==SPARQLLexer::Integer) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::Variable;
+      result->value=lexer.getTokenValue();
+      result->valueType="http://www.w3.org/2001/XMLSchema#integer";
+      result->valueArg=Element::CustomType;
+      return result.release();
+   }
+   if (token==SPARQLLexer::Decimal) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::Variable;
+      result->value=lexer.getTokenValue();
+      result->valueType="http://www.w3.org/2001/XMLSchema#decimal";
+      result->valueArg=Element::CustomType;
+      return result.release();
+   }
+   if (token==SPARQLLexer::Double) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::Variable;
+      result->value=lexer.getTokenValue();
+      result->valueType="http://www.w3.org/2001/XMLSchema#double";
+      result->valueArg=Element::CustomType;
+      return result.release();
+   }
+   if (token==SPARQLLexer::Variable) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::Variable;
+      result->value=lexer.getTokenValue();
+      return result.release();
+   }
+   throw ParserException("syntax error in primary expression");
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseUnaryExpression(map<string,unsigned>& localVars)
+   // Parse a "UnaryExpression" production
+{
+   SPARQLLexer::Token token=lexer.getNext();
+
+   if (token==SPARQLLexer::Not) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::Not;
+      result->arg1=parsePrimaryExpression(localVars);
+      return result.release();
+   } else if (token==SPARQLLexer::Plus) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::UnaryPlus;
+      result->arg1=parsePrimaryExpression(localVars);
+      return result.release();
+   } else if (token==SPARQLLexer::Minus) {
+      auto_ptr<Filter> result(new Filter);
+      result->type=Filter::UnaryMinus;
+      result->arg1=parsePrimaryExpression(localVars);
+      return result.release();
+   } else {
+      lexer.unget(token);
+      return parsePrimaryExpression(localVars);
+   }
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseMultiplicativeExpression(map<string,unsigned>& localVars)
+   // Parse a "MultiplicativeExpression" production
+{
+   auto_ptr<Filter> result(parseUnaryExpression(localVars));
+
+   // op *
+   while (true) {
+      SPARQLLexer::Token token=lexer.getNext();
+      if ((token==SPARQLLexer::Mul)||(token==SPARQLLexer::Div)) {
+         auto_ptr<Filter> right(parseUnaryExpression(localVars));
+
+         auto_ptr<Filter> newEntry(new Filter);
+         switch (token) {
+            case SPARQLLexer::Mul: newEntry->type=Filter::Mul; break;
+            case SPARQLLexer::Div: newEntry->type=Filter::Div; break;
+            default: throw; // cannot happen
+         }
+         newEntry->arg1=result.release();
+         newEntry->arg2=right.release();
+         result=newEntry;
+      } else {
+         lexer.unget(token);
+         break;
+      }
+   }
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseAdditiveExpression(map<string,unsigned>& localVars)
+   // Parse a "AdditiveExpression" production
+{
+   auto_ptr<Filter> result(parseMultiplicativeExpression(localVars));
+
+   // op *
+   while (true) {
+      SPARQLLexer::Token token=lexer.getNext();
+      if ((token==SPARQLLexer::Plus)||(token==SPARQLLexer::Minus)) {
+         auto_ptr<Filter> right(parseMultiplicativeExpression(localVars));
+
+         auto_ptr<Filter> newEntry(new Filter);
+         switch (token) {
+            case SPARQLLexer::Plus: newEntry->type=Filter::Plus; break;
+            case SPARQLLexer::Minus: newEntry->type=Filter::Minus; break;
+            default: throw; // cannot happen
+         }
+         newEntry->arg1=result.release();
+         newEntry->arg2=right.release();
+         result=newEntry;
+      } else {
+         lexer.unget(token);
+         break;
+      }
+   }
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseNumericExpression(map<string,unsigned>& localVars)
+   // Parse a "NumericExpression" production
+{
+   return parseAdditiveExpression(localVars);
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseRelationalExpression(map<string,unsigned>& localVars)
+   // Parse a "RelationalExpression" production
+{
+   auto_ptr<Filter> result(parseNumericExpression(localVars));
+
+   // op *
+   while (true) {
+      SPARQLLexer::Token token=lexer.getNext();
+      if ((token==SPARQLLexer::Equal)||(token==SPARQLLexer::NotEqual)||(token==SPARQLLexer::Less)||(token==SPARQLLexer::LessOrEqual)||(token==SPARQLLexer::Greater)||(token==SPARQLLexer::GreaterOrEqual)) {
+         auto_ptr<Filter> right(parseNumericExpression(localVars));
+
+         auto_ptr<Filter> newEntry(new Filter);
+         switch (token) {
+            case SPARQLLexer::Equal: newEntry->type=Filter::Equal; break;
+            case SPARQLLexer::NotEqual: newEntry->type=Filter::NotEqual; break;
+            case SPARQLLexer::Less: newEntry->type=Filter::Less; break;
+            case SPARQLLexer::LessOrEqual: newEntry->type=Filter::LessOrEqual; break;
+            case SPARQLLexer::Greater: newEntry->type=Filter::Greater; break;
+            case SPARQLLexer::GreaterOrEqual: newEntry->type=Filter::GreaterOrEqual; break;
+            default: throw; // cannot happen
+         }
+         newEntry->arg1=result.release();
+         newEntry->arg2=right.release();
+         result=newEntry;
+      } else {
+         lexer.unget(token);
+         break;
+      }
+   }
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseValueLogical(map<string,unsigned>& localVars)
+   // Parse a "ValueLogical" production
+{
+   return parseRelationalExpression(localVars);
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseConditionalAndExpression(map<string,unsigned>& localVars)
+   // Parse a "ConditionalAndExpression" production
+{
+   auto_ptr<Filter> result(parseValueLogical(localVars));
+
+   // && *
+   while (lexer.hasNext(SPARQLLexer::And)) {
+      if (lexer.getNext()!=SPARQLLexer::And)
+         throw ParserException("'&&' expected");
+      auto_ptr<Filter> right(parseValueLogical(localVars));
+
+      auto_ptr<Filter> newEntry(new Filter);
+      newEntry->type=Filter::And;
+      newEntry->arg1=result.release();
+      newEntry->arg2=right.release();
+
+      result=newEntry;
+   }
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseConditionalOrExpression(map<string,unsigned>& localVars)
+   // Parse a "ConditionalOrExpression" production
+{
+   auto_ptr<Filter> result(parseConditionalAndExpression(localVars));
+
+   // || *
+   while (lexer.hasNext(SPARQLLexer::Or)) {
+      if (lexer.getNext()!=SPARQLLexer::Or)
+         throw ParserException("'||' expected");
+      auto_ptr<Filter> right(parseConditionalAndExpression(localVars));
+
+      auto_ptr<Filter> newEntry(new Filter);
+      newEntry->type=Filter::Or;
+      newEntry->arg1=result.release();
+      newEntry->arg2=right.release();
+
+      result=newEntry;
+   }
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseExpression(map<string,unsigned>& localVars)
+   // Parse a "Expression" production
+{
+   return parseConditionalOrExpression(localVars);
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseBrackettedExpression(map<string,unsigned>& localVars)
+   // Parse a "BrackettedExpression" production
 {
    // '('
    if (lexer.getNext()!=SPARQLLexer::LParen)
       throw ParserException("'(' expected");
 
-   // Variable
-   Element var=parsePatternElement(group,localVars);
-   if (var.type!=Element::Variable)
-      throw ParserException("filter variable expected");
+   // Expression
+   auto_ptr<Filter> result(parseExpression(localVars));
 
-   // Prepare the setuo
-   vector<Element> values;
-   Filter::Type type;
+   // ')'
+   if (lexer.getNext()!=SPARQLLexer::RParen)
+      throw ParserException("')' expected");
 
-   // 'in'?
-   SPARQLLexer::Token token=lexer.getNext();
-   if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("in"))) {
-      // The values
-      while (true) {
-         Element e=parsePatternElement(group,localVars);
-         if (e.type==Element::Variable)
-            throw ParserException("constant values required in 'in' filter");
-         values.push_back(e);
+   return result.release();
+}
+//---------------------------------------------------------------------------
+SPARQLParser::Filter* SPARQLParser::parseConstraint(map<string,unsigned>& localVars)
+   // Parse a "Constraint" production
+{
+   // Check possible productions
+   if (lexer.hasNext(SPARQLLexer::LParen))
+      return parseBrackettedExpression(localVars);
+   if (lexer.hasNext(SPARQLLexer::Identifier))
+      return parseBuiltInCall(localVars);
+   if (lexer.hasNext(SPARQLLexer::IRI))
+      return parseIRIrefOrFunction(localVars,true);
 
-         SPARQLLexer::Token token=lexer.getNext();
-         if (token==SPARQLLexer::Comma)
-            continue;
-         if (token==SPARQLLexer::RParen)
-            break;
-         throw ParserException("',' or ')' expected");
-      }
-      type=Filter::Normal;
-   } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("reaches"))) {
-      Element target=parsePatternElement(group,localVars);
-      if (target.type==Element::Variable)
-         throw ParserException("constant values required in 'reaches' filter");
-
-       token=lexer.getNext();
-      if ((token!=SPARQLLexer::Identifier)||(!lexer.isKeyword("via")))
-         throw ParserException("'via' expected");
-
-      Element path=parsePatternElement(group,localVars);
-      if (target.type==Element::Variable)
-         throw ParserException("constant values required in 'reaches' filter");
-
-      values.push_back(target);
-      values.push_back(path);
-      type=Filter::Path;
-
-      if (lexer.getNext()!=SPARQLLexer::RParen)
-         throw ParserException("')' expected");
-   } else if ((token==SPARQLLexer::Equal)||(token==SPARQLLexer::NotEqual)) {
-      Element e=parsePatternElement(group,localVars);
-      values.push_back(e);
-      if (lexer.getNext()!=SPARQLLexer::RParen)
-         throw ParserException("')' expected");
-      type=(token==SPARQLLexer::Equal)?Filter::Normal:Filter::Exclude;
-   } else throw ParserException("'=', '!=', 'in', or 'reachable' expected");
-
-   // Remember the filter
-   Filter f;
-   f.id=var.id;
-   f.values=values;
-   f.type=type;
-   group.filters.push_back(f);
+   // Report an error
+   throw ParserException("filter constraint expected");
+}
+//---------------------------------------------------------------------------
+void SPARQLParser::parseFilter(PatternGroup& group,map<string,unsigned>& localVars)
+   // Parse a filter condition
+{
+   Filter* entry=parseConstraint(localVars);
+   group.filters.push_back(*entry);
+   delete entry;
 }
 //---------------------------------------------------------------------------
 SPARQLParser::Element SPARQLParser::parseBlankNode(PatternGroup& group,map<string,unsigned>& localVars)
@@ -266,25 +688,8 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
       result.id=nameVariable(lexer.getTokenValue());
    } else if (token==SPARQLLexer::String) {
       result.type=Element::Literal;
-      result.subType=Element::None;
-      result.value=lexer.getTokenValue();
-      token=lexer.getNext();
-      if (token==SPARQLLexer::At) {
-         if (lexer.getNext()!=SPARQLLexer::Identifier)
-            throw ParserException("language tag expected after '@'");
-         result.subType=Element::CustomLanguage;
-         result.subTypeValue=lexer.getTokenValue();
-      } else if (token==SPARQLLexer::Type) {
-         token=lexer.getNext();
-         if (token==SPARQLLexer::IRI) {
-            result.subType=Element::CustomType;
-            result.subTypeValue=lexer.getTokenValue();
-         } else {
-            throw ParserException("type URI expeted after '^^'");
-         }
-      } else {
-         lexer.unget(token);
-      }
+      lexer.unget(token);
+      parseRDFLiteral(result.value,result.subType,result.subTypeValue);
    } else if (token==SPARQLLexer::IRI) {
       result.type=Element::IRI;
       result.value=lexer.getTokenValue();

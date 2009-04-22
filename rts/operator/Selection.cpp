@@ -1,7 +1,11 @@
 #include "rts/operator/Selection.hpp"
+#include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/segment/DictionarySegment.hpp"
 #include <iostream>
+#include <sstream>
 #include <cassert>
+#include <tr1/regex>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -12,141 +16,861 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-/// Test for equal
-class Selection::Equal : public Selection
-{
-   public:
-   /// Constructor
-   Equal(Operator* input,const std::vector<Register*>& predicates) : Selection(input,predicates,true) {}
-
-   /// First tuple
-   unsigned first();
-   /// Next tuples
-   unsigned next();
-};
+using namespace std;
+using namespace std::tr1;
 //---------------------------------------------------------------------------
-/// Test for not equal
-class Selection::NotEqual : public Selection
+Selection::Result::~Result()
+   // Destructor
 {
-   public:
-   /// Constructor
-   NotEqual(Operator* input,const std::vector<Register*>& predicates) : Selection(input,predicates,false) {}
-
-   /// First tuple
-   unsigned first();
-   /// Next tuples
-   unsigned next();
-};
-//---------------------------------------------------------------------------
-Selection::Selection(Operator* input,const std::vector<Register*>& predicates,bool equal)
-   : predicates(predicates),input(input),equal(equal)
-   // Constructor
-{
-   assert((predicates.size()%2)==0);
 }
 //---------------------------------------------------------------------------
-Selection* Selection::create(Operator* input,const std::vector<Register*>& predicates,bool equal)
+void Selection::Result::ensureString(Selection* selection)
+   // Ensure that a string is available
+{
+   if (!(flags&stringAvailable)) {
+      if (flags&idAvailable) {
+         const char* start,*stop;
+         if ((~id)&&(selection->runtime.getDatabase().getDictionary().lookupById(id,start,stop,type,subType))) {
+            value=string(start,stop);
+            flags|=typeAvailable;
+         } else {
+            value="NULL";
+         }
+      } else if (flags&booleanAvailable) {
+         if (boolean)
+            value="true"; else
+            value="false";
+      } else {
+         value="";
+      }
+      flags|=stringAvailable;
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::Result::ensureType(Selection* selection)
+   // Ensure that the type is available
+{
+   if (!(flags&typeAvailable)) {
+      if (flags&idAvailable) {
+         const char* start,*stop;
+         if ((~id)&&(selection->runtime.getDatabase().getDictionary().lookupById(id,start,stop,type,subType))) {
+            value=string(start,stop);
+            flags|=stringAvailable;
+         } else {
+            type=Type::Literal; // XXX NULL type?
+         }
+      } else if (flags&booleanAvailable) {
+         type=Type::Boolean;
+      } else {
+         type=Type::Literal;
+      }
+      flags|=typeAvailable;
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::Result::ensureSubType(Selection* selection)
+   // Ensure that the type is available
+{
+   ensureType(selection);
+   if (!(flags&subTypeAvailable)) {
+      if ((type==Type::CustomLanguage)||(type==Type::CustomType)) {
+         const char* start,*stop;
+         Type::ID t; unsigned st;
+         if (selection->runtime.getDatabase().getDictionary().lookupById(subType,start,stop,t,st)) {
+            subTypeValue=string(start,stop);
+         } else {
+            subTypeValue.clear();
+         }
+      } else {
+         subTypeValue.clear();
+      }
+      flags|=subTypeAvailable;
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::Result::ensureBoolean(Selection* runtime)
+   // Ensure that a boolean interpretation is available
+{
+   if (!(flags&booleanAvailable)) {
+      ensureString(runtime);
+      boolean=(value=="true");
+      flags|=booleanAvailable;
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::Result::setBoolean(bool v)
+   // Set to a boolean value
+{
+   flags=booleanAvailable|typeAvailable;
+   type=Type::Boolean;
+   boolean=v;
+}
+//---------------------------------------------------------------------------
+void Selection::Result::setId(unsigned v)
+   // Set to an id value
+{
+   flags=idAvailable;
+   id=v;
+}
+//---------------------------------------------------------------------------
+void Selection::Result::setLiteral(const std::string& v)
+   // Set to a string value
+{
+   flags=stringAvailable|typeAvailable;
+   type=Type::Literal;
+   value=v;
+}
+//---------------------------------------------------------------------------
+void Selection::Result::setIRI(const std::string& v)
+   // Set to a string value
+{
+   flags=stringAvailable|typeAvailable;
+   type=Type::URI;
+   value=v;
+}
+//---------------------------------------------------------------------------
+Selection::Predicate::Predicate()
+   : selection(0)
    // Constructor
 {
-   if (equal)
-      return new Equal(input,predicates); else
-      return new NotEqual(input,predicates);
+}
+//---------------------------------------------------------------------------
+Selection::Predicate::~Predicate()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+void Selection::Predicate::setSelection(Selection* s)
+   // Set the selection
+{
+   selection=s;
+}
+//---------------------------------------------------------------------------
+bool Selection::Predicate::check()
+   // Check the predicate
+{
+   Result r;
+   eval(r);
+   r.ensureBoolean(selection);
+   return r.boolean;
+}
+//---------------------------------------------------------------------------
+void Selection::BinaryPredicate::setSelection(Selection* s)
+   // Set the selection
+{
+   Predicate::setSelection(s);
+   left->setSelection(s);
+   right->setSelection(s);
+}
+//---------------------------------------------------------------------------
+void Selection::UnaryPredicate::setSelection(Selection* s)
+   // Set the selection
+{
+   Predicate::setSelection(s);
+   input->setSelection(s);
+}
+//---------------------------------------------------------------------------
+void Selection::Or::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setBoolean(left->check()||right->check());
+}
+//---------------------------------------------------------------------------
+void Selection::Or::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")||(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::And::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setBoolean(left->check()&&right->check());
+}
+//---------------------------------------------------------------------------
+void Selection::And::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")&&(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Equal::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   // Cheap case first
+   if (l.hasId()&&r.hasId()) {
+      result.setBoolean(l.id==r.id);
+      return;
+   }
+
+   // Now compare for real
+   l.ensureString(selection);
+   r.ensureString(selection);
+   result.setBoolean(l.value==r.value);
+}
+//---------------------------------------------------------------------------
+void Selection::Equal::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")==(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::NotEqual::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   // Cheap case first
+   if (l.hasId()&&r.hasId()) {
+      result.setBoolean(l.id!=r.id);
+      return;
+   }
+
+   // Now compare for real
+   l.ensureString(selection);
+   r.ensureString(selection);
+   result.setBoolean(l.value!=r.value);
+}
+//---------------------------------------------------------------------------
+void Selection::NotEqual::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")!=(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Less::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   // XXX implement type based comparisons!
+   l.ensureString(selection);
+   r.ensureString(selection);
+   result.setBoolean(l.value<r.value);
+}
+//---------------------------------------------------------------------------
+void Selection::Less::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")<(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::LessOrEqual::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   // XXX implement type based comparisons!
+   l.ensureString(selection);
+   r.ensureString(selection);
+   result.setBoolean(l.value<=r.value);
+}
+//---------------------------------------------------------------------------
+void Selection::LessOrEqual::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")<(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Plus::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   l.ensureString(selection);
+   r.ensureString(selection);
+   stringstream s;
+   s << (atof(l.value.c_str())+atof(r.value.c_str()));
+   result.setLiteral(s.str());
+}
+//---------------------------------------------------------------------------
+void Selection::Plus::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")+(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Minus::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   l.ensureString(selection);
+   r.ensureString(selection);
+   stringstream s;
+   s << (atof(l.value.c_str())-atof(r.value.c_str()));
+   result.setLiteral(s.str());
+}
+//---------------------------------------------------------------------------
+void Selection::Minus::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")-(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Mul::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   l.ensureString(selection);
+   r.ensureString(selection);
+   stringstream s;
+   s << (atof(l.value.c_str())*atof(r.value.c_str()));
+   result.setLiteral(s.str());
+}
+//---------------------------------------------------------------------------
+void Selection::Mul::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")*(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Div::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   l.ensureString(selection);
+   r.ensureString(selection);
+   stringstream s;
+   s << (atof(l.value.c_str())/atof(r.value.c_str()));
+   result.setLiteral(s.str());
+}
+//---------------------------------------------------------------------------
+void Selection::Div::print()
+   // Print the predicate (debugging only)
+{
+   cout << "(";
+   left->print();
+   cout << ")/(";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::Not::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setBoolean(!input->check());
+}
+//---------------------------------------------------------------------------
+void Selection::Not::print()
+   // Print the predicate (debugging only)
+{
+   cout << "!";
+   input->print();
+}
+//---------------------------------------------------------------------------
+void Selection::Neg::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result i;
+   input->eval(i);
+
+   i.ensureString(selection);
+   stringstream s;
+   s << (-atof(i.value.c_str()));
+   result.setLiteral(s.str());
+}
+//---------------------------------------------------------------------------
+void Selection::Neg::print()
+   // Print the predicate (debugging only)
+{
+   cout << "-";
+   input->print();
+}
+//---------------------------------------------------------------------------
+void Selection::Null::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setId(~0u);
+}
+//---------------------------------------------------------------------------
+void Selection::Null::print()
+   // Print the predicate (debugging only)
+{
+   cout << "NULL";
+}
+//---------------------------------------------------------------------------
+void Selection::False::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setBoolean(false);
+}
+//---------------------------------------------------------------------------
+void Selection::False::print()
+   // Print the predicate (debugging only)
+{
+   cout << "false";
+}
+//---------------------------------------------------------------------------
+void Selection::Variable::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setId(reg->value);
+}
+//---------------------------------------------------------------------------
+void Selection::Variable::print()
+   // Print the predicate (debugging only)
+{
+   cout << reg;
+}
+//---------------------------------------------------------------------------
+void Selection::ConstantLiteral::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setId(id);
+}
+//---------------------------------------------------------------------------
+void Selection::ConstantLiteral::print()
+   // Print the predicate (debugging only)
+{
+   cout << id;
+}
+//---------------------------------------------------------------------------
+void Selection::TemporaryConstantLiteral::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setLiteral(value);
+}
+//---------------------------------------------------------------------------
+void Selection::TemporaryConstantLiteral::print()
+   // Print the predicate (debugging only)
+{
+   cout << value;
+}
+//---------------------------------------------------------------------------
+void Selection::ConstantIRI::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setId(id);
+}
+//---------------------------------------------------------------------------
+void Selection::ConstantIRI::print()
+   // Print the predicate (debugging only)
+{
+   cout << id;
+}
+//---------------------------------------------------------------------------
+void Selection::TemporaryConstantIRI::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setIRI(value);
+}
+//---------------------------------------------------------------------------
+void Selection::TemporaryConstantIRI::print()
+   // Print the predicate (debugging only)
+{
+   cout << value;
+}
+//---------------------------------------------------------------------------
+void Selection::FunctionCall::setSelection(Selection* s)
+   // Set the selection
+{
+   Predicate::setSelection(s);
+   for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter)
+      (*iter)->setSelection(s);
+}
+//---------------------------------------------------------------------------
+void Selection::FunctionCall::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setId(~0u); // XXX perform the call
+}
+//---------------------------------------------------------------------------
+void Selection::FunctionCall::print()
+   // Print the predicate (debugging only)
+{
+   cout << "<" << func << ">(";
+   for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter) {
+      if (iter!=args.begin())
+         cout << ",";
+      (*iter)->print();
+   }
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinStr::eval(Result& result)
+   // Evaluate the predicate
+{
+   input->eval(result);
+   result.ensureString(selection);
+   result.flags|=Result::typeAvailable;
+   result.type=Type::Literal;
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinStr::print()
+   // Print the predicate (debugging only)
+{
+   cout << "str(";
+   input->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinLang::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result i;
+   input->eval(result);
+   i.ensureType(selection);
+
+   if (i.type!=Type::CustomLanguage) {
+      result.setLiteral("");
+   } else {
+      result.ensureSubType(selection);
+      result.setLiteral(i.subTypeValue);
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinLang::print()
+   // Print the predicate (debugging only)
+{
+   cout << "lang(";
+   input->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinLangMatches::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   l.ensureType(selection);
+
+   if (l.type!=Type::CustomLanguage) {
+      result.setBoolean(false);
+      return;
+   }
+   l.ensureSubType(selection);
+
+   right->eval(r);
+   r.ensureString(selection);
+
+   result.setBoolean(l.subTypeValue==r.value); // XXX implement language range checks
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinLangMatches::print()
+   // Print the predicate (debugging only)
+{
+   cout << "langMatches(";
+   left->print();
+   cout << ",";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinDatatype::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result i;
+   input->eval(result);
+   i.ensureType(selection);
+
+   switch (i.type) {
+      case Type::URI: result.setLiteral("http://www.w3.org/2001/XMLSchema#URI"); break;
+      case Type::Literal:
+      case Type::CustomLanguage:
+      case Type::String: result.setLiteral("http://www.w3.org/2001/XMLSchema#string"); break;
+      case Type::Integer: result.setLiteral("http://www.w3.org/2001/XMLSchema#integer"); break;
+      case Type::Decimal: result.setLiteral("http://www.w3.org/2001/XMLSchema#decimal"); break;
+      case Type::Double: result.setLiteral("http://www.w3.org/2001/XMLSchema#double"); break;
+      case Type::Boolean: result.setLiteral("http://www.w3.org/2001/XMLSchema#boolean"); break;
+      case Type::CustomType: i.ensureSubType(selection); result.setLiteral(i.subTypeValue); break;
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinDatatype::print()
+   // Print the predicate (debugging only)
+{
+   cout << "datatype(";
+   input->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinBound::eval(Result& result)
+   // Evaluate the predicate
+{
+   result.setBoolean(~reg->value);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinBound::print()
+   // Print the predicate (debugging only)
+{
+   cout << "bound(" << reg << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinSameTerm::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result l,r;
+   left->eval(l);
+   right->eval(r);
+
+   // Cheap case
+   if (l.hasId()&&r.hasId()) {
+      result.setBoolean(l.id==r.id);
+      return;
+   }
+
+   // Expensive tests
+   l.ensureType(selection);
+   r.ensureType(selection);
+   if ((l.type!=r.type)||(Type::hasSubType(l.type)&&(l.subType!=r.subType))) {
+      result.setBoolean(false);
+      return;
+   }
+   l.ensureString(selection);
+   r.ensureString(selection);
+   result.setBoolean(l.value==r.value);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinSameTerm::print()
+   // Print the predicate (debugging only)
+{
+   cout << "sameTerm(";
+   left->print();
+   cout << ",";
+   right->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIsIRI::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result i;
+   input->eval(i);
+   i.ensureType(selection);
+   result.setBoolean(i.type==Type::URI);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIsIRI::print()
+   // Print the predicate (debugging only)
+{
+   cout << "isIRI(";
+   input->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIsBlank::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result i;
+   input->eval(i);
+   i.ensureType(selection);
+   if (i.type!=Type::URI) {
+      result.setBoolean(false);
+   } else {
+      i.ensureString(selection);
+      result.setBoolean(i.value.substr(0,2)=="_:");
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIsBlank::print()
+   // Print the predicate (debugging only)
+{
+   cout << "isBlanl(";
+   input->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIsLiteral::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result i;
+   input->eval(i);
+   i.ensureType(selection);
+   result.setBoolean(i.type!=Type::URI);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIsLiteral::print()
+   // Print the predicate (debugging only)
+{
+   cout << "isLiteral(";
+   input->print();
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinRegEx::setSelection(Selection* s)
+   // Set the selection
+{
+   Predicate::setSelection(s);
+   arg1->setSelection(s);
+   arg2->setSelection(s);
+   arg3->setSelection(s);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinRegEx::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result text,pattern;
+   arg1->eval(text);
+   arg2->eval(pattern);
+
+   try {
+      pattern.ensureString(selection);
+      regex r(pattern.value.c_str());
+      text.ensureString(selection);
+      result.setBoolean(regex_match(text.value.begin(),text.value.end(),r));
+      return;
+   } catch (const regex_error&) {
+      result.setBoolean(false);
+   }
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinRegEx::print()
+   // Print the predicate (debugging only)
+{
+   cout << "regex(";
+   arg1->print();
+   cout << ",";
+   arg2->print();
+   if (arg3) {
+      cout << ",";
+      arg2->print();
+   }
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIn::setSelection(Selection* s)
+   // Set the selection
+{
+   Predicate::setSelection(s);
+   probe->setSelection(s);
+   for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter)
+      (*iter)->setSelection(s);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIn::eval(Result& result)
+   // Evaluate the predicate
+{
+   Result p,c;
+   probe->eval(p);
+
+   for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter) {
+      (*iter)->eval(c);
+      if (p.hasId()&&c.hasId()) {
+         if (p.id==c.id) {
+            result.setBoolean(true);
+            return;
+         }
+      } else {
+         p.ensureString(selection);
+         c.ensureString(selection);
+         if (p.value==c.value) {
+            result.setBoolean(true);
+            return;
+         }
+      }
+   }
+   result.setBoolean(false);
+}
+//---------------------------------------------------------------------------
+void Selection::BuiltinIn::print()
+   // Print the predicate (debugging only)
+{
+   cout << "in(";
+   probe->print();
+   for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter) {
+      cout << ",";
+      (*iter)->print();
+   }
+   cout << ")";
+}
+//---------------------------------------------------------------------------
+Selection::Selection(Operator* input,Runtime& runtime,Predicate* predicate)
+   : input(input),runtime(runtime),predicate(predicate)
+   // Constructor
+{
 }
 //---------------------------------------------------------------------------
 Selection::~Selection()
    // Destructor
 {
+   delete predicate;
    delete input;
 }
 //---------------------------------------------------------------------------
-unsigned Selection::Equal::first()
+unsigned Selection::first()
    // Produce the first tuple
 {
-   // Empty input?
-   unsigned count;
-   if ((count=input->first())==0)
-      return false;
+   predicate->setSelection(this);
 
-   // Check the predicate
-   bool match=true;
-   for (std::vector<Register*>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
-      unsigned v1=(*iter)->value;
-      if (v1!=(*(++iter))->value) {
-         match=false;
-         break;
-      }
-   }
-   if (match)
+   // Get the first tuple
+   unsigned count=input->first();
+   if (!count) return 0;
+
+   // Match?
+   if (predicate->check())
       return count;
 
+   // Get the next one
    return next();
 }
 //---------------------------------------------------------------------------
-unsigned Selection::Equal::next()
+unsigned Selection::next()
    // Produce the next tuple
 {
    while (true) {
-      // Input exhausted?
-      unsigned count;
-      if ((count=input->next())==0)
-         return false;
+      // Retrieve the next tuple
+      unsigned count=input->next();
+      if (!count) return 0;
 
-      // Check the predicate
-      bool match=true;
-      for (std::vector<Register*>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
-         unsigned v1=(*iter)->value;
-         if (v1!=(*(++iter))->value) {
-            match=false;
-            break;
-         }
-      }
-      if (match)
-         return count;
-   }
-}
-//---------------------------------------------------------------------------
-unsigned Selection::NotEqual::first()
-   // Produce the first tuple
-{
-   // Empty input?
-   unsigned count;
-   if ((count=input->first())==0)
-      return false;
-
-   // Check the predicate
-   bool match=true;
-   for (std::vector<Register*>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
-      unsigned v1=(*iter)->value;
-      if (v1==(*(++iter))->value) {
-         match=false;
-         break;
-      }
-   }
-   if (match)
-      return count;
-
-   return next();
-}
-//---------------------------------------------------------------------------
-unsigned Selection::NotEqual::next()
-   // Produce the next tuple
-{
-   while (true) {
-      // Input exhausted?
-      unsigned count;
-      if ((count=input->next())==0)
-         return false;
-
-      // Check the predicate
-      bool match=true;
-      for (std::vector<Register*>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
-         unsigned v1=(*iter)->value;
-         if (v1==(*(++iter))->value) {
-            match=false;
-            break;
-         }
-      }
-      if (match)
+      // Match?
+      if (predicate->check())
          return count;
    }
 }
@@ -154,19 +878,11 @@ unsigned Selection::NotEqual::next()
 void Selection::print(DictionarySegment& dict,unsigned level)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<Selection";
-   for (std::vector<Register*>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
-      std::cout << " ";
-      printRegister(dict,*iter);
-      if (equal)
-         std::cout << "="; else
-         std::cout << "!=";
-      ++iter;
-      printRegister(dict,*iter);
-   }
-   std::cout << std::endl;
+   indent(level); cout << "<Selection ";
+   predicate->print();
+   cout << endl;
    input->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   indent(level); cout << ">" << endl;
 }
 //---------------------------------------------------------------------------
 void Selection::addMergeHint(Register* reg1,Register* reg2)

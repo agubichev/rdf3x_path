@@ -17,7 +17,7 @@ class SPARQLLexer
 {
    public:
    /// Possible tokens
-   enum Token { None, Error, Eof, IRI, String, Variable, Identifier, Colon, Semicolon, Comma, Dot, Star, Underscore, LCurly, RCurly, LParen, RParen, LBracket, RBracket, Anon, Equal, NotEqual, At, Type };
+   enum Token { None, Error, Eof, IRI, String, Variable, Identifier, Colon, Semicolon, Comma, Dot, Underscore, LCurly, RCurly, LParen, RParen, LBracket, RBracket, Anon, Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, At, Type, Not, Or, And, Plus, Minus, Mul, Div, Integer, Decimal, Double };
 
    private:
    /// The input
@@ -47,6 +47,8 @@ class SPARQLLexer
    bool isKeyword(const char* keyword) const;
    /// Put the last token back
    void unget(Token value) { putBack=value; }
+   /// Peek at the next token
+   bool hasNext(Token value);
 };
 //---------------------------------------------------------------------------
 #endif

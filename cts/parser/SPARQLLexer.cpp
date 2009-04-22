@@ -55,18 +55,21 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case ';': return Semicolon;
          case ',': return Comma;
          case '.': return Dot;
-         case '*': return Star;
          case '_': return Underscore;
          case '{': return LCurly;
          case '}': return RCurly;
          case '(': return LParen;
          case ')': return RParen;
          case '@': return At;
+         case '+': return Plus;
+         case '-': return Minus;
+         case '*': return Mul;
+         case '/': return Div;
          case '=': return Equal;
          // Not equal
          case '!':
             if ((pos==input.end())||((*pos)!='='))
-               return Error;
+               return Not;
             ++pos;
             return NotEqual;
          // Brackets
@@ -91,17 +94,52 @@ SPARQLLexer::Token SPARQLLexer::getNext()
                return Error;
             ++pos;
             return Type;
+         // Or
+         case '|':
+            if ((pos==input.end())||((*pos)!='|'))
+               return Error;
+            ++pos;
+            return Or;
+         // And
+         case '&':
+            if ((pos==input.end())||((*pos)!='&'))
+               return Error;
+            ++pos;
+            return And;
          // IRI Ref
          case '<':
             tokenStart=pos;
-            while (pos!=input.end()) {
-               if ((*pos)=='>')
-                  break;
-               ++pos;
+            // Try to parse as URI
+            for (++pos;pos!=input.end();++pos) {
+              char c=*pos;
+              // Escape chars
+              if (c=='\\') {
+                 if ((++pos)==input.end()) break;
+                 continue;
+              }
+              // Fast tests
+              if ((c>='a')&&(c<='z')) continue;
+              if ((c>='A')&&(c<='Z')) continue;
+
+              // Test for invalid characters
+              if ((c=='<')||(c=='>')||(c=='\"')||(c=='{')||(c=='}')||(c=='^')||(c=='|')||(c=='`')||((c&0xFF)<=0x20))
+                 break;
             }
-            tokenEnd=pos; hasTokenEnd=true;
-            if (pos!=input.end()) ++pos;
-            return IRI;
+
+            // Successful parse?
+            if ((pos!=input.end())&&((*pos)=='>')) {
+               tokenEnd=pos; hasTokenEnd=true;
+               return IRI;
+            }
+            pos=tokenStart;
+
+            // No, do we have a less-or-equal?
+            if (((pos+1)!=input.end())&&((*(pos+1))=='=')) {
+               pos++;
+               return LessOrEqual;
+            }
+            // Just a less
+            return Less;
          // String
          case '\'':
             tokenStart=pos;
@@ -178,11 +216,21 @@ bool SPARQLLexer::isKeyword(const char* keyword) const
    while (iter!=limit) {
       char c=*iter;
       if ((c>='A')&&(c<='Z')) c+='a'-'A';
-      if (c!=(*keyword))
+      char c2=*keyword;
+      if ((c2>='A')&&(c2<='Z')) c2+='a'-'A';
+      if (c!=c2)
          return false;
       if (!*keyword) return false;
       ++iter; ++keyword;
    }
    return !*keyword;
+}
+//---------------------------------------------------------------------------
+bool SPARQLLexer::hasNext(Token value)
+   // Peek at the next token
+{
+   Token peek=getNext();
+   unget(peek);
+   return peek==value;
 }
 //---------------------------------------------------------------------------

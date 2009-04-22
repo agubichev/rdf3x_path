@@ -51,6 +51,58 @@ QueryGraph::Edge::~Edge()
 {
 }
 //---------------------------------------------------------------------------
+QueryGraph::Filter::Filter()
+   : arg1(0),arg2(0),arg3(0),id(~0u)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+QueryGraph::Filter::Filter(const Filter& other)
+   : type(other.type),arg1(other.arg1?new Filter(*other.arg1):0),arg2(other.arg2?new Filter(*other.arg2):0),arg3(other.arg3?new Filter(*other.arg3):0),id(other.id),value(other.value)
+   // Copy-Constructor
+{
+}
+//---------------------------------------------------------------------------
+QueryGraph::Filter::~Filter()
+   // Destructor
+{
+   delete arg1;
+   delete arg2;
+   delete arg3;
+}
+//---------------------------------------------------------------------------
+QueryGraph::Filter& QueryGraph::Filter::operator=(const Filter& other)
+   // Assignment
+{
+   if ((&other)!=this) {
+      type=other.type;
+      delete arg1;
+      arg1=other.arg1?new Filter(*other.arg1):0;
+      delete arg2;
+      arg2=other.arg2?new Filter(*other.arg2):0;
+      delete arg3;
+      arg3=other.arg3?new Filter(*other.arg3):0;
+      id=other.id;
+      value=other.value;
+   }
+   return *this;
+}
+//---------------------------------------------------------------------------
+bool QueryGraph::Filter::isApplicable(const std::set<unsigned>& variables) const
+   // Could be applied?
+{
+   // A variable?
+   if (type==Variable)
+      return variables.count(id);
+
+   // Check the input
+   if (arg1&&(!arg1->isApplicable(variables))) return false;
+   if (arg2&&(!arg2->isApplicable(variables))) return false;
+   if (arg3&&(!arg3->isApplicable(variables))) return false;
+
+   return true;
+}
+//---------------------------------------------------------------------------
 QueryGraph::QueryGraph()
    : duplicateHandling(AllDuplicates),limit(~0u),knownEmptyResult(false)
    // Constructor

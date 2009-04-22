@@ -13,6 +13,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <memory>
 //---------------------------------------------------------------------------
 class SPARQLLexer;
 //---------------------------------------------------------------------------
@@ -59,17 +60,36 @@ class SPARQLParser
       /// Destructor
       ~Pattern();
    };
-   /// A filter condition
+   /// A filter entry
    struct Filter {
       /// Possible types
-      enum Type { Normal, Exclude, Path };
+      enum Type {
+         Or, And, Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Plus, Minus, Mul, Div,
+         Not, UnaryPlus, UnaryMinus, Literal, Variable, IRI, Function, ArgumentList,
+         Builtin_str, Builtin_lang, Builtin_langmatches, Builtin_datatype, Builtin_bound, Builtin_sameterm,
+         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex
+      };
 
-      /// The filtered variable
-      unsigned id;
-      /// Valid entries
-      std::vector<Element> values;
       /// The type
       Type type;
+      /// Input arguments
+      Filter* arg1,*arg2,*arg3;
+      /// The value (for constants)
+      std::string value;
+      /// The type (for constants)
+      std::string valueType;
+      /// Possible subtypes or variable ids
+      unsigned valueArg;
+
+      /// Constructor
+      Filter();
+      /// Copy-Constructor
+      Filter(const Filter& other);
+      /// Destructor
+      ~Filter();
+
+      /// Assignment
+      Filter& operator=(const Filter& other);
    };
    /// A group of patterns
    struct PatternGroup {
@@ -107,6 +127,36 @@ class SPARQLParser
    /// Lookup or create a named variable
    unsigned nameVariable(const std::string& name);
 
+   /// Parse an RDF literal
+   void parseRDFLiteral(std::string& value,Element::SubType& subType,std::string& valueType);
+   /// Parse a "IRIrefOrFunction" production
+   Filter* parseIRIrefOrFunction(std::map<std::string,unsigned>& localVars,bool mustCall);
+   /// Parse a "BuiltInCall" production
+   Filter* parseBuiltInCall(std::map<std::string,unsigned>& localVars);
+   /// Parse a "PrimaryExpression" production
+   Filter* parsePrimaryExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "UnaryExpression" production
+   Filter* parseUnaryExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "MultiplicativeExpression" production
+   Filter* parseMultiplicativeExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "AdditiveExpression" production
+   Filter* parseAdditiveExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "NumericExpression" production
+   Filter* parseNumericExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "RelationalExpression" production
+   Filter* parseRelationalExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "ValueLogical" production
+   Filter* parseValueLogical(std::map<std::string,unsigned>& localVars);
+   /// Parse a "ConditionalAndExpression" production
+   Filter* parseConditionalAndExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "ConditionalOrExpression" production
+   Filter* parseConditionalOrExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "Expression" production
+   Filter* parseExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "BrackettedExpression" production
+   Filter* parseBrackettedExpression(std::map<std::string,unsigned>& localVars);
+   /// Parse a "Constraint" production
+   Filter* parseConstraint(std::map<std::string,unsigned>& localVars);
    /// Parse a filter condition
    void parseFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse an entry in a pattern

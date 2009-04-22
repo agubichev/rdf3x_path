@@ -42,8 +42,6 @@ void Plan::print(unsigned indent) const
       case HashJoin: cout << "HashJoin"; break;
       case HashGroupify: cout << "HashGroupify"; break;
       case Filter: cout << "Filter"; break;
-      case NestedLoopFilter: cout << "NestedLoopFilter"; break;
-      case ComplexFilter: cout << "ComplexFilter"; break;
       case Union: cout << "Union"; break;
       case MergeUnion: cout << "MergeUnion"; break;
    }
@@ -56,9 +54,7 @@ void Plan::print(unsigned indent) const
       case MergeJoin:
       case HashJoin: left->print(indent+1); right->print(indent+1); break;
       case HashGroupify:
-      case Filter:
-      case NestedLoopFilter:
-      case ComplexFilter: left->print(indent+1); break;
+      case Filter: left->print(indent+1); break;
       case Union:
       case MergeUnion: left->print(indent+1); right->print(indent+1); break;
    }

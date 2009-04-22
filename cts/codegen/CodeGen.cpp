@@ -152,8 +152,6 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
          break;
       case Plan::HashGroupify:
       case Plan::Filter:
-      case Plan::NestedLoopFilter:
-      case Plan::ComplexFilter:
          collectVariables(context,variables,plan->left);
          break;
 
@@ -191,22 +189,31 @@ static void mergeBindings(const set<unsigned>& projection,map<unsigned,Register*
          bindings[(*iter).first]=(*iter).second;
 }
 //---------------------------------------------------------------------------
-static Operator* addAdditionalSelections(Operator* input,const set<unsigned>& joinVariables,map<unsigned,Register*>& leftBindings,map<unsigned,Register*>& rightBindings,unsigned joinedOn)
+static Operator* addAdditionalSelections(Runtime& runtime,Operator* input,const set<unsigned>& joinVariables,map<unsigned,Register*>& leftBindings,map<unsigned,Register*>& rightBindings,unsigned joinedOn)
    // Convert additional join predicates into a selection
 {
    // Examine join conditions
-   vector<Register*> conditions;
+   vector<Register*> left,right;
    for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
       if ((*iter)!=joinedOn) {
-         conditions.push_back(leftBindings[*iter]);
-         conditions.push_back(rightBindings[*iter]);
+         left.push_back(leftBindings[*iter]);
+         right.push_back(rightBindings[*iter]);
       }
    }
 
    // Build the results
-   if (!conditions.empty())
-      return Selection::create(input,conditions,true); else
+   if (!left.empty()) {
+      Selection::Predicate* predicate=0;
+      for (unsigned index=0;index<left.size();index++) {
+         Selection::Predicate* p=new Selection::Equal(new Selection::Variable(left[index]),new Selection::Variable(right[index]));
+         if (predicate)
+            predicate=new Selection::And(predicate,p); else
+            predicate=p;
+      }
+      return new Selection(input,runtime,predicate);
+   } else  {
       return input;
+   }
 }
 //---------------------------------------------------------------------------
 static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
@@ -227,7 +234,7 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Reg
    Operator* result=new NestedLoopJoin(leftTree,rightTree);
 
    // And apply additional selections if necessary
-   result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,~0u);
+   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,~0u);
 
    return result;
 }
@@ -262,7 +269,7 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail);
 
    // And apply additional selections if necessary
-   result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,joinOn);
+   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
 
    return result;
 }
@@ -296,7 +303,7 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
    Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs);
 
    // And apply additional selections if necessary
-   result=addAdditionalSelections(result,joinVariables,leftBindings,rightBindings,joinOn);
+   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
 
    return result;
 }
@@ -316,83 +323,146 @@ static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Regis
    return new HashGroupify(tree,output);
 }
 //---------------------------------------------------------------------------
+static void collectVariables(set<unsigned>& filterVariables,const QueryGraph::Filter& filter)
+   // Collect all query variables
+{
+   if (filter.type==QueryGraph::Filter::Variable)
+      filterVariables.insert(filter.id);
+   if (filter.arg1)
+      collectVariables(filterVariables,*filter.arg1);
+   if (filter.arg2)
+      collectVariables(filterVariables,*filter.arg2);
+   if (filter.arg3)
+      collectVariables(filterVariables,*filter.arg3);
+}
+//---------------------------------------------------------------------------
+static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindings,const QueryGraph::Filter& filter);
+//---------------------------------------------------------------------------
+static void collectSelectionArgs(const map<unsigned,Register*>& bindings,vector<Selection::Predicate*>& args,const QueryGraph::Filter* input)
+   // Collect all function arguments
+{
+   for (const QueryGraph::Filter* iter=input;iter;iter=iter->arg2) {
+      assert(iter->type==QueryGraph::Filter::ArgumentList);
+      args.push_back(buildSelection(bindings,*(iter->arg1)));
+   }
+}
+//---------------------------------------------------------------------------
+static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindings,const QueryGraph::Filter& filter)
+   // Construct a complex filter predicate
+{
+   switch (filter.type) {
+      case QueryGraph::Filter::Or: return new Selection::Or(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::And: return new Selection::And(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Equal: return new Selection::Equal(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::NotEqual: return new Selection::And(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Less: return new Selection::Less(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::LessOrEqual: return new Selection::LessOrEqual(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Greater: return new Selection::Less(buildSelection(bindings,*filter.arg2),buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::GreaterOrEqual: return new Selection::LessOrEqual(buildSelection(bindings,*filter.arg2),buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Plus: return new Selection::Plus(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Minus: return new Selection::Minus(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Mul: return new Selection::Mul(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Div: return new Selection::Div(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Not: return new Selection::Not(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::UnaryPlus: return buildSelection(bindings,*filter.arg1);
+      case QueryGraph::Filter::UnaryMinus: return new Selection::Neg(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Literal:
+         if (~filter.id)
+            return new Selection::ConstantLiteral(filter.id); else
+            return new Selection::TemporaryConstantLiteral(filter.value);
+      case QueryGraph::Filter::Variable:
+         if (bindings.count(filter.id))
+            return new Selection::Variable((*bindings.find(filter.id)).second); else
+            return new Selection::Null();
+      case QueryGraph::Filter::IRI:
+         if (~filter.id)
+            return new Selection::ConstantIRI(filter.id); else
+            return new Selection::TemporaryConstantIRI(filter.value);
+      case QueryGraph::Filter::Null: return new Selection::Null();
+      case QueryGraph::Filter::Function: {
+         assert(filter.arg1->type==QueryGraph::Filter::IRI);
+         vector<Selection::Predicate*> args;
+         collectSelectionArgs(bindings,args,filter.arg2);
+         return new Selection::FunctionCall(filter.arg1->value,args); }
+      case QueryGraph::Filter::ArgumentList: assert(false); // cannot happen
+      case QueryGraph::Filter::Builtin_str: return new Selection::BuiltinStr(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Builtin_lang: return new Selection::BuiltinLang(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Builtin_langmatches: return new Selection::BuiltinLangMatches(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Builtin_datatype: return new Selection::BuiltinDatatype(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Builtin_bound:
+         if (~filter.id)
+            return new Selection::BuiltinBound((*bindings.find(filter.id)).second); else
+            return new Selection::False();
+      case QueryGraph::Filter::Builtin_sameterm: return new Selection::BuiltinSameTerm(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
+      case QueryGraph::Filter::Builtin_isiri: return new Selection::BuiltinIsIRI(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Builtin_isblank: return new Selection::BuiltinIsBlank(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Builtin_isliteral: return new Selection::BuiltinIsLiteral(buildSelection(bindings,*filter.arg1));
+      case QueryGraph::Filter::Builtin_regex: return new Selection::BuiltinRegEx(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2),buildSelection(bindings,*filter.arg3));
+      case QueryGraph::Filter::Builtin_in: {
+         vector<Selection::Predicate*> args;
+         collectSelectionArgs(bindings,args,filter.arg2);
+         return new Selection::BuiltinIn(buildSelection(bindings,*filter.arg1),args); }
+   }
+   throw; // Cannot happen
+}
+//---------------------------------------------------------------------------
 static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a filter into an operator tree
 {
    const QueryGraph::Filter& filter=*reinterpret_cast<QueryGraph::Filter*>(plan->right);
 
+   // Collect all variables
+   set<unsigned> filterVariables;
+   collectVariables(filterVariables,filter);
+
    // Build the input trees
    set<unsigned> newProjection=projection;
-   newProjection.insert(filter.id);
+   for (set<unsigned>::const_iterator iter=filterVariables.begin(),limit=filterVariables.end();iter!=limit;++iter)
+      newProjection.insert(*iter);
    Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
 
-   // Build the operator
-   Operator* result=new Filter(tree,bindings[filter.id],filter.values,filter.exclude);
-
-   // Cleanup the binding
-   if (!projection.count(filter.id))
-      bindings.erase(filter.id);
-
-   return result;
-}
-//---------------------------------------------------------------------------
-static Operator* translateNestedLoopFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
-   // Translate a nested loop filter into an operator tree
-{
-   const QueryGraph::Filter& filter=*reinterpret_cast<QueryGraph::Filter*>(plan->right);
-
-   // Compute the scan paramers
-   assert((plan->left->op==Plan::IndexScan)||(plan->left->op==Plan::AggregatedIndexScan));
-   unsigned id=plan->left->left-static_cast<Plan*>(0);
-   const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->left->right);
-
-   // Lookup the filter register
-   Register* filterRegister=0;
-   if ((!node.constSubject)&&(filter.id==node.subject)) filterRegister=runtime.getRegister(3*id+0); else
-   if ((!node.constPredicate)&&(filter.id==node.predicate)) filterRegister=runtime.getRegister(3*id+1); else
-   if ((!node.constObject)&&(filter.id==node.object)) filterRegister=runtime.getRegister(3*id+2); else {
-      assert(false);
+   // Build the operator, try special cases first
+   Operator* result=0;
+   if (((filter.type==QueryGraph::Filter::Equal)||(filter.type==QueryGraph::Filter::NotEqual))&&(filter.arg1->type==QueryGraph::Filter::Variable)) {
+      if (((filter.arg2->type==QueryGraph::Filter::Literal)||(filter.arg2->type==QueryGraph::Filter::IRI))&&(bindings.count(filter.arg1->id))) {
+         vector<unsigned> values;
+         values.push_back(filter.arg2->id);
+         result=new Filter(tree,bindings[filter.arg1->id],values,filter.type==QueryGraph::Filter::NotEqual);
+      }
+   }
+   if ((!result)&&((filter.type==QueryGraph::Filter::Equal)||(filter.type==QueryGraph::Filter::NotEqual))&&(filter.arg2->type==QueryGraph::Filter::Variable)) {
+      if (((filter.arg1->type==QueryGraph::Filter::Literal)||(filter.arg1->type==QueryGraph::Filter::IRI))&&(bindings.count(filter.arg2->id))) {
+         vector<unsigned> values;
+         values.push_back(filter.arg1->id);
+         result=new Filter(tree,bindings[filter.arg2->id],values,filter.type==QueryGraph::Filter::NotEqual);
+      }
+   }
+   if ((!result)&&(filter.type==QueryGraph::Filter::Builtin_in)&&(filter.arg1->type==QueryGraph::Filter::Variable)&&(bindings.count(filter.arg1->id))) {
+      vector<unsigned> values;
+      bool valid=true;
+      if (filter.arg2) {
+         const QueryGraph::Filter* iter=filter.arg2;
+         for (;iter;iter=iter->arg2) {
+            assert(iter->type==QueryGraph::Filter::ArgumentList);
+            if ((iter->arg1->type!=QueryGraph::Filter::Literal)&&(iter->arg1->type!=QueryGraph::Filter::IRI)) {
+               valid=false;
+               break;
+            }
+            values.push_back(iter->arg1->id);
+         }
+      }
+      if (valid) {
+         result=new Filter(tree,bindings[filter.arg1->id],values,false);
+      }
+   }
+   if (!result) {
+      result=new Selection(tree,runtime,buildSelection(bindings,filter));
    }
 
-   // Build the input trees
-   set<unsigned> newProjection=projection;
-   map<unsigned,Register*> newContext=context;
-   newProjection.insert(filter.id);
-   newContext[filter.id]=filterRegister;
-   Operator* tree=translatePlan(runtime,newContext,newProjection,bindings,registers,plan->left);
-
-   // Build the operator
-   Operator* result=new NestedLoopFilter(tree,filterRegister,filter.values);
-
-   // Setup the binding
-   if (projection.count(filter.id))
-      bindings[filter.id]=filterRegister;
-
-   return result;
-}
-//---------------------------------------------------------------------------
-static Operator* translateComplexFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
-   // Translate a complex filter into an operator tree
-{
-   const QueryGraph::ComplexFilter& filter=*reinterpret_cast<QueryGraph::ComplexFilter*>(plan->right);
-
-   // Build the input trees
-   set<unsigned> newProjection=projection;
-   newProjection.insert(filter.id1);
-   newProjection.insert(filter.id2);
-   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
-
-   // Build the operator
-   vector<Register*> condition;
-   condition.push_back(bindings[filter.id1]);
-   condition.push_back(bindings[filter.id2]);
-   Operator* result=Selection::create(tree,condition,filter.equal);
-
    // Cleanup the binding
-   if (!projection.count(filter.id1))
-      bindings.erase(filter.id1);
-   if (!projection.count(filter.id2))
-      bindings.erase(filter.id2);
+   for (set<unsigned>::const_iterator iter=filterVariables.begin(),limit=filterVariables.end();iter!=limit;++iter)
+      if (!projection.count(*iter))
+         bindings.erase(*iter);
 
    return result;
 }
@@ -480,8 +550,6 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::HashGroupify: result=translateHashGroupify(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Filter: result=translateFilter(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::NestedLoopFilter: result=translateNestedLoopFilter(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::ComplexFilter: result=translateComplexFilter(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan); break;
       case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan); break;
    }

@@ -11,40 +11,518 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include "rts/operator/Operator.hpp"
+#include "infra/util/Type.hpp"
 #include <vector>
+#include <string>
 //---------------------------------------------------------------------------
 class Register;
+class Runtime;
 //---------------------------------------------------------------------------
-/// Applies a number of selctions. Checks that pairs of registers have the same values
+/// Applies a number of selections
 class Selection : public Operator
 {
+   public:
+   /// A predicate result
+   struct Result {
+      /// Possible flags
+      enum Flags { idAvailable=1,stringAvailable=2,typeAvailable=4,subTypeAvailable=8,booleanAvailable=16 };
+
+      /// The flags
+      unsigned flags;
+      /// The id
+      unsigned id;
+      /// The value
+      std::string value;
+      /// The type
+      Type::ID type;
+      /// The sub-type
+      unsigned subType;
+      /// The sub-type value
+      std::string subTypeValue;
+      /// The boolean interpretation
+      bool boolean;
+
+      /// Constructor
+      Result() : flags(0) {}
+      /// Destructor
+      ~Result();
+
+      /// String available?
+      bool hasId() const { return flags&idAvailable; }
+      /// String available?
+      bool hasString() const { return flags&stringAvailable; }
+
+      /// Ensure that a string is available
+      void ensureString(Selection* selection);
+      /// Ensure that the type is available
+      void ensureType(Selection* selection);
+      /// Ensuzre tthat the subtype is available
+      void ensureSubType(Selection* selection);
+      /// Ensure that a boolean interpretation is available
+      void ensureBoolean(Selection* selection);
+
+      /// Set to a boolean value
+      void setBoolean(bool v);
+      /// Set and id value
+      void setId(unsigned v);
+      /// Set to a string value
+      void setLiteral(const std::string& c);
+      /// Set to a string value
+      void setIRI(const std::string& c);
+   };
+   /// Base for predicate evaluation
+   class Predicate {
+      protected:
+      /// The outer selection
+      Selection* selection;
+
+      public:
+      /// Constructor
+      Predicate();
+      /// Destructor
+      virtual ~Predicate();
+
+      /// Register the selection
+      virtual void setSelection(Selection* selection);
+      /// Evaluate the predicate
+      virtual void eval(Result& result) = 0;
+      /// Print the predicate (debugging only)
+      virtual void print() = 0;
+
+      /// Check the predicate
+      bool check();
+   };
+   /// Binary operator
+   class BinaryPredicate : public Predicate {
+      protected:
+      /// The input
+      Predicate* left,*right;
+
+      public:
+      /// Constructor
+      BinaryPredicate(Predicate* left,Predicate* right) : left(left),right(right) {}
+
+      /// Register the selection
+      void setSelection(Selection* selection);
+   };
+   /// Unary operator
+   class UnaryPredicate : public Predicate {
+      protected:
+      /// The input
+      Predicate* input;
+
+      public:
+      /// Constructor
+      UnaryPredicate(Predicate* input) : input(input) {}
+
+      /// Register the selection
+      void setSelection(Selection* selection);
+   };
+   /// Logical or
+   class Or : public BinaryPredicate {
+      public:
+      /// Constructor
+      Or(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Logical and
+   class And : public BinaryPredicate {
+      public:
+      /// Constructor
+      And(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Comparison ==
+   class Equal : public BinaryPredicate {
+      public:
+      /// Constructor
+      Equal(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Comparison !=
+   class NotEqual : public BinaryPredicate {
+      public:
+      /// Constructor
+      NotEqual(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Comparison <
+   class Less : public BinaryPredicate {
+      public:
+      /// Constructor
+      Less(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Comparison <=
+   class LessOrEqual : public BinaryPredicate {
+      public:
+      /// Constructor
+      LessOrEqual(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Arithmetic +
+   class Plus : public BinaryPredicate {
+      public:
+      /// Constructor
+      Plus(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Arithmetic -
+   class Minus : public BinaryPredicate {
+      public:
+      /// Constructor
+      Minus(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Arithmetic *
+   class Mul : public BinaryPredicate {
+      public:
+      /// Constructor
+      Mul(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Arithmetic /
+   class Div : public BinaryPredicate {
+      public:
+      /// Constructor
+      Div(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Operator !
+   class Not : public UnaryPredicate {
+      public:
+      /// Constructor
+      Not(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Operator -
+   class Neg : public UnaryPredicate {
+      public:
+      /// Constructor
+      Neg(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// A NULL value
+   class Null : public Predicate {
+      public:
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// A false value
+   class False : public Predicate {
+      public:
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Variable access
+   class Variable : public Predicate {
+      private:
+      /// The register
+      Register* reg;
+
+      public:
+      /// Constructor
+      Variable(Register* reg) : reg(reg) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Constant
+   class ConstantLiteral : public Predicate {
+      private:
+      /// The id
+      unsigned id;
+
+      public:
+      /// Constructor
+      ConstantLiteral(unsigned id) : id(id) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Constant
+   class TemporaryConstantLiteral : public Predicate {
+      private:
+      /// The value
+      std::string value;
+
+      public:
+      /// Constructor
+      TemporaryConstantLiteral(const std::string& value) : value(value) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Constant
+   class ConstantIRI : public Predicate {
+      private:
+      /// The id
+      unsigned id;
+
+      public:
+      /// Constructor
+      ConstantIRI(unsigned id) : id(id) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Constant
+   class TemporaryConstantIRI : public Predicate {
+      private:
+      /// The value
+      std::string value;
+
+      public:
+      /// Constructor
+      TemporaryConstantIRI(const std::string& value) : value(value) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Function call
+   class FunctionCall : public Predicate {
+      private:
+      /// The function
+      std::string func;
+      /// Arguments
+      std::vector<Predicate*> args;
+
+      public:
+      /// Constructor
+      FunctionCall(const std::string& func,const std::vector<Predicate*>& args) : func(func),args(args) {}
+
+      /// Register the selection
+      void setSelection(Selection* selection);
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin str
+   class BuiltinStr : public UnaryPredicate {
+      public:
+      /// Constructor
+      BuiltinStr(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin lang
+   class BuiltinLang : public UnaryPredicate {
+      public:
+      /// Constructor
+      BuiltinLang(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin langMatches
+   class BuiltinLangMatches : public BinaryPredicate {
+      public:
+      /// Constructor
+      BuiltinLangMatches(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin datatype
+   class BuiltinDatatype : public UnaryPredicate {
+      public:
+      /// Constructor
+      BuiltinDatatype(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin bound
+   class BuiltinBound : public Predicate {
+      private:
+      /// The register
+      Register* reg;
+
+      public:
+      /// Constructor
+      BuiltinBound(Register* reg) : reg(reg) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin sameTerm
+   class BuiltinSameTerm : public BinaryPredicate {
+      public:
+      /// Constructor
+      BuiltinSameTerm(Predicate* left,Predicate* right) : BinaryPredicate(left,right) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin isIRI
+   class BuiltinIsIRI : public UnaryPredicate {
+      public:
+      /// Constructor
+      BuiltinIsIRI(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin isBlank
+   class BuiltinIsBlank : public UnaryPredicate {
+      public:
+      /// Constructor
+      BuiltinIsBlank(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin isLiteral
+   class BuiltinIsLiteral : public UnaryPredicate {
+      public:
+      /// Constructor
+      BuiltinIsLiteral(Predicate* input) : UnaryPredicate(input) {}
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin RegEx
+   class BuiltinRegEx : public Predicate {
+      private:
+      /// Arguments
+      Predicate* arg1,*arg2,*arg3;
+
+      public:
+      /// Constructor
+      BuiltinRegEx(Predicate* arg1,Predicate* arg2,Predicate* arg3) : arg1(arg1),arg2(arg2),arg3(arg3) {}
+
+      /// Register the selection
+      void setSelection(Selection* selection);
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+   /// Builtin in
+   class BuiltinIn : public Predicate {
+      private:
+      /// The probe
+      Predicate* probe;
+      /// The set
+      std::vector<Predicate*> args;
+
+      public:
+      /// Constructor
+      BuiltinIn(Predicate* probe,const std::vector<Predicate*>& args) : probe(probe),args(args) {}
+
+      /// Register the selection
+      void setSelection(Selection* selection);
+
+      /// Evaluate the predicate
+      void eval(Result& result);
+      /// Print the predicate (debugging only)
+      void print();
+   };
+
    private:
-   /// The predicates
-   std::vector<Register*> predicates;
    /// The input
    Operator* input;
-   /// Check for equal?
-   bool equal;
+   /// The runtime
+   Runtime& runtime;
+   /// The predicate
+   Predicate* predicate;
 
-   /// Equal
-   class Equal;
-   /// Not eqaul
-   class NotEqual;
-
-   /// Constructor
-   Selection(Operator* input,const std::vector<Register*>& predicates,bool equal);
 
    public:
+   /// Constructor
+   Selection(Operator* input,Runtime& runtime,Predicate* predicate);
    /// Destructor
    ~Selection();
 
    /// Produce the first tuple
-   virtual unsigned first() = 0;
+   unsigned first();
    /// Produce the next tuple
-   virtual unsigned next() = 0;
+   unsigned next();
 
-   /// Create a selection
-   static Selection* create(Operator* input,const std::vector<Register*>& predicates,bool equal);
    /// Print the operator tree. Debugging only.
    void print(DictionarySegment& dict,unsigned indent);
    /// Add a merge join hint

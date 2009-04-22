@@ -95,74 +95,128 @@ static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
    return false;
 }
 //---------------------------------------------------------------------------
+static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output);
+//---------------------------------------------------------------------------
+static bool encodeUnaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+   // Encode a unary filter element
+{
+   output.type=type;
+   output.arg1=new QueryGraph::Filter();
+   return encodeFilter(db,group,*input.arg1,*output.arg1);
+}
+//---------------------------------------------------------------------------
+static bool encodeBinaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+   // Encode a binary filter element
+{
+   output.type=type;
+   output.arg1=new QueryGraph::Filter();
+   output.arg2=new QueryGraph::Filter();
+   return encodeFilter(db,group,*input.arg1,*output.arg1)&&encodeFilter(db,group,*input.arg2,*output.arg2);
+}
+//---------------------------------------------------------------------------
+static bool encodeTernaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+   // Encode a ternary filter element
+{
+   output.type=type;
+   output.arg1=new QueryGraph::Filter();
+   output.arg2=new QueryGraph::Filter();
+   output.arg3=new QueryGraph::Filter();
+   return encodeFilter(db,group,*input.arg1,*output.arg1)&&encodeFilter(db,group,*input.arg2,*output.arg2)&&encodeFilter(db,group,*input.arg3,*output.arg3);
+}
+
+//---------------------------------------------------------------------------
+static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+   // Encode an element for the query graph
+{
+   switch (input.type) {
+      case SPARQLParser::Filter::Or: return encodeBinaryFilter(QueryGraph::Filter::Or,db,group,input,output);
+      case SPARQLParser::Filter::And: return encodeBinaryFilter(QueryGraph::Filter::And,db,group,input,output);
+      case SPARQLParser::Filter::Equal: return encodeBinaryFilter(QueryGraph::Filter::Equal,db,group,input,output);
+      case SPARQLParser::Filter::NotEqual: return encodeBinaryFilter(QueryGraph::Filter::NotEqual,db,group,input,output);
+      case SPARQLParser::Filter::Less: return encodeBinaryFilter(QueryGraph::Filter::Less,db,group,input,output);
+      case SPARQLParser::Filter::LessOrEqual: return encodeBinaryFilter(QueryGraph::Filter::LessOrEqual,db,group,input,output);
+      case SPARQLParser::Filter::Greater: return encodeBinaryFilter(QueryGraph::Filter::Greater,db,group,input,output);
+      case SPARQLParser::Filter::GreaterOrEqual: return encodeBinaryFilter(QueryGraph::Filter::GreaterOrEqual,db,group,input,output);
+      case SPARQLParser::Filter::Plus: return encodeBinaryFilter(QueryGraph::Filter::Plus,db,group,input,output);
+      case SPARQLParser::Filter::Minus: return encodeBinaryFilter(QueryGraph::Filter::Minus,db,group,input,output);
+      case SPARQLParser::Filter::Mul: return encodeBinaryFilter(QueryGraph::Filter::Mul,db,group,input,output);
+      case SPARQLParser::Filter::Div: return encodeBinaryFilter(QueryGraph::Filter::Div,db,group,input,output);
+      case SPARQLParser::Filter::Not: return encodeUnaryFilter(QueryGraph::Filter::Not,db,group,input,output);
+      case SPARQLParser::Filter::UnaryPlus: return encodeUnaryFilter(QueryGraph::Filter::UnaryPlus,db,group,input,output);
+      case SPARQLParser::Filter::UnaryMinus: return encodeUnaryFilter(QueryGraph::Filter::UnaryMinus,db,group,input,output);
+      case SPARQLParser::Filter::Literal: {
+         SPARQLParser::Element e;
+         e.type=SPARQLParser::Element::Literal;
+         e.subType=static_cast<SPARQLParser::Element::SubType>(input.valueArg);
+         e.subTypeValue=input.valueType;
+         e.value=input.value;
+         unsigned id; bool constant;
+         if (encode(db,e,id,constant)) {
+            output.type=QueryGraph::Filter::Literal;
+            output.id=id;
+            output.value=input.value;
+         } else {
+            output.type=QueryGraph::Filter::Literal;
+            output.id=~0u;
+            output.value=input.value;
+         }
+         } return true;
+      case SPARQLParser::Filter::Variable:
+         if (binds(group,input.valueArg)) {
+            output.type=QueryGraph::Filter::Variable;
+            output.id=input.valueArg;
+         } else {
+            output.type=QueryGraph::Filter::Null;
+         }
+         return true;
+      case SPARQLParser::Filter::IRI: {
+         SPARQLParser::Element e;
+         e.type=SPARQLParser::Element::IRI;
+         e.subType=static_cast<SPARQLParser::Element::SubType>(input.valueArg);
+         e.subTypeValue=input.valueType;
+         e.value=input.value;
+         unsigned id; bool constant;
+         if (encode(db,e,id,constant)) {
+            output.type=QueryGraph::Filter::IRI;
+            output.id=id;
+            output.value=input.value;
+         } else {
+            output.type=QueryGraph::Filter::IRI;
+            output.id=~0u;
+            output.value=input.value;
+         }
+         } return true;
+      case SPARQLParser::Filter::Function: return encodeBinaryFilter(QueryGraph::Filter::Function,db,group,input,output);
+      case SPARQLParser::Filter::ArgumentList: return encodeBinaryFilter(QueryGraph::Filter::ArgumentList,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_str: return encodeUnaryFilter(QueryGraph::Filter::Builtin_str,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_lang: return encodeUnaryFilter(QueryGraph::Filter::Builtin_lang,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_langmatches: return encodeBinaryFilter(QueryGraph::Filter::Builtin_langmatches,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_datatype: return encodeUnaryFilter(QueryGraph::Filter::Builtin_datatype,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_bound: return encodeUnaryFilter(QueryGraph::Filter::Builtin_bound,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_sameterm: return encodeBinaryFilter(QueryGraph::Filter::Builtin_sameterm,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_isiri: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isiri,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_isblank: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isblank,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_isliteral: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isliteral,db,group,input,output);
+      case SPARQLParser::Filter::Builtin_regex: return encodeTernaryFilter(QueryGraph::Filter::Builtin_regex,db,group,input,output);
+   }
+   return false; // XXX cannot happen
+}
+//---------------------------------------------------------------------------
 static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
    // Encode an element for the query graph
 {
-   // Check if the id is bound somewhere
-   if (!binds(group,input.id))
-      return false;
-
-   // A complex filter? XXX handles only primitive filters
-   if ((input.values.size()==1)&&(input.values[0].type==SPARQLParser::Element::Variable)) {
-      if (!binds(group,input.id))
-         return input.type==SPARQLParser::Filter::Exclude;
-      QueryGraph::ComplexFilter filter;
-      filter.id1=input.id;
-      filter.id2=input.values[0].id;
-      filter.equal=(input.type==SPARQLParser::Filter::Normal);
-      output.complexFilters.push_back(filter);
+   // Handle and separately to be more flexible
+   if (input.type==SPARQLParser::Filter::And) {
+      if (!encodeFilter(db,group,*input.arg1,output))
+         return false;
+      if (!encodeFilter(db,group,*input.arg2,output))
+         return false;
       return true;
    }
 
-   // Resolve all values
-   std::set<unsigned> values;
-   for (std::vector<SPARQLParser::Element>::const_iterator iter=input.values.begin(),limit=input.values.end();iter!=limit;++iter) {
-      unsigned id; bool constant;
-      if (encode(db,(*iter),id,constant)) {
-         assert(constant);
-         values.insert(id);
-      }
-   }
-
-   // Construct the filter
-   QueryGraph::Filter filter;
-   filter.id=input.id;
-   filter.values.clear();
-   if (input.type!=SPARQLParser::Filter::Path) {
-      for (std::set<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter)
-         filter.values.push_back(*iter);
-      filter.exclude=(input.type==SPARQLParser::Filter::Exclude);
-   } else if (values.size()==2) {
-      unsigned target,via; bool constant;
-      encode(db,input.values[0],target,constant);
-      encode(db,input.values[1],via,constant);
-
-      // Explore the path
-      std::set<unsigned> explored;
-      std::vector<unsigned> toDo;
-      toDo.push_back(target);
-      while (!toDo.empty()) {
-         // Examine the next reachable node
-         unsigned current=toDo.front();
-         toDo.erase(toDo.begin());
-         if (explored.count(current))
-            continue;
-         explored.insert(current);
-         filter.values.push_back(current);
-
-         // Request all other reachable nodes
-         FactsSegment::Scan scan;
-         if (scan.first(db.getFacts(Database::Order_Predicate_Object_Subject),via,current,0)) {
-            while ((scan.getValue1()==via)&&(scan.getValue2()==current)) {
-               toDo.push_back(scan.getValue3());
-               if (!scan.next())
-                  break;
-            }
-         }
-      }
-   }
-
-   output.filters.push_back(filter);
+   // Encode recursively
+   output.filters.push_back(QueryGraph::Filter());
+   encodeFilter(db,group,input,output.filters.back());
    return true;
 }
 //---------------------------------------------------------------------------

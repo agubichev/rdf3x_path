@@ -11,6 +11,8 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include <vector>
+#include <string>
+#include <set>
 //---------------------------------------------------------------------------
 /// A query graph representing a SPARQL query
 class QueryGraph
@@ -43,19 +45,35 @@ class QueryGraph
    };
    /// A value filter
    struct Filter {
-      /// The id
+      /// Possible types
+      enum Type {
+         Or, And, Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Plus, Minus, Mul, Div,
+         Not, UnaryPlus, UnaryMinus, Literal, Variable, IRI, Null, Function, ArgumentList,
+         Builtin_str, Builtin_lang, Builtin_langmatches, Builtin_datatype, Builtin_bound, Builtin_sameterm,
+         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex, Builtin_in
+      };
+
+      /// The type
+      Type type;
+      /// Input arguments
+      Filter* arg1,*arg2,*arg3;
+      /// The id (if possible)
       unsigned id;
-      /// The valid values. Sorted by id.
-      std::vector<unsigned> values;
-      /// Negative filter?
-      bool exclude;
-   };
-   /// A (potentially) complex filter. Currently very limited.
-   struct ComplexFilter {
-      /// The ids
-      unsigned id1,id2;
-      /// Test for  equal?
-      bool equal;
+      /// The raw value (for constants)
+      std::string value;
+
+      /// Constructor
+      Filter();
+      /// Copy-Constructor
+      Filter(const Filter& other);
+      /// Destructor
+      ~Filter();
+
+      /// Assignment
+      Filter& operator=(const Filter& other);
+
+      /// Could be applied?
+      bool isApplicable(const std::set<unsigned>& variables) const;
    };
    /// Description of a subquery
    struct SubQuery {
@@ -65,8 +83,6 @@ class QueryGraph
       std::vector<Edge> edges;
       /// The filter conditions
       std::vector<Filter> filters;
-      /// The complex filter conditions
-      std::vector<ComplexFilter> complexFilters;
       /// Optional subqueries
       std::vector<SubQuery> optional;
       /// Union subqueries
