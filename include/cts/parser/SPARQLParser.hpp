@@ -190,6 +190,8 @@ class SPARQLParser
 
    /// Get the patterns
    const PatternGroup& getPatterns() const { return patterns; }
+   /// Get the name of a variable
+   std::string getVariableName(unsigned id) const;
 
    /// Iterator over the projection clause
    typedef std::vector<unsigned>::const_iterator projection_iterator;

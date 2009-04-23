@@ -23,6 +23,8 @@ class ResultsPrinter : public Operator
    public:
    /// Duplicate handling
    enum DuplicateHandling { ReduceDuplicates, ExpandDuplicates, CountDuplicates, ShowDuplicates };
+   /// Output modes
+   enum OutputMode { DefaultOutput, Embedded };
 
    private:
    /// The output registers
@@ -33,6 +35,8 @@ class ResultsPrinter : public Operator
    DictionarySegment& dictionary;
    /// The duplicate handling
    DuplicateHandling duplicateHandling;
+   /// The output mode
+   OutputMode outputMode;
    /// Maximum number of output tuples
    unsigned limit;
    /// Skip the printing, resolve only?
@@ -43,6 +47,9 @@ class ResultsPrinter : public Operator
    ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit=~0u,bool silent=false);
    /// Destructor
    ~ResultsPrinter();
+
+   /// Set the output mode
+   void setOutputMode(OutputMode o) { outputMode=o; }
 
    /// Produce the first tuple
    unsigned first();

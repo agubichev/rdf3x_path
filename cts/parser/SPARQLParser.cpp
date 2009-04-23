@@ -928,3 +928,12 @@ void SPARQLParser::parse()
    }
 }
 //---------------------------------------------------------------------------
+string SPARQLParser::getVariableName(unsigned id) const
+   // Get the name of a variable
+{
+   for (map<string,unsigned>::const_iterator iter=namedVariables.begin(),limit=namedVariables.end();iter!=limit;++iter)
+      if ((*iter).second==id)
+         return (*iter).first;
+   return "";
+}
+//---------------------------------------------------------------------------

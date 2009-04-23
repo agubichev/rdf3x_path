@@ -18,7 +18,7 @@
 using namespace std;
 //---------------------------------------------------------------------------
 ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
-   : output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),limit(limit),silent(silent)
+   : output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),outputMode(DefaultOutput),limit(limit),silent(silent)
    // Constructor
 {
 }
@@ -43,46 +43,55 @@ struct CacheEntry {
    /// Constructor
    CacheEntry() : start(0),stop(0) {}
    /// Print the raw value
-   void printValue() const;
+   void printValue(bool escape) const;
    /// Print it
-   void print(const map<unsigned,CacheEntry>& stringCache) const;
+   void print(const map<unsigned,CacheEntry>& stringCache,bool escape) const;
 };
 //---------------------------------------------------------------------------
-void CacheEntry::printValue() const
+void CacheEntry::printValue(bool escape) const
    // Print the raw value
 {
-   for (const char* iter=start,*limit=stop;iter!=limit;++iter)
-      cout << *iter;
-}
-//---------------------------------------------------------------------------
-void CacheEntry::print(const map<unsigned,CacheEntry>& stringCache) const
-   // Print it
-{
-   switch (type) {
-      case Type::URI: cout << '<'; printValue(); cout << '>'; break;
-      case Type::Literal: cout << '"'; printValue(); cout << '"'; break;
-      case Type::CustomLanguage: cout << '"'; printValue(); cout << "\"@"; (*stringCache.find(subType)).second.printValue(); break;
-      case Type::CustomType: cout << '"'; printValue(); cout << "\"^^<"; (*stringCache.find(subType)).second.printValue(); cout << ">"; break;
-      case Type::String: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#string>"; break;
-      case Type::Integer: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#integer>"; break;
-      case Type::Decimal: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#decimal>"; break;
-      case Type::Double: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#double>"; break;
-      case Type::Boolean: cout << '"'; printValue(); cout << "\"^^<http://www.w3.org/2001/XMLSchema#boolean>"; break;
+   if (escape) {
+      for (const char* iter=start,*limit=stop;iter!=limit;++iter) {
+         char c=*iter;
+         if ((c==' ')||(c=='\n')||(c=='\\'))
+            cout << '\\';
+         cout << c;
+      }
+   } else {
+      for (const char* iter=start,*limit=stop;iter!=limit;++iter)
+         cout << *iter;
    }
 }
 //---------------------------------------------------------------------------
-static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::const_iterator start,vector<unsigned>::const_iterator stop)
+void CacheEntry::print(const map<unsigned,CacheEntry>& stringCache,bool escape) const
+   // Print it
+{
+   switch (type) {
+      case Type::URI: cout << '<'; printValue(escape); cout << '>'; break;
+      case Type::Literal: cout << '"'; printValue(escape); cout << '"'; break;
+      case Type::CustomLanguage: cout << '"'; printValue(escape); cout << "\"@"; (*stringCache.find(subType)).second.printValue(escape); break;
+      case Type::CustomType: cout << '"'; printValue(escape); cout << "\"^^<"; (*stringCache.find(subType)).second.printValue(escape); cout << ">"; break;
+      case Type::String: cout << '"'; printValue(escape); cout << "\"^^<http://www.w3.org/2001/XMLSchema#string>"; break;
+      case Type::Integer: cout << '"'; printValue(escape); cout << "\"^^<http://www.w3.org/2001/XMLSchema#integer>"; break;
+      case Type::Decimal: cout << '"'; printValue(escape); cout << "\"^^<http://www.w3.org/2001/XMLSchema#decimal>"; break;
+      case Type::Double: cout << '"'; printValue(escape); cout << "\"^^<http://www.w3.org/2001/XMLSchema#double>"; break;
+      case Type::Boolean: cout << '"'; printValue(escape); cout << "\"^^<http://www.w3.org/2001/XMLSchema#boolean>"; break;
+   }
+}
+//---------------------------------------------------------------------------
+static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::const_iterator start,vector<unsigned>::const_iterator stop,bool escape)
    // Print a result row
 {
    if (start==stop) return;
    if (!~(*start))
       cout << "NULL"; else
-      stringCache[*start].print(stringCache);
+      stringCache[*start].print(stringCache,escape);
    for (++start;start!=stop;++start) {
       cout << ' ';
       if (!~(*start))
          cout << "NULL"; else
-         stringCache[*start].print(stringCache);
+         stringCache[*start].print(stringCache,escape);
    }
 }
 //---------------------------------------------------------------------------
@@ -94,7 +103,7 @@ unsigned ResultsPrinter::first()
    // Empty input?
    unsigned count;
    if ((count=input->first())==0) {
-      if (!silent)
+      if ((!silent)&&(outputMode!=Embedded))
          cout << "<empty result>" << endl;
       return true;
    }
@@ -138,7 +147,7 @@ unsigned ResultsPrinter::first()
       for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
          unsigned count=*iter; ++iter;
          for (unsigned index=0;index<count;index++) {
-            printResult(stringCache,iter,iter+columns);
+            printResult(stringCache,iter,iter+columns,(outputMode==Embedded));
             cout << endl;
          }
          iter+=columns;
@@ -147,7 +156,7 @@ unsigned ResultsPrinter::first()
       // No, reduced, count, or duplicates
       for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
          unsigned count=*iter; ++iter;
-         printResult(stringCache,iter,iter+columns);
+         printResult(stringCache,iter,iter+columns,(outputMode==Embedded));
          if (duplicateHandling!=ReduceDuplicates)
             cout << " " << count;
          cout << endl;
