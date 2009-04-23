@@ -5,7 +5,14 @@
 #include <iostream>
 #include <sstream>
 #include <cassert>
+#ifdef __GNUC__
+#if (__GNUC__>4)||((__GNUC__==4)&&(__GNUC_MINOR__>=3))
+#define CONFIG_TR1
+#endif
+#endif
+#ifdef CONFIG_TR1
 #include <tr1/regex>
+#endif
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -17,7 +24,6 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 using namespace std;
-using namespace std::tr1;
 //---------------------------------------------------------------------------
 Selection::Result::~Result()
    // Destructor
@@ -756,19 +762,23 @@ void Selection::BuiltinRegEx::setSelection(Selection* s)
 void Selection::BuiltinRegEx::eval(Result& result)
    // Evaluate the predicate
 {
+#ifdef CONFIG_TR1
    Result text,pattern;
    arg1->eval(text);
    arg2->eval(pattern);
 
    try {
       pattern.ensureString(selection);
-      regex r(pattern.value.c_str());
+      std::tr1::regex r(pattern.value.c_str());
       text.ensureString(selection);
-      result.setBoolean(regex_match(text.value.begin(),text.value.end(),r));
+      result.setBoolean(std::tr1::regex_match(text.value.begin(),text.value.end(),r));
       return;
    } catch (const regex_error&) {
       result.setBoolean(false);
    }
+#else
+   result.setBoolean(false);
+#endif
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinRegEx::print()

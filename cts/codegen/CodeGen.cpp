@@ -554,7 +554,7 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan); break;
    }
    if (getenv("SHOWCARD")&&(scan||strcmp(getenv("SHOWCARD"),"scans")))
-      result=new TupleCounter(result,plan->cardinality);
+      result=new TupleCounter(result,static_cast<unsigned>(plan->cardinality));
    return result;
 }
 //---------------------------------------------------------------------------
