@@ -435,7 +435,6 @@ bool FullyAggregatedFactsSegment::Scan::readNextPage()
          continue;
       }
       // Decode the parts
-      value1+=1;
       switch (info&127) {
          case 0: value1+=1; count=1; break;
          case 1: value1+=1; count=readDelta1(reader)+1; reader+=1; break;
