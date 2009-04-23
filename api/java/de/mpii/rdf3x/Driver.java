@@ -15,6 +15,17 @@ import java.sql.SQLException;
 
 public final class Driver implements java.sql.Driver
 {
+   private static boolean registered = false;
+   {
+      if (!registered) {
+         registered=true;
+         try {
+            java.sql.DriverManager.registerDriver(new Driver());
+         } catch (SQLException e) {
+            e.printStackTrace();
+         }
+      }
+   }
    // Does the URL look reasonable?
    public boolean acceptsURL(String url)
    {

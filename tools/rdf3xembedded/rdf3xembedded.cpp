@@ -72,6 +72,7 @@ static void runQuery(Database& db,const string& query)
       cout << "ok" << endl;
       writeHeader(queryGraph,parser);
       cout << "\\." << endl;
+      cout.flush();
       return;
    }
 
@@ -95,6 +96,7 @@ static void runQuery(Database& db,const string& query)
       while (operatorTree->next()) ;
    }
    cout << "\\." << endl;
+   cout.flush();
 
    delete operatorTree;
 }
@@ -120,8 +122,15 @@ int main(int argc,char* argv[])
    // And process queries
    while (true) {
       string query;
-      if (!getline(cin,query))
-         break;
+      while (true) {
+         char c;
+         if (!(cin.get(c))) return 0;
+         if (c=='\n') break;
+         if (c=='\\') {
+            if (!(cin.get(c))) return 0;
+         }
+         query+=c;
+      }
       runQuery(db,query);
       cout.flush();
    }
