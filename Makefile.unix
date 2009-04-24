@@ -17,6 +17,18 @@ define checkdir
 @mkdir -p $(dir $@)
 endef
 
+ifeq ($(LINEEDITOR),)
+ifeq ($(wildcard lineeditor/LineEditor.cpp),lineeditor/LineEditor.cpp)
+LINEEDITOR:=1
+endif
+endif
+
+ifeq ($(LINEEDITOR),1)
+CXXFLAGS:=$(CXXFLAGS) -DCONFIG_LINEEDITOR
+endif
+
+ifeq ($(FORCELIBS),)
+
 LIBS:=-lpthread
 
 ifeq ($(SYS),SunOS)
@@ -27,15 +39,10 @@ ifneq ($(SYS),Darwin)
 LIBS:=$(LIBS) -lrt
 endif
 
-ifeq ($(LINEEDITOR),)
-ifeq ($(wildcard lineeditor/LineEditor.cpp),lineeditor/LineEditor.cpp)
-LINEEDITOR:=1
-endif
+ifeq ($(LINEEDITOR),1)
+LIBFILE-termcap:=-ltermcap
 endif
 
-ifeq ($(LINEEDITOR),1)
-CXXFLAGS:=$(CXXFLAGS) -DCONFIG_LINEEDITOR
-LIBFILE-termcap:=-ltermcap
 endif
 
 define buildexe
