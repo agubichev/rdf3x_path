@@ -773,7 +773,7 @@ void Selection::BuiltinRegEx::eval(Result& result)
       text.ensureString(selection);
       result.setBoolean(std::tr1::regex_match(text.value.begin(),text.value.end(),r));
       return;
-   } catch (const regex_error&) {
+   } catch (const std::tr1::regex_error&) {
       result.setBoolean(false);
    }
 #else
