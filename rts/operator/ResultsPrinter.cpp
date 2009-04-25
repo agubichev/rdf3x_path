@@ -18,7 +18,7 @@
 using namespace std;
 //---------------------------------------------------------------------------
 ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
-   : output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),outputMode(DefaultOutput),limit(limit),silent(silent)
+   : Operator(1),output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),outputMode(DefaultOutput),limit(limit),silent(silent)
    // Constructor
 {
 }
@@ -100,12 +100,14 @@ static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::
 unsigned ResultsPrinter::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=1;
+
    // Empty input?
    unsigned count;
    if ((count=input->first())==0) {
       if ((!silent)&&(outputMode!=Embedded))
          cout << "<empty result>" << endl;
-      return true;
+      return 1;
    }
 
    // Collect the values

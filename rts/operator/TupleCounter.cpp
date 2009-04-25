@@ -14,7 +14,7 @@ unsigned TupleCounter::totalEstimated = 0;
 unsigned TupleCounter::totalObserved = 0;
 //---------------------------------------------------------------------------
 TupleCounter::TupleCounter(Operator* input,unsigned estimated)
-   : input(input),estimated(estimated),observed(0)
+   : Operator(estimated),input(input),estimated(estimated),observed(0)
    // Constructor
 {
 }
@@ -28,8 +28,10 @@ TupleCounter::~TupleCounter()
 unsigned TupleCounter::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    unsigned result=input->first();
    observed=result;
+   observedOutputCardinality+=result;
    return result;
 }
 //---------------------------------------------------------------------------
@@ -38,6 +40,7 @@ unsigned TupleCounter::next()
 {
    unsigned result=input->next();
    observed+=result;
+   observedOutputCardinality+=result;
    return result;
 }
 //---------------------------------------------------------------------------

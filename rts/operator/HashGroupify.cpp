@@ -52,8 +52,8 @@ class HashGroupify::Chainer {
    }
 };
 //---------------------------------------------------------------------------
-HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values)
-   : values(values),input(input),groups(0),groupsPool(values.size()*sizeof(unsigned))
+HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),values(values),input(input),groups(0),groupsPool(values.size()*sizeof(unsigned))
    // Constructor
 {
 }
@@ -67,6 +67,8 @@ HashGroupify::~HashGroupify()
 unsigned HashGroupify::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Aggregate the input
    std::vector<Group*> hashTable;
    unsigned hashTableSize=64,load=0,maxLoad=static_cast<unsigned>(0.8*hashTableSize);
@@ -137,6 +139,7 @@ unsigned HashGroupify::next()
    unsigned count=groupsIter->count;
    groupsIter=groupsIter->next;
 
+   observedOutputCardinality+=count;
    return count;
 }
 //---------------------------------------------------------------------------

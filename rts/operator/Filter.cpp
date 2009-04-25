@@ -11,8 +11,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude)
-   : input(input),filter(filter),exclude(exclude)
+Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),input(input),filter(filter),exclude(exclude)
    // Constructor
 {
    if (values.empty()) {
@@ -41,6 +41,8 @@ Filter::~Filter()
 unsigned Filter::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Do we know the domain?
    if ((!exclude)&&(filter->domain)) {
       ObservedDomainDescription domain;
@@ -60,10 +62,13 @@ unsigned Filter::first()
    if (exclude) {
       if ((value>=min)&&(value<=max)&&(valid[value-min]))
          return next();
+      observedOutputCardinality+=count;
       return count;
    } else {
-      if ((value>=min)&&(value<=max)&&(valid[value-min]))
+      if ((value>=min)&&(value<=max)&&(valid[value-min])) {
+         observedOutputCardinality+=count;
          return count;
+      }
       return next();
    }
 }
@@ -82,6 +87,7 @@ unsigned Filter::next()
          unsigned value=filter->value;
          if ((value>=min)&&(value<=max)&&(valid[value-min]))
             continue;
+         observedOutputCardinality+=count;
          return count;
       }
    } else {
@@ -93,8 +99,10 @@ unsigned Filter::next()
 
          // Check if valid
          unsigned value=filter->value;
-         if ((value>=min)&&(value<=max)&&(valid[value-min]))
+         if ((value>=min)&&(value<=max)&&(valid[value-min])) {
+            observedOutputCardinality+=count;
             return count;
+         }
       }
    }
 }

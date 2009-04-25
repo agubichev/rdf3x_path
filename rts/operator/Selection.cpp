@@ -841,8 +841,8 @@ void Selection::BuiltinIn::print()
    cout << ")";
 }
 //---------------------------------------------------------------------------
-Selection::Selection(Operator* input,Runtime& runtime,Predicate* predicate)
-   : input(input),runtime(runtime),predicate(predicate)
+Selection::Selection(Operator* input,Runtime& runtime,Predicate* predicate,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),input(input),runtime(runtime),predicate(predicate)
    // Constructor
 {
 }
@@ -857,6 +857,7 @@ Selection::~Selection()
 unsigned Selection::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    predicate->setSelection(this);
 
    // Get the first tuple
@@ -864,8 +865,10 @@ unsigned Selection::first()
    if (!count) return 0;
 
    // Match?
-   if (predicate->check())
+   if (predicate->check()) {
+      observedOutputCardinality+=count;
       return count;
+   }
 
    // Get the next one
    return next();
@@ -880,8 +883,10 @@ unsigned Selection::next()
       if (!count) return 0;
 
       // Match?
-      if (predicate->check())
+      if (predicate->check()) {
+         observedOutputCardinality+=count;
          return count;
+      }
    }
 }
 //---------------------------------------------------------------------------

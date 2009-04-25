@@ -71,7 +71,7 @@ class DifferentialIndexScan : public Operator
 };
 //---------------------------------------------------------------------------
 DifferentialIndexScan::DifferentialIndexScan(Operator* input,Latch& latch,unsigned timestamp,set<DifferentialIndex::VersionedTriple>& triples,Register* value1,Register* value2,Register* value3,unsigned check2,unsigned check3,const DifferentialIndex::VersionedTriple& lowerBound,const DifferentialIndex::VersionedTriple& upperBound)
-   : input(input),latch(latch),triples(triples),timestamp(timestamp),value1(value1),value2(value2),value3(value3),check2(check2),check3(check3),lowerBound(lowerBound),upperBound(upperBound),latched(false)
+   : Operator(0),input(input),latch(latch),triples(triples),timestamp(timestamp),value1(value1),value2(value2),value3(value3),check2(check2),check3(check3),lowerBound(lowerBound),upperBound(upperBound),latched(false)
    // Constructor
 {
 }
@@ -114,6 +114,8 @@ static int compareTriple(unsigned l1,unsigned l2,unsigned l3,unsigned r1,unsigne
 unsigned DifferentialIndexScan::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Latch if necessary
    if (!latched) {
       latch.lockShared();
@@ -144,11 +146,14 @@ unsigned DifferentialIndexScan::first()
    }
 
    // Compare
-   if (iter==limit)
+   if (iter==limit) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
+   }
    const DifferentialIndex::VersionedTriple& t=(*iter);
    int cmp=compareTriple(value1->value,value2->value,value3->value,t.value1,t.value2,t.value3);
    if (cmp<0) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (cmp>0) {
       left1=value1->value;
@@ -159,9 +164,11 @@ unsigned DifferentialIndexScan::first()
       value2->value=t.value2;
       value3->value=t.value3;
       incIter();
+      observedOutputCardinality+=1;
       return 1;
    } else {
       incIter();
+      observedOutputCardinality+=leftCount;
       return leftCount;
    }
 }
@@ -185,6 +192,7 @@ unsigned DifferentialIndexScan::next()
          value2->value=left2;
          value3->value=left3;
          hasLeft=false;
+         observedOutputCardinality+=leftCount;
          return leftCount;
       }
       // Read the next one
@@ -196,6 +204,7 @@ unsigned DifferentialIndexScan::next()
          }
          return 0;
       }
+      observedOutputCardinality+=leftCount;
       return leftCount;
    }
    // Left side done?
@@ -205,6 +214,7 @@ unsigned DifferentialIndexScan::next()
       value2->value=t.value2;
       value3->value=t.value3;
       incIter();
+      observedOutputCardinality+=1;
       return 1;
    }
    // A buffered left triple?
@@ -216,12 +226,14 @@ unsigned DifferentialIndexScan::next()
          value2->value=left2;
          value3->value=left3;
          hasLeft=false;
+         observedOutputCardinality+=leftCount;
          return leftCount;
       } else if (cmp>0) {
          value1->value=t.value1;
          value2->value=t.value2;
          value3->value=t.value3;
          incIter();
+         observedOutputCardinality+=1;
          return 1;
       } else {
          value1->value=left1;
@@ -229,6 +241,7 @@ unsigned DifferentialIndexScan::next()
          value3->value=left3;
          hasLeft=false;
          incIter();
+         observedOutputCardinality+=leftCount;
          return leftCount;
       }
    }
@@ -240,6 +253,7 @@ unsigned DifferentialIndexScan::next()
       value2->value=t.value2;
       value3->value=t.value3;
       incIter();
+      observedOutputCardinality+=1;
       return 1;
    }
 
@@ -247,6 +261,7 @@ unsigned DifferentialIndexScan::next()
    const DifferentialIndex::VersionedTriple& t=(*iter);
    int cmp=compareTriple(value1->value,value2->value,value3->value,t.value1,t.value2,t.value3);
    if (cmp<0) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (cmp>0) {
       left1=value1->value;
@@ -257,9 +272,11 @@ unsigned DifferentialIndexScan::next()
       value2->value=t.value2;
       value3->value=t.value3;
       incIter();
+      observedOutputCardinality+=1;
       return 1;
    } else {
       incIter();
+      observedOutputCardinality+=leftCount;
       return leftCount;
    }
 }
@@ -334,7 +351,7 @@ class AggregatedDifferentialIndexScan : public Operator
 };
 //---------------------------------------------------------------------------
 AggregatedDifferentialIndexScan::AggregatedDifferentialIndexScan(Operator* input,Latch& latch,unsigned timestamp,set<DifferentialIndex::VersionedTriple>& triples,Register* value1,Register* value2,unsigned check2,const DifferentialIndex::VersionedTriple& lowerBound,const DifferentialIndex::VersionedTriple& upperBound)
-   : input(input),latch(latch),triples(triples),timestamp(timestamp),value1(value1),value2(value2),check2(check2),lowerBound(lowerBound),upperBound(upperBound),latched(false)
+   : Operator(0),input(input),latch(latch),triples(triples),timestamp(timestamp),value1(value1),value2(value2),check2(check2),lowerBound(lowerBound),upperBound(upperBound),latched(false)
    // Constructor
 {
 }
@@ -379,6 +396,8 @@ static int compareTriple2(unsigned l1,unsigned l2,unsigned r1,unsigned r2)
 unsigned AggregatedDifferentialIndexScan::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Latch if necessary
    if (!latched) {
       latch.lockShared();
@@ -408,11 +427,14 @@ unsigned AggregatedDifferentialIndexScan::first()
    }
 
    // Compare
-   if (iter==limit)
+   if (iter==limit) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
+   }
    const DifferentialIndex::VersionedTriple& t=(*iter);
    int cmp=compareTriple2(value1->value,value2->value,t.value1,t.value2);
    if (cmp<0) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (cmp>0) {
       left1=value1->value;
@@ -420,9 +442,14 @@ unsigned AggregatedDifferentialIndexScan::first()
       hasLeft=true;
       value1->value=t.value1;
       value2->value=t.value2;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    } else {
-      return leftCount+incIter();
+      unsigned count=leftCount+incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
 }
 //---------------------------------------------------------------------------
@@ -444,6 +471,7 @@ unsigned AggregatedDifferentialIndexScan::next()
          value1->value=left1;
          value2->value=left2;
          hasLeft=false;
+         observedOutputCardinality+=leftCount;
          return leftCount;
       }
       // Read the next one
@@ -455,6 +483,7 @@ unsigned AggregatedDifferentialIndexScan::next()
          }
          return 0;
       }
+      observedOutputCardinality+=leftCount;
       return leftCount;
    }
    // Left side done?
@@ -462,7 +491,10 @@ unsigned AggregatedDifferentialIndexScan::next()
       const DifferentialIndex::VersionedTriple& t=(*iter);
       value1->value=t.value1;
       value2->value=t.value2;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
    // A buffered left triple?
    if (hasLeft) {
@@ -472,16 +504,23 @@ unsigned AggregatedDifferentialIndexScan::next()
          value1->value=left1;
          value2->value=left2;
          hasLeft=false;
+         observedOutputCardinality+=leftCount;
          return leftCount;
       } else if (cmp>0) {
          value1->value=t.value1;
          value2->value=t.value2;
-         return incIter();
+
+         unsigned count=incIter();
+         observedOutputCardinality+=count;
+         return count;
       } else {
          value1->value=left1;
          value2->value=left2;
          hasLeft=false;
-         return leftCount+incIter();
+
+         unsigned count=leftCount+incIter();
+         observedOutputCardinality+=count;
+         return count;
       }
    }
    // Retrieve the next DB triple
@@ -490,13 +529,17 @@ unsigned AggregatedDifferentialIndexScan::next()
       const DifferentialIndex::VersionedTriple& t=(*iter);
       value1->value=t.value1;
       value2->value=t.value2;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
 
    // Compare
    const DifferentialIndex::VersionedTriple& t=(*iter);
    int cmp=compareTriple2(value1->value,value2->value,t.value1,t.value2);
    if (cmp<0) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (cmp>0) {
       left1=value1->value;
@@ -504,9 +547,14 @@ unsigned AggregatedDifferentialIndexScan::next()
       hasLeft=true;
       value1->value=t.value1;
       value2->value=t.value2;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    } else {
-      return leftCount+incIter();
+      unsigned count=leftCount+incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
 }
 //---------------------------------------------------------------------------
@@ -578,7 +626,7 @@ class FullyAggregatedDifferentialIndexScan : public Operator
 };
 //---------------------------------------------------------------------------
 FullyAggregatedDifferentialIndexScan::FullyAggregatedDifferentialIndexScan(Operator* input,Latch& latch,unsigned timestamp,set<DifferentialIndex::VersionedTriple>& triples,Register* value1,const DifferentialIndex::VersionedTriple& lowerBound,const DifferentialIndex::VersionedTriple& upperBound)
-   : input(input),latch(latch),triples(triples),timestamp(timestamp),value1(value1),lowerBound(lowerBound),upperBound(upperBound),latched(false)
+   : Operator(0),input(input),latch(latch),triples(triples),timestamp(timestamp),value1(value1),lowerBound(lowerBound),upperBound(upperBound),latched(false)
    // Constructor
 {
 }
@@ -620,6 +668,8 @@ static int compareTriple1(unsigned l1,unsigned r1)
 unsigned FullyAggregatedDifferentialIndexScan::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Latch if necessary
    if (!latched) {
       latch.lockShared();
@@ -648,19 +698,27 @@ unsigned FullyAggregatedDifferentialIndexScan::first()
    }
 
    // Compare
-   if (iter==limit)
+   if (iter==limit) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
+   }
    const DifferentialIndex::VersionedTriple& t=(*iter);
    int cmp=compareTriple1(value1->value,t.value1);
    if (cmp<0) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (cmp>0) {
       left1=value1->value;
       hasLeft=true;
       value1->value=t.value1;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    } else {
-      return leftCount+incIter();
+      unsigned count=leftCount+incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
 }
 //---------------------------------------------------------------------------
@@ -681,6 +739,7 @@ unsigned FullyAggregatedDifferentialIndexScan::next()
       if (hasLeft) {
          value1->value=left1;
          hasLeft=false;
+         observedOutputCardinality+=leftCount;
          return leftCount;
       }
       // Read the next one
@@ -692,13 +751,17 @@ unsigned FullyAggregatedDifferentialIndexScan::next()
          }
          return 0;
       }
+      observedOutputCardinality+=leftCount;
       return leftCount;
    }
    // Left side done?
    if (!leftCount) {
       const DifferentialIndex::VersionedTriple& t=(*iter);
       value1->value=t.value1;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
    // A buffered left triple?
    if (hasLeft) {
@@ -707,14 +770,21 @@ unsigned FullyAggregatedDifferentialIndexScan::next()
       if (cmp<0) {
          value1->value=left1;
          hasLeft=false;
+         observedOutputCardinality+=leftCount;
          return leftCount;
       } else if (cmp>0) {
          value1->value=t.value1;
-         return incIter();
+
+         unsigned count=incIter();
+         observedOutputCardinality+=count;
+         return count;
       } else {
          value1->value=left1;
          hasLeft=false;
-         return leftCount+incIter();
+
+         unsigned count=leftCount+incIter();
+         observedOutputCardinality+=count;
+         return count;
       }
    }
    // Retrieve the next DB triple
@@ -722,21 +792,30 @@ unsigned FullyAggregatedDifferentialIndexScan::next()
    if (!leftCount) {
       const DifferentialIndex::VersionedTriple& t=(*iter);
       value1->value=t.value1;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
 
    // Compare
    const DifferentialIndex::VersionedTriple& t=(*iter);
    int cmp=compareTriple1(value1->value,t.value1);
    if (cmp<0) {
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (cmp>0) {
       left1=value1->value;
       hasLeft=true;
       value1->value=t.value1;
-      return incIter();
+
+      unsigned count=incIter();
+      observedOutputCardinality+=count;
+      return count;
    } else {
-      return leftCount+incIter();
+      unsigned count=leftCount+incIter();
+      observedOutputCardinality+=count;
+      return count;
    }
 }
 //---------------------------------------------------------------------------
@@ -1023,11 +1102,11 @@ void DifferentialIndex::sync()
       latches[index].unlock();
 }
 //---------------------------------------------------------------------------
-Operator* DifferentialIndex::createScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound)
+Operator* DifferentialIndex::createScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality)
    // Create a suitable scan operator scanning both the DB and the differential index
 {
    // Construct the database scan
-   Operator* dbScan=IndexScan::create(db,order,subjectRegister,subjectBound,predicateRegister,predicateBound,objectRegister,objectBound);
+   Operator* dbScan=IndexScan::create(db,order,subjectRegister,subjectBound,predicateRegister,predicateBound,objectRegister,objectBound,expectedOutputCardinality);
 
    // Setup the slot bindings
    Register* value1=0,*value2=0,*value3=0;
@@ -1086,11 +1165,11 @@ Operator* DifferentialIndex::createScan(Database::DataOrder order,Register* subj
    return new DifferentialIndexScan(dbScan,latches[order],timestamp,triples[order],value1,value2,value3,bound2?value2->value:~0u,bound3?value3->value:~0u,lowerBound,upperBound);
 }
 //---------------------------------------------------------------------------
-Operator* DifferentialIndex::createAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound)
+Operator* DifferentialIndex::createAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality)
    // Create a suitable scan operator scanning both the DB and the differential index
 {
    // Construct the database scan
-   Operator* dbScan=AggregatedIndexScan::create(db,order,subjectRegister,subjectBound,predicateRegister,predicateBound,objectRegister,objectBound);
+   Operator* dbScan=AggregatedIndexScan::create(db,order,subjectRegister,subjectBound,predicateRegister,predicateBound,objectRegister,objectBound,expectedOutputCardinality);
 
    // Setup the slot bindings
    Register* value1=0,*value2=0;
@@ -1147,11 +1226,11 @@ Operator* DifferentialIndex::createAggregatedScan(Database::DataOrder order,Regi
    return new AggregatedDifferentialIndexScan(dbScan,latches[order],timestamp,triples[order],value1,value2,bound2?value2->value:~0u,lowerBound,upperBound);
 }
 //---------------------------------------------------------------------------
-Operator* DifferentialIndex::createFullyAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound)
+Operator* DifferentialIndex::createFullyAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality)
    // Create a suitable scan operator scanning both the DB and the differential index
 {
    // Construct the database scan
-   Operator* dbScan=FullyAggregatedIndexScan::create(db,order,subjectRegister,subjectBound,predicateRegister,predicateBound,objectRegister,objectBound);
+   Operator* dbScan=FullyAggregatedIndexScan::create(db,order,subjectRegister,subjectBound,predicateRegister,predicateBound,objectRegister,objectBound,expectedOutputCardinality);
 
    // Setup the slot bindings
    Register* value1=0;

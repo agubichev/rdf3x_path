@@ -16,7 +16,7 @@
 class AggregatedIndexScan::Scan : public AggregatedIndexScan {
    public:
    /// Constructor
-   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -32,7 +32,7 @@ class AggregatedIndexScan::ScanFilter2 : public AggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -48,7 +48,7 @@ class AggregatedIndexScan::ScanPrefix1 : public AggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -64,7 +64,7 @@ class AggregatedIndexScan::ScanPrefix12 : public AggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2) {}
+   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -130,8 +130,8 @@ void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
    }
 }
 //---------------------------------------------------------------------------
-AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2)
-   : value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
+AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
    // Constructor
 {
 }
@@ -189,7 +189,7 @@ void AggregatedIndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
 {
 }
 //---------------------------------------------------------------------------
-AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
+AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,unsigned expectedOutputCardinality)
    // Constructor
 {
    // Setup the slot bindings
@@ -232,12 +232,12 @@ AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrde
    AggregatedIndexScan* result;
    if (!bound1) {
       if (bound2)
-         result=new ScanFilter2(db,order,value1,bound1,value2,bound2); else
-         result=new Scan(db,order,value1,bound1,value2,bound2);
+         result=new ScanFilter2(db,order,value1,bound1,value2,bound2,expectedOutputCardinality); else
+         result=new Scan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality);
    } else {
       if (!bound2)
-         result=new ScanPrefix1(db,order,value1,bound1,value2,bound2); else
-         result=new ScanPrefix12(db,order,value1,bound1,value2,bound2);
+         result=new ScanPrefix1(db,order,value1,bound1,value2,bound2,expectedOutputCardinality); else
+         result=new ScanPrefix12(db,order,value1,bound1,value2,bound2,expectedOutputCardinality);
    }
 
    return result;
@@ -246,11 +246,16 @@ AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrde
 unsigned AggregatedIndexScan::Scan::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    if (!scan.first(facts))
       return false;
    value1->value=scan.getValue1();
    value2->value=scan.getValue2();
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::Scan::next()
@@ -260,12 +265,16 @@ unsigned AggregatedIndexScan::Scan::next()
       return false;
    value1->value=scan.getValue1();
    value2->value=scan.getValue2();
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::ScanFilter2::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    filter=value2->value;
 
    if (!scan.first(facts))
@@ -273,7 +282,10 @@ unsigned AggregatedIndexScan::ScanFilter2::first()
    if (scan.getValue2()!=filter)
       return next();
    value1->value=scan.getValue1();
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::ScanFilter2::next()
@@ -285,20 +297,27 @@ unsigned AggregatedIndexScan::ScanFilter2::next()
       if (scan.getValue2()!=filter)
          continue;
       value1->value=scan.getValue1();
-      return scan.getCount();
+
+      unsigned count=scan.getCount();
+      observedOutputCardinality+=count;
+      return count;
    }
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::ScanPrefix1::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    stop1=value1->value;
    if (!scan.first(facts,stop1,0))
       return false;
    if (scan.getValue1()>stop1)
       return false;
    value2->value=scan.getValue2();
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::ScanPrefix1::next()
@@ -309,18 +328,25 @@ unsigned AggregatedIndexScan::ScanPrefix1::next()
    if (scan.getValue1()>stop1)
       return false;
    value2->value=scan.getValue2();
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::ScanPrefix12::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    stop1=value1->value; stop2=value2->value;
    if (!scan.first(facts,stop1,stop2))
       return false;
    if ((scan.getValue1()>stop1)||((scan.getValue1()==stop1)&&(scan.getValue2()>stop2)))
       return false;
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned AggregatedIndexScan::ScanPrefix12::next()
@@ -330,6 +356,9 @@ unsigned AggregatedIndexScan::ScanPrefix12::next()
       return false;
    if ((scan.getValue1()>stop1)||((scan.getValue1()==stop1)&&(scan.getValue2()>stop2)))
       return false;
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------

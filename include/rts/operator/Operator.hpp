@@ -18,6 +18,9 @@ class Scheduler;
 class Operator
 {
    protected:
+   /// Tuple counter
+   unsigned expectedOutputCardinality,observedOutputCardinality;
+
    /// Helper for indenting debug output
    static void indent(unsigned level);
    /// Helper for debug output
@@ -25,7 +28,7 @@ class Operator
 
    public:
    /// Constructor
-   Operator();
+   explicit Operator(unsigned expectedOutputCardinality);
    /// Destructor
    virtual ~Operator();
 
@@ -33,6 +36,11 @@ class Operator
    virtual unsigned first() = 0;
    /// Produce the next tuple
    virtual unsigned next() = 0;
+
+   /// Tuple counter
+   unsigned getExpectedOutputCardinality() const { return expectedOutputCardinality; }
+   /// Tuple counter
+   unsigned getObservedOutputCardinality() const { return observedOutputCardinality; }
 
    /// Print the operator tree. Debugging only.
    virtual void print(DictionarySegment& dict,unsigned indent=0) = 0;

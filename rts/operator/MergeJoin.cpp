@@ -11,9 +11,9 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-MergeJoin::MergeJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail)
-   : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),
-     scanState(empty)
+MergeJoin::MergeJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),left(left),right(right),leftValue(leftValue),rightValue(rightValue),
+     leftTail(leftTail),rightTail(rightTail),scanState(empty)
    // Constructor
 {
    leftShadow.resize(leftTail.size()+2);
@@ -33,6 +33,8 @@ MergeJoin::~MergeJoin()
 unsigned MergeJoin::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Read the first tuples
    if ((leftCount=left->first())==0)
       return false;
@@ -169,14 +171,20 @@ unsigned MergeJoin::next()
             if ((leftCount=left->next())==0) {
                swapLeft();
                scanState=loopEmptyLeft;
-               return leftCount*rightCount;
+
+               unsigned count=leftCount*rightCount;
+               observedOutputCardinality+=count;
+               return count;
             }
             copyRight();
             if ((rightCount=right->next())==0) {
                swapLeft();
                swapRight();
                scanState=loopEmptyRightHasData;
-               return leftCount*rightCount;
+
+               unsigned count=leftCount*rightCount;
+               observedOutputCardinality+=count;
+               return count;
             }
             // Match. Is this a 1:n or n:m join?
             if (leftValue->value==leftShadow[1]) {
@@ -187,19 +195,27 @@ unsigned MergeJoin::next()
                   swapLeft();
                   swapRight();
                   scanState=loopEqualLeftHasData;
-                  return leftCount*rightCount;
+                  
+                  unsigned count=leftCount*rightCount;
+                  observedOutputCardinality+=count;
+                  return count;
                }
             } else if (rightValue->value==rightShadow[1]) {
                swapLeft();
                swapRight();
                scanState=loopEqualRightHasData;
-               return leftCount*rightCount;
+
+               unsigned count=leftCount*rightCount;
+               observedOutputCardinality+=count;
+               return count;
             }
             // No, just a single match
             swapLeft();
             swapRight();
             scanState=scanHasBothSwapped;
-            return leftCount*rightCount;
+            { unsigned count=leftCount*rightCount;
+            observedOutputCardinality+=count;
+            return count; }
          case loopEmptyLeft:
             // Left side is empty, compare with the right side
             if ((rightCount=right->next())==0) {
@@ -212,7 +228,9 @@ unsigned MergeJoin::next()
                return false;
             }
             if (l==r) {
-               return leftCount*rightCount;
+               unsigned count=leftCount*rightCount;
+               observedOutputCardinality+=count;
+               return count;
             }}
             continue;
          case loopEmptyRight:
@@ -232,7 +250,9 @@ unsigned MergeJoin::next()
                return false;
             }
             if (l==r) {
-               return leftCount*rightCount;
+               unsigned count=leftCount*rightCount;
+               observedOutputCardinality+=count;
+               return count;
             }}
             continue;
          case loopEqualLeftHasData:
@@ -253,7 +273,9 @@ unsigned MergeJoin::next()
                scanState=scanHasBoth;
                continue;
             }
-            return leftCount*rightCount;
+            { unsigned count=leftCount*rightCount;
+            observedOutputCardinality+=count;
+            return count; }
          case loopEqualRightHasData:
             // Reuse the copy
             swapRight();
@@ -272,7 +294,9 @@ unsigned MergeJoin::next()
                scanState=scanHasBoth;
                continue;
             }
-            return leftCount*rightCount;
+            { unsigned count=leftCount*rightCount;
+            observedOutputCardinality+=count;
+            return count; }
          case loopSpooledRightEmpty:
          case loopSpooledRightHasData:
             // The right hand side is spooled into the buffer...
@@ -281,7 +305,9 @@ unsigned MergeJoin::next()
                rightValue->value=*bufferIter; ++bufferIter;
                for (std::vector<Register*>::iterator iter=rightTail.begin(),limit=rightTail.end();iter!=limit;++iter,++bufferIter)
                   (*iter)->value=*bufferIter;
-               return leftCount*rightCount;
+               unsigned count=leftCount*rightCount;
+               observedOutputCardinality+=count;
+               return count;
             } else {
                // More tuples available on the left hand side?
                if (leftInCopy) {

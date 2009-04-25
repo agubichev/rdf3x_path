@@ -11,8 +11,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-Union::Union(const std::vector<Operator*>& parts,const std::vector<std::vector<Register*> >& mappings,const std::vector<std::vector<Register*> >& initializations)
-   : parts(parts),mappings(mappings),initializations(initializations)
+Union::Union(const std::vector<Operator*>& parts,const std::vector<std::vector<Register*> >& mappings,const std::vector<std::vector<Register*> >& initializations,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),parts(parts),mappings(mappings),initializations(initializations)
    // Constructor
 {
 }
@@ -41,6 +41,7 @@ unsigned Union::firstFromPart()
          Register* to=*iter; ++iter;
          to->value=from->value;
       }
+      observedOutputCardinality+=count;
       return count;
    }
 }
@@ -48,6 +49,7 @@ unsigned Union::firstFromPart()
 unsigned Union::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    current=0;
    if (parts.empty())
       return false;
@@ -75,6 +77,7 @@ unsigned Union::next()
       Register* to=*iter; ++iter;
       to->value=from->value;
    }
+   observedOutputCardinality+=count;
    return count;
 }
 //---------------------------------------------------------------------------

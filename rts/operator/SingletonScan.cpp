@@ -11,6 +11,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 SingletonScan::SingletonScan()
+   : Operator(1)
    // Constructor
 {
 }
@@ -23,6 +24,7 @@ SingletonScan::~SingletonScan()
 unsigned SingletonScan::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=1;
    return 1;
 }
 //---------------------------------------------------------------------------

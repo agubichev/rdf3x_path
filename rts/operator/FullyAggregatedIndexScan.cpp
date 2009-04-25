@@ -16,7 +16,7 @@
 class FullyAggregatedIndexScan::Scan : public FullyAggregatedIndexScan {
    public:
    /// Constructor
-   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1) : FullyAggregatedIndexScan(db,order,value1,bound1) {}
+   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality) : FullyAggregatedIndexScan(db,order,value1,bound1,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -32,7 +32,7 @@ class FullyAggregatedIndexScan::ScanPrefix1 : public FullyAggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1) : FullyAggregatedIndexScan(db,order,value1,bound1) {}
+   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality) : FullyAggregatedIndexScan(db,order,value1,bound1,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -75,8 +75,8 @@ void FullyAggregatedIndexScan::Hint::next(unsigned& value1)
    }
 }
 //---------------------------------------------------------------------------
-FullyAggregatedIndexScan::FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1)
-   : value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
+FullyAggregatedIndexScan::FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
    // Constructor
 {
 }
@@ -131,7 +131,7 @@ void FullyAggregatedIndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
 {
 }
 //---------------------------------------------------------------------------
-FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound)
+FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,unsigned expectedOutputCardinality)
    // Constructor
 {
    // Setup the slot bindings
@@ -179,9 +179,9 @@ FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database
    // Construct the proper operator
    FullyAggregatedIndexScan* result;
    if (!bound1) {
-      result=new Scan(db,order,value1,bound1);
+      result=new Scan(db,order,value1,bound1,expectedOutputCardinality);
    } else {
-      result=new ScanPrefix1(db,order,value1,bound1);
+      result=new ScanPrefix1(db,order,value1,bound1,expectedOutputCardinality);
    }
 
    return result;
@@ -190,10 +190,14 @@ FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database
 unsigned FullyAggregatedIndexScan::Scan::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    if (!scan.first(facts))
       return false;
    value1->value=scan.getValue1();
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned FullyAggregatedIndexScan::Scan::next()
@@ -202,18 +206,26 @@ unsigned FullyAggregatedIndexScan::Scan::next()
    if (!scan.next())
       return false;
    value1->value=scan.getValue1();
-   return scan.getCount();
+   
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned FullyAggregatedIndexScan::ScanPrefix1::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    stop1=value1->value;
    if (!scan.first(facts,stop1))
       return false;
    if (scan.getValue1()>stop1)
       return false;
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned FullyAggregatedIndexScan::ScanPrefix1::next()
@@ -223,6 +235,9 @@ unsigned FullyAggregatedIndexScan::ScanPrefix1::next()
       return false;
    if (scan.getValue1()>stop1)
       return false;
-   return scan.getCount();
+
+   unsigned count=scan.getCount();
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------

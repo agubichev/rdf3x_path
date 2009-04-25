@@ -95,7 +95,7 @@ class HashJoin : public Operator
 
    public:
    /// Constructor
-   HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail,double hashPriority,double probePriority);
+   HashJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail,double hashPriority,double probePriority,unsigned expectedOutputCardinality);
    /// Destructor
    ~HashJoin();
 

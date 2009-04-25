@@ -11,8 +11,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-MergeUnion::MergeUnion(Register* result,Operator* left,Register* leftReg,Operator* right,Register* rightReg)
-   : left(left),right(right),leftReg(leftReg),rightReg(rightReg),result(result)
+MergeUnion::MergeUnion(Register* result,Operator* left,Register* leftReg,Operator* right,Register* rightReg,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),left(left),right(right),leftReg(leftReg),rightReg(rightReg),result(result)
    // Constructor
 {
 }
@@ -27,6 +27,8 @@ MergeUnion::~MergeUnion()
 unsigned MergeUnion::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Read the first tuple on the left side
    if ((leftCount=left->first())==0) {
       if ((rightCount=right->first())==0) {
@@ -35,6 +37,7 @@ unsigned MergeUnion::first()
       }
       result->value=rightReg->value;
       state=leftEmpty;
+      observedOutputCardinality+=rightCount;
       return rightCount;
    }
    leftValue=leftReg->value;
@@ -43,6 +46,7 @@ unsigned MergeUnion::first()
    if ((rightCount=right->first())==0) {
       result->value=leftReg->value;
       state=rightEmpty;
+      observedOutputCardinality+=leftCount;
       return leftCount;
    }
    rightValue=rightReg->value;
@@ -51,15 +55,20 @@ unsigned MergeUnion::first()
    if (leftValue<rightValue) {
       result->value=leftValue;
       state=stepLeft;
+      observedOutputCardinality+=leftCount;
       return leftCount;
    } else if (leftValue>rightValue) {
       result->value=rightValue;
       state=stepRight;
+      observedOutputCardinality+=rightCount;
       return rightCount;
    } else {
       result->value=leftValue;
       state=stepBoth;
-      return leftCount+rightCount;
+
+      unsigned count=leftCount+rightCount;
+      observedOutputCardinality+=count;
+      return count;
    }
 }
 //---------------------------------------------------------------------------
@@ -72,6 +81,7 @@ unsigned MergeUnion::next()
          if ((leftCount=left->next())==0) {
             result->value=rightValue;
             state=leftEmpty;
+            observedOutputCardinality+=rightCount;
             return rightCount;
          }
          leftValue=leftReg->value;
@@ -81,6 +91,7 @@ unsigned MergeUnion::next()
             if ((rightCount=right->next())==0) {
                result->value=leftValue;
                state=rightEmpty;
+               observedOutputCardinality+=leftCount;
                return leftCount;
             }
             rightValue=rightReg->value;
@@ -89,15 +100,20 @@ unsigned MergeUnion::next()
          if (leftValue<rightValue) {
             result->value=leftValue;
             state=stepLeft;
+            observedOutputCardinality+=leftCount;
             return leftCount;
          } else if (leftValue>rightValue) {
             result->value=rightValue;
             state=stepRight;
+            observedOutputCardinality+=rightCount;
             return rightCount;
          } else {
             result->value=leftValue;
             state=stepBoth;
-            return leftCount+rightCount;
+
+            unsigned count=leftCount+rightCount;
+            observedOutputCardinality+=count;
+            return count;
          }
       case leftEmpty:
          if ((rightCount=right->next())==0) {
@@ -105,6 +121,7 @@ unsigned MergeUnion::next()
             return false;
          }
          result->value=rightReg->value;
+         observedOutputCardinality+=rightCount;
          return rightCount;
       case rightEmpty:
          if ((leftCount=left->next())==0) {
@@ -112,6 +129,7 @@ unsigned MergeUnion::next()
             return false;
          }
          result->value=leftReg->value;
+         observedOutputCardinality+=leftCount;
          return leftCount;
    }
    return false;

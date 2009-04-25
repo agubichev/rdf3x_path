@@ -187,7 +187,7 @@ int main(int argc,char* argv[])
    DictionarySegment& dic=db.getDictionary();
    Register subject,predicate,object;
    subject.reset(); predicate.reset(); object.reset();
-   IndexScan* scan=IndexScan::create(db,Database::Order_Subject_Predicate_Object,&subject,false,&predicate,false,&object,false);
+   IndexScan* scan=IndexScan::create(db,Database::Order_Subject_Predicate_Object,&subject,false,&predicate,false,&object,false,0);
    if (ntriplesDump) {
       if (scan->first()) do {
          dumpSubject(dic,subject.value);

@@ -11,6 +11,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 EmptyScan::EmptyScan()
+   : Operator(0)
    // Constructor
 {
 }

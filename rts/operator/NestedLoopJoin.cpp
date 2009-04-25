@@ -11,8 +11,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-NestedLoopJoin::NestedLoopJoin(Operator* left,Operator* right)
-   : left(left),right(right)
+NestedLoopJoin::NestedLoopJoin(Operator* left,Operator* right,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),left(left),right(right)
    // Constructor
 {
 }
@@ -27,6 +27,8 @@ NestedLoopJoin::~NestedLoopJoin()
 unsigned NestedLoopJoin::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
+
    // Read the first tuple on the left side
    if ((leftCount=left->first())==0)
       return false;
@@ -38,7 +40,9 @@ unsigned NestedLoopJoin::first()
          return false;
    }
 
-   return leftCount*rightCount;
+   unsigned count=leftCount*rightCount;
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 unsigned NestedLoopJoin::next()
@@ -46,8 +50,11 @@ unsigned NestedLoopJoin::next()
 {
    // A simple match?
    unsigned rightCount;
-   if ((rightCount=right->next())!=0)
-      return leftCount*rightCount;
+   if ((rightCount=right->next())!=0) {
+      unsigned count=leftCount*rightCount;
+      observedOutputCardinality+=count;
+      return count;
+   }
 
    // No, do we have more tuples on the left hand side?
    if ((leftCount=left->next())==0)
@@ -59,7 +66,9 @@ unsigned NestedLoopJoin::next()
          return false;
    }
 
-   return leftCount*rightCount;
+   unsigned count=leftCount*rightCount;
+   observedOutputCardinality+=count;
+   return count;
 }
 //---------------------------------------------------------------------------
 void NestedLoopJoin::print(DictionarySegment& dict,unsigned level)

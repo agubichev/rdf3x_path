@@ -12,8 +12,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-NestedLoopFilter::NestedLoopFilter(Operator* input,Register* filter,const std::vector<unsigned>& values)
-   : input(input),filter(filter),values(values)
+NestedLoopFilter::NestedLoopFilter(Operator* input,Register* filter,const std::vector<unsigned>& values,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),input(input),filter(filter),values(values)
    // Constructor
 {
    std::sort(this->values.begin(),this->values.end());
@@ -27,11 +27,14 @@ NestedLoopFilter::~NestedLoopFilter()
 unsigned NestedLoopFilter::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    for (pos=0;pos<values.size();++pos) {
       filter->value=values[pos];
       unsigned count;
-      if ((count=input->first())!=0)
+      if ((count=input->first())!=0) {
+         observedOutputCardinality+=count;
          return count;
+      }
    }
    return false;
 }
@@ -45,15 +48,18 @@ unsigned NestedLoopFilter::next()
 
    // More tuples?
    unsigned count;
-   if ((count=input->next())!=0)
+   if ((count=input->next())!=0) {
+      observedOutputCardinality+=count;
       return count;
+   }
 
    // No, go to the next value
    for (++pos;pos<values.size();++pos) {
       filter->value=values[pos];
-      unsigned count;
-      if ((count=input->first())!=0)
+      if ((count=input->first())!=0) {
+         observedOutputCardinality+=count;
          return count;
+      }
    }
    return false;
 }

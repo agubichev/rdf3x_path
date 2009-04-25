@@ -63,7 +63,7 @@ class MergeJoin : public Operator
 
    public:
    /// Constructor
-   MergeJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail);
+   MergeJoin(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail,unsigned expectedOutputCardinality);
    /// Destructor
    ~MergeJoin();
 

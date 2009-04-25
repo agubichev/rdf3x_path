@@ -118,8 +118,9 @@ void HashJoin::ProbePeek::run()
    done=true;
 }
 //---------------------------------------------------------------------------
-HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail,double hashPriority,double probePriority)
-   : left(left),right(right),leftValue(leftValue),rightValue(rightValue),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
+HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail,double hashPriority,double probePriority,unsigned expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),left(left),right(right),leftValue(leftValue),rightValue(rightValue),
+     leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
      buildHashTableTask(*this),probePeekTask(*this),hashPriority(hashPriority),probePriority(probePriority)
    // Constructor
 {
@@ -172,6 +173,7 @@ HashJoin::Entry* HashJoin::lookup(unsigned key)
 unsigned HashJoin::first()
    // Produce the first tuple
 {
+   observedOutputCardinality=0;
    // Build the hash table if not already done
    buildHashTableTask.run();
 
@@ -198,7 +200,10 @@ unsigned HashJoin::next()
          for (unsigned index=0,limit=leftTail.size();index<limit;++index)
             leftTail[index]->value=hashTableIter->values[index];
          hashTableIter=hashTableIter->next;
-         return leftCount*rightCount;
+
+         unsigned count=leftCount*rightCount;
+         observedOutputCardinality+=count;
+         return count;
       }
 
       // Read the next tuple from the right
