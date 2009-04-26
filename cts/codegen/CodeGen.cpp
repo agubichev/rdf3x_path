@@ -15,7 +15,6 @@
 #include "rts/operator/ResultsPrinter.hpp"
 #include "rts/operator/Selection.hpp"
 #include "rts/operator/SingletonScan.hpp"
-#include "rts/operator/TupleCounter.hpp"
 #include "rts/operator/Union.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/DifferentialIndex.hpp"
@@ -543,11 +542,10 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
    // Translate a plan into an operator tree
 {
    Operator* result=0;
-   bool scan=false;
    switch (plan->op) {
-      case Plan::IndexScan: result=translateIndexScan(runtime,context,projection,bindings,registers,plan); scan=true; break;
-      case Plan::AggregatedIndexScan: result=translateAggregatedIndexScan(runtime,context,projection,bindings,registers,plan); scan=true; break;
-      case Plan::FullyAggregatedIndexScan: result=translateFullyAggregatedIndexScan(runtime,context,projection,bindings,registers,plan); scan=true; break;
+      case Plan::IndexScan: result=translateIndexScan(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::AggregatedIndexScan: result=translateAggregatedIndexScan(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::FullyAggregatedIndexScan: result=translateFullyAggregatedIndexScan(runtime,context,projection,bindings,registers,plan); break;
       case Plan::NestedLoopJoin: result=translateNestedLoopJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::MergeJoin: result=translateMergeJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan); break;
@@ -556,8 +554,6 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan); break;
       case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan); break;
    }
-   if (getenv("SHOWCARD")&&(scan||strcmp(getenv("SHOWCARD"),"scans")))
-      result=new TupleCounter(result,static_cast<unsigned>(plan->cardinality));
    return result;
 }
 //---------------------------------------------------------------------------

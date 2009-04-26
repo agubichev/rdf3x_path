@@ -52,13 +52,15 @@ class DebugPlanPrinter : public PlanPrinter
    Runtime& runtime;
    /// Indentation level
    unsigned level;
+   /// Show observed cardinalities?
+   bool showObserved;
 
    /// Indent
    void indent();
 
    public:
    /// Constructor
-   explicit DebugPlanPrinter(Runtime& runtime);
+   DebugPlanPrinter(Runtime& runtime,bool showObserved);
 
    /// Begin a new operator
    void beginOperator(const std::string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality);

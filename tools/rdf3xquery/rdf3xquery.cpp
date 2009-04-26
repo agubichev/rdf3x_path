@@ -112,7 +112,7 @@ static void runQuery(Database& db,const string& query,bool explain)
 
    // Explain if requested
    if (explain) {
-      DebugPlanPrinter out(runtime);
+      DebugPlanPrinter out(runtime,false);
       operatorTree->print(out);
    } else {
       // Else execute it

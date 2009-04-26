@@ -117,7 +117,7 @@ void Filter::print(PlanPrinter& out)
    pred+=" in {";
    unsigned id=min; bool first=true;
    for (std::vector<unsigned char>::const_iterator iter=valid.begin(),limit=valid.end();iter!=limit;++iter,++id) {
-      if (first) first=true; else pred+=" ";
+      if (first) first=false; else pred+=" ";
       pred+=out.formatValue(id);
    }
    pred+="}";

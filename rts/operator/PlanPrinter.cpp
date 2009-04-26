@@ -22,8 +22,8 @@ PlanPrinter::~PlanPrinter()
 {
 }
 //---------------------------------------------------------------------------
-DebugPlanPrinter::DebugPlanPrinter(Runtime& runtime)
-   : runtime(runtime),level(0)
+DebugPlanPrinter::DebugPlanPrinter(Runtime& runtime,bool showObserved)
+   : runtime(runtime),level(0),showObserved(showObserved)
    // Constructor
 {
 }
@@ -39,7 +39,10 @@ void DebugPlanPrinter::beginOperator(const string& name,unsigned expectedOutputC
    // Begin a new operator
 {
    indent();
-   cout << "<" << name << " " << expectedOutputCardinality << " " << observedOutputCardinality << endl;
+   cout << "<" << name << " " << expectedOutputCardinality;
+   if (showObserved)
+      cout << " " << observedOutputCardinality;
+   cout << endl;
    ++level;
 }
 //---------------------------------------------------------------------------

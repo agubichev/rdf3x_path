@@ -10,7 +10,6 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/operator/Scheduler.hpp"
-#include "rts/operator/TupleCounter.hpp"
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -80,12 +79,9 @@ static void evalQuery(Database& db,const string& query,bool silent)
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,silent);
 
    if (getenv("SHOWPLAN")) {
-      DebugPlanPrinter out(runtime);
+      DebugPlanPrinter out(runtime,false);
       operatorTree->print(out);
    }
-   vector<unsigned> regValues;
-   for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
-      regValues.push_back(runtime.getRegister(index)->value);
 
    // And execute it
    Scheduler scheduler;
@@ -95,12 +91,8 @@ static void evalQuery(Database& db,const string& query,bool silent)
    cout << "Execution time: " << (stop-start) << " ms" << endl;
 
    if (getenv("SHOWCARD")) {
-      for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
-         runtime.getRegister(index)->value=regValues[index];
-      TupleCounter::totalEstimated=0; TupleCounter::totalObserved=0;
-      DebugPlanPrinter out(runtime);
+      DebugPlanPrinter out(runtime,true);
       operatorTree->print(out);
-      cout << "# sum estimated: " << TupleCounter::totalEstimated << " sum observed: " << TupleCounter::totalObserved << endl;
    }
 
    delete operatorTree;
