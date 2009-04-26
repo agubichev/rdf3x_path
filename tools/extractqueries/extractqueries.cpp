@@ -4,6 +4,7 @@
 #include "rts/operator/AggregatedIndexScan.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
@@ -56,7 +57,7 @@ class LookupFilter : public Operator {
 
    public:
    /// Constructor
-   LookupFilter(Operator* input,Register* reg,const vector<unsigned>& filter) : input(input),reg(reg),filter(filter) {}
+   LookupFilter(Operator* input,Register* reg,const vector<unsigned>& filter) : Operator(0),input(input),reg(reg),filter(filter) {}
    /// Destructor
    ~LookupFilter() { delete input; }
 
@@ -65,7 +66,7 @@ class LookupFilter : public Operator {
    /// Find the next tuple
    unsigned next();
    /// Print the operator
-   void print(DictionarySegment& dict,unsigned indent);
+   void print(PlanPrinter& out);
    /// Handle a merge hint
    void addMergeHint(Register* l,Register* r);
    /// Register parts of the tree that can be executed asynchronous
@@ -96,17 +97,24 @@ unsigned LookupFilter::next()
    }
 }
 //---------------------------------------------------------------------------
-void LookupFilter::print(DictionarySegment& dict,unsigned level)
+void LookupFilter::print(PlanPrinter& out)
    // Print the operator
 {
-   indent(level); std::cout << "<LookupFilter ";
-   printRegister(dict,reg);
-   std::cout << " [";
-   for (std::vector<unsigned>::const_iterator iter=filter.begin(),limit=filter.end();iter!=limit;++iter)
-      std::cout << " " << (*iter);
-   std::cout << "]" << std::endl;
-   input->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("LookupFilter",expectedOutputCardinality,observedOutputCardinality);
+
+   std::string pred=out.formatRegister(reg);
+   pred+=" in {";
+   bool first=true;
+   for (std::vector<unsigned>::const_iterator iter=filter.begin(),limit=filter.end();iter!=limit;++iter) {
+      if (first) first=true; else pred+=" ";
+      pred+=out.formatValue(*iter);
+   }
+   pred+="}";
+   out.addGenericAnnotation(pred);
+
+   input->print(out);
+
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void LookupFilter::addMergeHint(Register* l,Register* r)
@@ -215,12 +223,12 @@ static vector<unsigned> buildChain(unsigned from,const vector<unsigned>& fromIds
    {
       Register ls,lo,rs,ro;
       ls.reset(); lo.reset(); rs.reset(); ro.reset();
-      AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,&ls,false,0,false,&lo,false);
+      AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,&ls,false,0,false,&lo,false,0);
       LookupFilter* filter1=new LookupFilter(scan1,&ls,fromIds);
-      AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Object_Predicate,&rs,false,0,false,&ro,false);
+      AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Object_Predicate,&rs,false,0,false,&ro,false,0);
       LookupFilter* filter2=new LookupFilter(scan2,&ro,toIds);
       vector<Register*> lt,rt; lt.push_back(&ls); rt.push_back(&ro);
-      MergeJoin join(filter1,&lo,lt,filter2,&rs,rt);
+      MergeJoin join(filter1,&lo,lt,filter2,&rs,rt,0);
 
       if (join.first()) do {
          result.push_back(ro.value);
@@ -318,10 +326,10 @@ static void constructQuery(unsigned id,Database& db,const vector<unsigned>& allN
          Register ls,lp,lo,rs,rp,ro;
          ls.reset(); lp.reset(); lo.reset(); rs.reset(); rp.reset(); ro.reset();
          ls.value=node1; ro.value=node2;
-         IndexScan* scan1=IndexScan::create(db,Database::Order_Subject_Object_Predicate,&ls,true,&lp,false,&lo,false);
-         IndexScan* scan2=IndexScan::create(db,Database::Order_Object_Subject_Predicate,&rs,false,&rp,false,&ro,true);
+         IndexScan* scan1=IndexScan::create(db,Database::Order_Subject_Object_Predicate,&ls,true,&lp,false,&lo,false,0);
+         IndexScan* scan2=IndexScan::create(db,Database::Order_Object_Subject_Predicate,&rs,false,&rp,false,&ro,true,0);
          vector<Register*> lt,rt; lt.push_back(&lp); rt.push_back(&rp);
-         MergeJoin join(scan1,&lo,lt,scan2,&rs,rt);
+         MergeJoin join(scan1,&lo,lt,scan2,&rs,rt,0);
 
          if (join.first()) do {
             connections.push_back(pair<unsigned,unsigned>(lp.value,rp.value));
@@ -389,12 +397,12 @@ int main(int argc,char* argv[])
    {
       Register ls,lo,rs,ro;
       ls.reset(); lo.reset(); rs.reset(); ro.reset();
-      AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,&ls,false,0,false,&lo,false);
+      AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Subject_Predicate,&ls,false,0,false,&lo,false,0);
       LookupFilter* filter1=new LookupFilter(scan1,&ls,candidates);
-      AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Object_Predicate,&rs,false,0,false,&ro,false);
+      AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Object_Predicate,&rs,false,0,false,&ro,false,0);
       LookupFilter* filter2=new LookupFilter(scan2,&ro,candidates);
       vector<Register*> lt,rt; lt.push_back(&ls); rt.push_back(&ro);
-      MergeJoin join(filter1,&lo,lt,filter2,&rs,rt);
+      MergeJoin join(filter1,&lo,lt,filter2,&rs,rt,0);
 
       if (join.first()) do {
          if (ls.value!=ro.value)

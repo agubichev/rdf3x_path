@@ -8,6 +8,7 @@
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #ifdef CONFIG_LINEEDITOR
 #include "lineeditor/LineInput.hpp"
 #endif
@@ -111,7 +112,8 @@ static void runQuery(Database& db,const string& query,bool explain)
 
    // Explain if requested
    if (explain) {
-      operatorTree->print(db.getDictionary());
+      DebugPlanPrinter out(runtime);
+      operatorTree->print(out);
    } else {
       // Else execute it
       if (operatorTree->first()) {

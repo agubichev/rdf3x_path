@@ -1,6 +1,6 @@
 #include "rts/operator/NestedLoopJoin.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -71,13 +71,13 @@ unsigned NestedLoopJoin::next()
    return count;
 }
 //---------------------------------------------------------------------------
-void NestedLoopJoin::print(DictionarySegment& dict,unsigned level)
+void NestedLoopJoin::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<NestedLoopJoin" << std::endl;
-   left->print(dict,level+1);
-   right->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("NestedLoopJoin",expectedOutputCardinality,observedOutputCardinality);
+   left->print(out);
+   right->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void NestedLoopJoin::addMergeHint(Register* reg1,Register* reg2)

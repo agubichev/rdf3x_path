@@ -1,6 +1,6 @@
 #include "rts/operator/Union.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -81,28 +81,17 @@ unsigned Union::next()
    return count;
 }
 //---------------------------------------------------------------------------
-void Union::print(DictionarySegment& dict,unsigned level)
+void Union::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<Union" << std::endl;
+   out.beginOperator("Union",expectedOutputCardinality,observedOutputCardinality);
    for (unsigned index=0;index<parts.size();index++) {
-      indent(level);
-      std::cout << "[";
-      for (unsigned index2=0;index2<mappings[index].size();index2+=2) {
-         if (index2) std::cout << " ";
-         printRegister(dict,mappings[index][index2]);
-         std::cout << "->";
-         printRegister(dict,mappings[index][index2+1]);
-      }
-      std::cout << "] [";
-      for (unsigned index2=0;index2<initializations[index].size();index2++) {
-         if (index2) std::cout << " ";
-         printRegister(dict,initializations[index][index2]);
-      }
-      std::cout << "]" << std::endl;
-      parts[index]->print(dict,level+1);
+      out.addMaterializationAnnotation(mappings[index]);
+      out.addMaterializationAnnotation(initializations[index]);
    }
-   indent(level); std::cout << ">" << std::endl;
+   for (unsigned index=0;index<parts.size();index++)
+      parts[index]->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void Union::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)

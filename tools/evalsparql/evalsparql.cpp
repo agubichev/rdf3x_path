@@ -8,6 +8,7 @@
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/operator/Scheduler.hpp"
 #include "rts/operator/TupleCounter.hpp"
 #include <iostream>
@@ -78,8 +79,10 @@ static void evalQuery(Database& db,const string& query,bool silent)
    Runtime runtime(db);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,silent);
 
-   if (getenv("SHOWPLAN"))
-      operatorTree->print(db.getDictionary());
+   if (getenv("SHOWPLAN")) {
+      DebugPlanPrinter out(runtime);
+      operatorTree->print(out);
+   }
    vector<unsigned> regValues;
    for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
       regValues.push_back(runtime.getRegister(index)->value);
@@ -95,7 +98,8 @@ static void evalQuery(Database& db,const string& query,bool silent)
       for (unsigned index=0,limit=runtime.getRegisterCount();index<limit;index++)
          runtime.getRegister(index)->value=regValues[index];
       TupleCounter::totalEstimated=0; TupleCounter::totalObserved=0;
-      operatorTree->print(db.getDictionary());
+      DebugPlanPrinter out(runtime);
+      operatorTree->print(out);
       cout << "# sum estimated: " << TupleCounter::totalEstimated << " sum observed: " << TupleCounter::totalObserved << endl;
    }
 

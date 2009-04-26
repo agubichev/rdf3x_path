@@ -1,5 +1,5 @@
 #include "rts/operator/EmptyScan.hpp"
-#include <iostream>
+#include "rts/operator/PlanPrinter.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -33,10 +33,11 @@ unsigned EmptyScan::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void EmptyScan::print(DictionarySegment& /*dict*/,unsigned level)
+void EmptyScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<EmptyScan>" << std::endl;
+   out.beginOperator("EmptyScan",expectedOutputCardinality,observedOutputCardinality);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void EmptyScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)

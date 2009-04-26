@@ -1,6 +1,6 @@
 #include "rts/operator/MergeJoin.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -195,7 +195,7 @@ unsigned MergeJoin::next()
                   swapLeft();
                   swapRight();
                   scanState=loopEqualLeftHasData;
-                  
+
                   unsigned count=leftCount*rightCount;
                   observedOutputCardinality+=count;
                   return count;
@@ -340,23 +340,16 @@ unsigned MergeJoin::next()
    }
 }
 //---------------------------------------------------------------------------
-void MergeJoin::print(DictionarySegment& dict,unsigned level)
+void MergeJoin::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<MergeJoin ";
-   printRegister(dict,leftValue); std::cout << "="; printRegister(dict,rightValue);
-   std::cout << " [";
-   for (std::vector<Register*>::const_iterator iter=leftTail.begin(),limit=leftTail.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(dict,*iter);
-   }
-   std::cout << "] [";
-   for (std::vector<Register*>::const_iterator iter=rightTail.begin(),limit=rightTail.end();iter!=limit;++iter) {
-      std::cout << " "; printRegister(dict,*iter);
-   }
-   std::cout << "]" << std::endl;
-   left->print(dict,level+1);
-   right->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("MergeJoin",expectedOutputCardinality,observedOutputCardinality);
+   out.addEqualPredicateAnnotation(leftValue,rightValue);
+   out.addMaterializationAnnotation(leftTail);
+   out.addMaterializationAnnotation(rightTail);
+   left->print(out);
+   right->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void MergeJoin::addMergeHint(Register* reg1,Register* reg2)

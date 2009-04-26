@@ -44,15 +44,14 @@ unsigned TupleCounter::next()
    return result;
 }
 //---------------------------------------------------------------------------
-void TupleCounter::print(DictionarySegment& dict,unsigned level)
+void TupleCounter::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
    totalEstimated+=estimated;
    totalObserved+=observed;
 
-   indent(level);
    std::cout << "# estimated cardinality: " << estimated << " observed cardinality: " << observed << std::endl;
-   input->print(dict,level);
+   input->print(out);
 }
 //---------------------------------------------------------------------------
 void TupleCounter::addMergeHint(Register* reg1,Register* reg2)

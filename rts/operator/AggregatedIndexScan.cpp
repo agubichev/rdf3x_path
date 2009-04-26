@@ -1,6 +1,6 @@
 #include "rts/operator/AggregatedIndexScan.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 #include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -141,25 +141,23 @@ AggregatedIndexScan::~AggregatedIndexScan()
 {
 }
 //---------------------------------------------------------------------------
-void AggregatedIndexScan::print(DictionarySegment& dict,unsigned level)
+void AggregatedIndexScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<AggregatedIndexScan ";
+   const char* scanType = "";
    switch (order) {
-      case Database::Order_Subject_Predicate_Object: std::cout << "SubjectPredicate"; break;
-      case Database::Order_Subject_Object_Predicate: std::cout << "SubjectObject"; break;
-      case Database::Order_Object_Predicate_Subject: std::cout << "ObjectPredicate"; break;
-      case Database::Order_Object_Subject_Predicate: std::cout << "ObjectSubject"; break;
-      case Database::Order_Predicate_Subject_Object: std::cout << "PredicateSubject"; break;
-      case Database::Order_Predicate_Object_Subject: std::cout << "PredicateObject"; break;
+      case Database::Order_Subject_Predicate_Object: scanType="SubjectPredicate"; break;
+      case Database::Order_Subject_Object_Predicate: scanType="SubjectObject"; break;
+      case Database::Order_Object_Predicate_Subject: scanType="ObjectPredicate"; break;
+      case Database::Order_Object_Subject_Predicate: scanType="ObjectSubject"; break;
+      case Database::Order_Predicate_Subject_Object: scanType="PredicateSubject"; break;
+      case Database::Order_Predicate_Object_Subject: scanType="PredicateObject"; break;
    }
-   std::cout << std::endl;
-   indent(level+1);
-   printRegister(dict,value1); if (bound1) std::cout << "*";
-   std::cout << " ";
-   printRegister(dict,value2); if (bound2) std::cout << "*";
-   std::cout << std::endl;
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("AggregatedIndexScan",expectedOutputCardinality,observedOutputCardinality);
+   out.addArgumentAnnotation(scanType);
+   out.addScanAnnotation(value1,bound1);
+   out.addScanAnnotation(value2,bound2);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 static void handleHints(Register* reg1,Register* reg2,Register* result,std::vector<Register*>& merges)

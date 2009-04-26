@@ -1,8 +1,8 @@
 #include "rts/operator/Selection.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/segment/DictionarySegment.hpp"
-#include <iostream>
 #include <sstream>
 #include <cassert>
 #ifdef __GNUC__
@@ -182,14 +182,10 @@ void Selection::Or::eval(Result& result)
    result.setBoolean(left->check()||right->check());
 }
 //---------------------------------------------------------------------------
-void Selection::Or::print()
+string Selection::Or::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")||(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")||("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::And::eval(Result& result)
@@ -198,14 +194,10 @@ void Selection::And::eval(Result& result)
    result.setBoolean(left->check()&&right->check());
 }
 //---------------------------------------------------------------------------
-void Selection::And::print()
+string Selection::And::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")&&(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")&&("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Equal::eval(Result& result)
@@ -227,14 +219,10 @@ void Selection::Equal::eval(Result& result)
    result.setBoolean(l.value==r.value);
 }
 //---------------------------------------------------------------------------
-void Selection::Equal::print()
+string Selection::Equal::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")==(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")==("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::NotEqual::eval(Result& result)
@@ -256,14 +244,10 @@ void Selection::NotEqual::eval(Result& result)
    result.setBoolean(l.value!=r.value);
 }
 //---------------------------------------------------------------------------
-void Selection::NotEqual::print()
+string Selection::NotEqual::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")!=(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")!=("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Less::eval(Result& result)
@@ -279,14 +263,10 @@ void Selection::Less::eval(Result& result)
    result.setBoolean(l.value<r.value);
 }
 //---------------------------------------------------------------------------
-void Selection::Less::print()
+string Selection::Less::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")<(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")<("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::LessOrEqual::eval(Result& result)
@@ -302,14 +282,10 @@ void Selection::LessOrEqual::eval(Result& result)
    result.setBoolean(l.value<=r.value);
 }
 //---------------------------------------------------------------------------
-void Selection::LessOrEqual::print()
+string Selection::LessOrEqual::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")<(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")<=("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Plus::eval(Result& result)
@@ -326,14 +302,10 @@ void Selection::Plus::eval(Result& result)
    result.setLiteral(s.str());
 }
 //---------------------------------------------------------------------------
-void Selection::Plus::print()
+string Selection::Plus::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")+(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")+("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Minus::eval(Result& result)
@@ -350,14 +322,10 @@ void Selection::Minus::eval(Result& result)
    result.setLiteral(s.str());
 }
 //---------------------------------------------------------------------------
-void Selection::Minus::print()
+string Selection::Minus::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")-(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")-("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Mul::eval(Result& result)
@@ -374,14 +342,10 @@ void Selection::Mul::eval(Result& result)
    result.setLiteral(s.str());
 }
 //---------------------------------------------------------------------------
-void Selection::Mul::print()
+string Selection::Mul::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")*(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")*("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Div::eval(Result& result)
@@ -398,14 +362,10 @@ void Selection::Div::eval(Result& result)
    result.setLiteral(s.str());
 }
 //---------------------------------------------------------------------------
-void Selection::Div::print()
+string Selection::Div::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "(";
-   left->print();
-   cout << ")/(";
-   right->print();
-   cout << ")";
+   return "("+left->print(out)+")/("+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::Not::eval(Result& result)
@@ -414,11 +374,10 @@ void Selection::Not::eval(Result& result)
    result.setBoolean(!input->check());
 }
 //---------------------------------------------------------------------------
-void Selection::Not::print()
+string Selection::Not::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "!";
-   input->print();
+   return "!"+input->print(out);
 }
 //---------------------------------------------------------------------------
 void Selection::Neg::eval(Result& result)
@@ -433,11 +392,10 @@ void Selection::Neg::eval(Result& result)
    result.setLiteral(s.str());
 }
 //---------------------------------------------------------------------------
-void Selection::Neg::print()
+string Selection::Neg::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "-";
-   input->print();
+   return "-"+input->print(out);
 }
 //---------------------------------------------------------------------------
 void Selection::Null::eval(Result& result)
@@ -446,10 +404,10 @@ void Selection::Null::eval(Result& result)
    result.setId(~0u);
 }
 //---------------------------------------------------------------------------
-void Selection::Null::print()
+string Selection::Null::print(PlanPrinter& /*out*/)
    // Print the predicate (debugging only)
 {
-   cout << "NULL";
+   return "NULL";
 }
 //---------------------------------------------------------------------------
 void Selection::False::eval(Result& result)
@@ -458,10 +416,10 @@ void Selection::False::eval(Result& result)
    result.setBoolean(false);
 }
 //---------------------------------------------------------------------------
-void Selection::False::print()
+string Selection::False::print(PlanPrinter& /*out*/)
    // Print the predicate (debugging only)
 {
-   cout << "false";
+   return "false";
 }
 //---------------------------------------------------------------------------
 void Selection::Variable::eval(Result& result)
@@ -470,10 +428,10 @@ void Selection::Variable::eval(Result& result)
    result.setId(reg->value);
 }
 //---------------------------------------------------------------------------
-void Selection::Variable::print()
+string Selection::Variable::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << reg;
+   return out.formatRegister(reg);
 }
 //---------------------------------------------------------------------------
 void Selection::ConstantLiteral::eval(Result& result)
@@ -482,10 +440,10 @@ void Selection::ConstantLiteral::eval(Result& result)
    result.setId(id);
 }
 //---------------------------------------------------------------------------
-void Selection::ConstantLiteral::print()
+string Selection::ConstantLiteral::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << id;
+   return out.formatValue(id);
 }
 //---------------------------------------------------------------------------
 void Selection::TemporaryConstantLiteral::eval(Result& result)
@@ -494,10 +452,10 @@ void Selection::TemporaryConstantLiteral::eval(Result& result)
    result.setLiteral(value);
 }
 //---------------------------------------------------------------------------
-void Selection::TemporaryConstantLiteral::print()
+string Selection::TemporaryConstantLiteral::print(PlanPrinter& /*out*/)
    // Print the predicate (debugging only)
 {
-   cout << value;
+   return value;
 }
 //---------------------------------------------------------------------------
 void Selection::ConstantIRI::eval(Result& result)
@@ -506,10 +464,10 @@ void Selection::ConstantIRI::eval(Result& result)
    result.setId(id);
 }
 //---------------------------------------------------------------------------
-void Selection::ConstantIRI::print()
+string Selection::ConstantIRI::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << id;
+   return out.formatValue(id);
 }
 //---------------------------------------------------------------------------
 void Selection::TemporaryConstantIRI::eval(Result& result)
@@ -518,10 +476,10 @@ void Selection::TemporaryConstantIRI::eval(Result& result)
    result.setIRI(value);
 }
 //---------------------------------------------------------------------------
-void Selection::TemporaryConstantIRI::print()
+string Selection::TemporaryConstantIRI::print(PlanPrinter& /*out*/)
    // Print the predicate (debugging only)
 {
-   cout << value;
+   return value;
 }
 //---------------------------------------------------------------------------
 void Selection::FunctionCall::setSelection(Selection* s)
@@ -538,16 +496,17 @@ void Selection::FunctionCall::eval(Result& result)
    result.setId(~0u); // XXX perform the call
 }
 //---------------------------------------------------------------------------
-void Selection::FunctionCall::print()
+string Selection::FunctionCall::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "<" << func << ">(";
+   string result="<"+func+">(";
    for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter) {
       if (iter!=args.begin())
-         cout << ",";
-      (*iter)->print();
+         result+=",";
+      result+=(*iter)->print(out);
    }
-   cout << ")";
+   result+=")";
+   return result;
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinStr::eval(Result& result)
@@ -559,12 +518,10 @@ void Selection::BuiltinStr::eval(Result& result)
    result.type=Type::Literal;
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinStr::print()
+string Selection::BuiltinStr::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "str(";
-   input->print();
-   cout << ")";
+   return "str("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinLang::eval(Result& result)
@@ -582,12 +539,10 @@ void Selection::BuiltinLang::eval(Result& result)
    }
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinLang::print()
+string Selection::BuiltinLang::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "lang(";
-   input->print();
-   cout << ")";
+   return "lang("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinLangMatches::eval(Result& result)
@@ -609,14 +564,10 @@ void Selection::BuiltinLangMatches::eval(Result& result)
    result.setBoolean(l.subTypeValue==r.value); // XXX implement language range checks
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinLangMatches::print()
+string Selection::BuiltinLangMatches::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "langMatches(";
-   left->print();
-   cout << ",";
-   right->print();
-   cout << ")";
+   return  "langMatches("+left->print(out)+","+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinDatatype::eval(Result& result)
@@ -639,12 +590,10 @@ void Selection::BuiltinDatatype::eval(Result& result)
    }
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinDatatype::print()
+string Selection::BuiltinDatatype::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "datatype(";
-   input->print();
-   cout << ")";
+   return "datatype("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinBound::eval(Result& result)
@@ -653,10 +602,10 @@ void Selection::BuiltinBound::eval(Result& result)
    result.setBoolean(~reg->value);
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinBound::print()
+string Selection::BuiltinBound::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "bound(" << reg << ")";
+   return "bound("+out.formatRegister(reg)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinSameTerm::eval(Result& result)
@@ -684,14 +633,10 @@ void Selection::BuiltinSameTerm::eval(Result& result)
    result.setBoolean(l.value==r.value);
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinSameTerm::print()
+string Selection::BuiltinSameTerm::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "sameTerm(";
-   left->print();
-   cout << ",";
-   right->print();
-   cout << ")";
+   return "sameTerm("+left->print(out)+","+right->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinIsIRI::eval(Result& result)
@@ -703,12 +648,10 @@ void Selection::BuiltinIsIRI::eval(Result& result)
    result.setBoolean(i.type==Type::URI);
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinIsIRI::print()
+string Selection::BuiltinIsIRI::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "isIRI(";
-   input->print();
-   cout << ")";
+   return "isIRI("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinIsBlank::eval(Result& result)
@@ -725,12 +668,10 @@ void Selection::BuiltinIsBlank::eval(Result& result)
    }
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinIsBlank::print()
+string Selection::BuiltinIsBlank::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "isBlanl(";
-   input->print();
-   cout << ")";
+   return "isBlanl("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinIsLiteral::eval(Result& result)
@@ -742,12 +683,10 @@ void Selection::BuiltinIsLiteral::eval(Result& result)
    result.setBoolean(i.type!=Type::URI);
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinIsLiteral::print()
+string Selection::BuiltinIsLiteral::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "isLiteral(";
-   input->print();
-   cout << ")";
+   return "isLiteral("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinRegEx::setSelection(Selection* s)
@@ -781,18 +720,16 @@ void Selection::BuiltinRegEx::eval(Result& result)
 #endif
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinRegEx::print()
+string Selection::BuiltinRegEx::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "regex(";
-   arg1->print();
-   cout << ",";
-   arg2->print();
+   string result="regex("+arg1->print(out)+","+arg2->print(out);
    if (arg3) {
-      cout << ",";
-      arg2->print();
+      result+=",";
+      result+=arg3->print(out);
    }
-   cout << ")";
+   result+=")";
+   return result;
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinIn::setSelection(Selection* s)
@@ -829,16 +766,16 @@ void Selection::BuiltinIn::eval(Result& result)
    result.setBoolean(false);
 }
 //---------------------------------------------------------------------------
-void Selection::BuiltinIn::print()
+string Selection::BuiltinIn::print(PlanPrinter& out)
    // Print the predicate (debugging only)
 {
-   cout << "in(";
-   probe->print();
+   string result="in("+probe->print(out);
    for (vector<Predicate*>::iterator iter=args.begin(),limit=args.end();iter!=limit;++iter) {
-      cout << ",";
-      (*iter)->print();
+      result+=",";
+      result+=(*iter)->print(out);
    }
-   cout << ")";
+   result+=")";
+   return result;
 }
 //---------------------------------------------------------------------------
 Selection::Selection(Operator* input,Runtime& runtime,Predicate* predicate,unsigned expectedOutputCardinality)
@@ -890,14 +827,13 @@ unsigned Selection::next()
    }
 }
 //---------------------------------------------------------------------------
-void Selection::print(DictionarySegment& dict,unsigned level)
+void Selection::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); cout << "<Selection ";
-   predicate->print();
-   cout << endl;
-   input->print(dict,level+1);
-   indent(level); cout << ">" << endl;
+   out.beginOperator("Selection",expectedOutputCardinality,observedOutputCardinality);
+   out.addGenericAnnotation(predicate->print(out));
+   input->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void Selection::addMergeHint(Register* reg1,Register* reg2)

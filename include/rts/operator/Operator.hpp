@@ -13,6 +13,7 @@
 class Register;
 class DictionarySegment;
 class Scheduler;
+class PlanPrinter;
 //---------------------------------------------------------------------------
 /// Base class for all operators of the runtime system
 class Operator
@@ -20,11 +21,6 @@ class Operator
    protected:
    /// Tuple counter
    unsigned expectedOutputCardinality,observedOutputCardinality;
-
-   /// Helper for indenting debug output
-   static void indent(unsigned level);
-   /// Helper for debug output
-   static void printRegister(DictionarySegment& dict,const Register* reg);
 
    public:
    /// Constructor
@@ -43,7 +39,7 @@ class Operator
    unsigned getObservedOutputCardinality() const { return observedOutputCardinality; }
 
    /// Print the operator tree. Debugging only.
-   virtual void print(DictionarySegment& dict,unsigned indent=0) = 0;
+   virtual void print(PlanPrinter& out) = 0;
    /// Add a merge join hint
    virtual void addMergeHint(Register* reg1,Register* reg2) = 0;
    /// Register parts of the tree that can be executed asynchronous

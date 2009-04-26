@@ -1,6 +1,6 @@
 #include "rts/operator/Filter.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -107,21 +107,25 @@ unsigned Filter::next()
    }
 }
 //---------------------------------------------------------------------------
-void Filter::print(DictionarySegment& dict,unsigned level)
+void Filter::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<Filter ";
-   printRegister(dict,filter);
-   if (exclude) std::cout << " !";
-   std::cout << " [";
-   unsigned id=min;
+   out.beginOperator("Filter",expectedOutputCardinality,observedOutputCardinality);
+
+   std::string pred=out.formatRegister(filter);
+   if (exclude) pred+=" not";
+   pred+=" in {";
+   unsigned id=min; bool first=true;
    for (std::vector<unsigned char>::const_iterator iter=valid.begin(),limit=valid.end();iter!=limit;++iter,++id) {
-      if (*iter)
-         std::cout << " " << id;
+      if (first) first=true; else pred+=" ";
+      pred+=out.formatValue(id);
    }
-   std::cout << "]" << std::endl;
-   input->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   pred+="}";
+   out.addGenericAnnotation(pred);
+
+   input->print(out);
+
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void Filter::addMergeHint(Register* reg1,Register* reg2)

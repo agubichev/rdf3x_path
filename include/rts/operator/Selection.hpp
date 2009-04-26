@@ -87,7 +87,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       virtual void eval(Result& result) = 0;
       /// Print the predicate (debugging only)
-      virtual void print() = 0;
+      virtual std::string print(PlanPrinter& out) = 0;
 
       /// Check the predicate
       bool check();
@@ -127,7 +127,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Logical and
    class And : public BinaryPredicate {
@@ -138,7 +138,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Comparison ==
    class Equal : public BinaryPredicate {
@@ -149,7 +149,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Comparison !=
    class NotEqual : public BinaryPredicate {
@@ -160,7 +160,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Comparison <
    class Less : public BinaryPredicate {
@@ -171,7 +171,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Comparison <=
    class LessOrEqual : public BinaryPredicate {
@@ -182,7 +182,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Arithmetic +
    class Plus : public BinaryPredicate {
@@ -193,7 +193,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Arithmetic -
    class Minus : public BinaryPredicate {
@@ -204,7 +204,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Arithmetic *
    class Mul : public BinaryPredicate {
@@ -215,7 +215,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Arithmetic /
    class Div : public BinaryPredicate {
@@ -226,7 +226,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Operator !
    class Not : public UnaryPredicate {
@@ -237,7 +237,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Operator -
    class Neg : public UnaryPredicate {
@@ -248,7 +248,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// A NULL value
    class Null : public Predicate {
@@ -256,7 +256,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// A false value
    class False : public Predicate {
@@ -264,7 +264,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Variable access
    class Variable : public Predicate {
@@ -279,7 +279,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Constant
    class ConstantLiteral : public Predicate {
@@ -294,7 +294,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Constant
    class TemporaryConstantLiteral : public Predicate {
@@ -309,7 +309,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Constant
    class ConstantIRI : public Predicate {
@@ -324,7 +324,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Constant
    class TemporaryConstantIRI : public Predicate {
@@ -339,7 +339,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Function call
    class FunctionCall : public Predicate {
@@ -359,7 +359,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin str
    class BuiltinStr : public UnaryPredicate {
@@ -370,7 +370,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin lang
    class BuiltinLang : public UnaryPredicate {
@@ -381,7 +381,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin langMatches
    class BuiltinLangMatches : public BinaryPredicate {
@@ -392,7 +392,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin datatype
    class BuiltinDatatype : public UnaryPredicate {
@@ -403,7 +403,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin bound
    class BuiltinBound : public Predicate {
@@ -418,7 +418,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin sameTerm
    class BuiltinSameTerm : public BinaryPredicate {
@@ -429,7 +429,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin isIRI
    class BuiltinIsIRI : public UnaryPredicate {
@@ -440,7 +440,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin isBlank
    class BuiltinIsBlank : public UnaryPredicate {
@@ -451,7 +451,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin isLiteral
    class BuiltinIsLiteral : public UnaryPredicate {
@@ -462,7 +462,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin RegEx
    class BuiltinRegEx : public Predicate {
@@ -480,7 +480,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
    /// Builtin in
    class BuiltinIn : public Predicate {
@@ -500,7 +500,7 @@ class Selection : public Operator
       /// Evaluate the predicate
       void eval(Result& result);
       /// Print the predicate (debugging only)
-      void print();
+      std::string print(PlanPrinter& out);
    };
 
    private:
@@ -524,7 +524,7 @@ class Selection : public Operator
    unsigned next();
 
    /// Print the operator tree. Debugging only.
-   void print(DictionarySegment& dict,unsigned indent);
+   void print(PlanPrinter& out);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
    /// Register parts of the tree that can be executed asynchronous

@@ -1,6 +1,6 @@
 #include "rts/operator/FullyAggregatedIndexScan.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 #include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -86,23 +86,22 @@ FullyAggregatedIndexScan::~FullyAggregatedIndexScan()
 {
 }
 //---------------------------------------------------------------------------
-void FullyAggregatedIndexScan::print(DictionarySegment& dict,unsigned level)
+void FullyAggregatedIndexScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<FullyAggregatedIndexScan ";
+   const char* scanType="";
    switch (order) {
-      case Database::Order_Subject_Predicate_Object: std::cout << "Subject"; break;
-      case Database::Order_Subject_Object_Predicate: std::cout << "Subject"; break;
-      case Database::Order_Object_Predicate_Subject: std::cout << "Object"; break;
-      case Database::Order_Object_Subject_Predicate: std::cout << "Object"; break;
-      case Database::Order_Predicate_Subject_Object: std::cout << "Predicate"; break;
-      case Database::Order_Predicate_Object_Subject: std::cout << "Predicate"; break;
+      case Database::Order_Subject_Predicate_Object: scanType="Subject"; break;
+      case Database::Order_Subject_Object_Predicate: scanType="Subject"; break;
+      case Database::Order_Object_Predicate_Subject: scanType="Object"; break;
+      case Database::Order_Object_Subject_Predicate: scanType="Object"; break;
+      case Database::Order_Predicate_Subject_Object: scanType="Predicate"; break;
+      case Database::Order_Predicate_Object_Subject: scanType="Predicate"; break;
    }
-   std::cout << std::endl;
-   indent(level+1);
-   printRegister(dict,value1); if (bound1) std::cout << "*";
-   std::cout << std::endl;
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("FullyAggregatedIndexScan",expectedOutputCardinality,observedOutputCardinality);
+   out.addArgumentAnnotation(scanType);
+   out.addScanAnnotation(value1,bound1);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 static void handleHints(Register* reg1,Register* reg2,Register* result,std::vector<Register*>& merges)
@@ -206,7 +205,7 @@ unsigned FullyAggregatedIndexScan::Scan::next()
    if (!scan.next())
       return false;
    value1->value=scan.getValue1();
-   
+
    unsigned count=scan.getCount();
    observedOutputCardinality+=count;
    return count;

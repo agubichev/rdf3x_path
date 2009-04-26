@@ -1,6 +1,6 @@
 #include "rts/operator/MergeUnion.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -135,19 +135,15 @@ unsigned MergeUnion::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void MergeUnion::print(DictionarySegment& dict,unsigned level)
+void MergeUnion::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<MergeUnion ";
-   printRegister(dict,result);
-   std::cout << " [";
-   printRegister(dict,leftReg);
-   std::cout << " ";
-   printRegister(dict,rightReg);
-   std::cout << "]" << std::endl;
-   left->print(dict,level+1);
-   right->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("MergeUnion",expectedOutputCardinality,observedOutputCardinality);
+   out.addEqualPredicateAnnotation(result,leftReg);
+   out.addEqualPredicateAnnotation(result,rightReg);
+   left->print(out);
+   right->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void MergeUnion::addMergeHint(Register* reg1,Register* reg2)

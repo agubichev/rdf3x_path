@@ -11,6 +11,7 @@ src_rts_operator:=					\
 	rts/operator/MergeUnion.cpp			\
 	rts/operator/NestedLoopFilter.cpp		\
 	rts/operator/NestedLoopJoin.cpp			\
+	rts/operator/PlanPrinter.cpp			\
 	rts/operator/ResultsPrinter.cpp			\
 	rts/operator/Scheduler.cpp			\
 	rts/operator/Selection.cpp			\

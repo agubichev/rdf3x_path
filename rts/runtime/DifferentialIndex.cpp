@@ -3,10 +3,10 @@
 #include "rts/operator/AggregatedIndexScan.hpp"
 #include "rts/operator/FullyAggregatedIndexScan.hpp"
 #include "rts/operator/IndexScan.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -63,7 +63,7 @@ class DifferentialIndexScan : public Operator
    unsigned next();
 
    /// Print the operator tree. Debugging only.
-   void print(DictionarySegment& dict,unsigned indent);
+   void print(PlanPrinter& out);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
    /// Register parts of the tree that can be executed asynchronous
@@ -281,12 +281,12 @@ unsigned DifferentialIndexScan::next()
    }
 }
 //---------------------------------------------------------------------------
-void DifferentialIndexScan::print(DictionarySegment& dict,unsigned level)
+void DifferentialIndexScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); cout << "<DifferentialIndexScan" << endl;
-   input->print(dict,level+1);
-   indent(level); cout << ">" << endl;
+   out.beginOperator("DifferentialIndexScan",expectedOutputCardinality,observedOutputCardinality);
+   input->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void DifferentialIndexScan::addMergeHint(Register* reg1,Register* reg2)
@@ -343,7 +343,7 @@ class AggregatedDifferentialIndexScan : public Operator
    unsigned next();
 
    /// Print the operator tree. Debugging only.
-   void print(DictionarySegment& dict,unsigned indent);
+   void print(PlanPrinter& out);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
    /// Register parts of the tree that can be executed asynchronous
@@ -558,12 +558,12 @@ unsigned AggregatedDifferentialIndexScan::next()
    }
 }
 //---------------------------------------------------------------------------
-void AggregatedDifferentialIndexScan::print(DictionarySegment& dict,unsigned level)
+void AggregatedDifferentialIndexScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); cout << "<AggregatedDifferentialIndexScan" << endl;
-   input->print(dict,level+1);
-   indent(level); cout << ">" << endl;
+   out.beginOperator("<AggregatedDifferentialIndexScan",expectedOutputCardinality,observedOutputCardinality);
+   input->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void AggregatedDifferentialIndexScan::addMergeHint(Register* reg1,Register* reg2)
@@ -618,7 +618,7 @@ class FullyAggregatedDifferentialIndexScan : public Operator
    unsigned next();
 
    /// Print the operator tree. Debugging only.
-   void print(DictionarySegment& dict,unsigned indent);
+   void print(PlanPrinter& out);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
    /// Register parts of the tree that can be executed asynchronous
@@ -819,12 +819,12 @@ unsigned FullyAggregatedDifferentialIndexScan::next()
    }
 }
 //---------------------------------------------------------------------------
-void FullyAggregatedDifferentialIndexScan::print(DictionarySegment& dict,unsigned level)
+void FullyAggregatedDifferentialIndexScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); cout << "<FullyAggregatedDifferentialIndexScan" << endl;
-   input->print(dict,level+1);
-   indent(level); cout << ">" << endl;
+   out.beginOperator("FullyAggregatedDifferentialIndexScan",expectedOutputCardinality,observedOutputCardinality);
+   input->print(out);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void FullyAggregatedDifferentialIndexScan::addMergeHint(Register* reg1,Register* reg2)

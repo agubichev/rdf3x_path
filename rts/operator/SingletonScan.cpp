@@ -1,5 +1,5 @@
 #include "rts/operator/SingletonScan.hpp"
-#include <iostream>
+#include "rts/operator/PlanPrinter.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -34,10 +34,11 @@ unsigned SingletonScan::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void SingletonScan::print(DictionarySegment& /*dict*/,unsigned level)
+void SingletonScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<SingletonScan>" << std::endl;
+   out.beginOperator("SingletonScan",expectedOutputCardinality,observedOutputCardinality);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void SingletonScan::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)

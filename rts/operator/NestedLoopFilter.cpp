@@ -1,7 +1,7 @@
 #include "rts/operator/NestedLoopFilter.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include <algorithm>
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -64,18 +64,24 @@ unsigned NestedLoopFilter::next()
    return false;
 }
 //---------------------------------------------------------------------------
-void NestedLoopFilter::print(DictionarySegment& dict,unsigned level)
+void NestedLoopFilter::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<NestedLoopFilter ";
-   printRegister(dict,filter);
-   std::cout << " [";
+   out.beginOperator("NestedLoopFilter",expectedOutputCardinality,observedOutputCardinality);
+
+   std::string pred=out.formatRegister(filter);
+   pred+=" in {";
+   bool first=true;
    for (std::vector<unsigned>::const_iterator iter=values.begin(),limit=values.end();iter!=limit;++iter) {
-      std::cout << " " << (*iter);
+      if (first) first=true; else pred+=" ";
+      pred+=out.formatValue(*iter);
    }
-   std::cout << "]" << std::endl;
-   input->print(dict,level+1);
-   indent(level); std::cout << ">" << std::endl;
+   pred+="}";
+   out.addGenericAnnotation(pred);
+
+   input->print(out);
+
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 void NestedLoopFilter::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)

@@ -27,7 +27,7 @@ class EmptyScan : public Operator
    unsigned next();
 
    /// Print the operator tree. Debugging only.
-   void print(DictionarySegment& dict,unsigned indent);
+   void print(PlanPrinter& out);
    /// Add a merge join hint
    void addMergeHint(Register* reg1,Register* reg2);
    /// Register parts of the tree that can be executed asynchronous

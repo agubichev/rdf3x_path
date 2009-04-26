@@ -1,6 +1,6 @@
 #include "rts/operator/IndexScan.hpp"
+#include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -232,27 +232,24 @@ IndexScan::~IndexScan()
 {
 }
 //---------------------------------------------------------------------------
-void IndexScan::print(DictionarySegment& dict,unsigned level)
+void IndexScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   indent(level); std::cout << "<IndexScan ";
+   const char* scanType="";
    switch (order) {
-      case Database::Order_Subject_Predicate_Object: std::cout << "SubjectPredicateObject"; break;
-      case Database::Order_Subject_Object_Predicate: std::cout << "SubjectObjectPredicate"; break;
-      case Database::Order_Object_Predicate_Subject: std::cout << "ObjectPredicateSubject"; break;
-      case Database::Order_Object_Subject_Predicate: std::cout << "ObjectSubjectPredicate"; break;
-      case Database::Order_Predicate_Subject_Object: std::cout << "PredicateSubjectObject"; break;
-      case Database::Order_Predicate_Object_Subject: std::cout << "PredicateObjectSubject"; break;
+      case Database::Order_Subject_Predicate_Object: scanType="SubjectPredicateObject"; break;
+      case Database::Order_Subject_Object_Predicate: scanType="SubjectObjectPredicate"; break;
+      case Database::Order_Object_Predicate_Subject: scanType="ObjectPredicateSubject"; break;
+      case Database::Order_Object_Subject_Predicate: scanType="ObjectSubjectPredicate"; break;
+      case Database::Order_Predicate_Subject_Object: scanType="PredicateSubjectObject"; break;
+      case Database::Order_Predicate_Object_Subject: scanType="PredicateObjectSubject"; break;
    }
-   std::cout << std::endl;
-   indent(level+1);
-   printRegister(dict,value1); if (bound1) std::cout << "*";
-   std::cout << " ";
-   printRegister(dict,value2); if (bound2) std::cout << "*";
-   std::cout << " ";
-   printRegister(dict,value3); if (bound3) std::cout << "*";
-   std::cout << std::endl;
-   indent(level); std::cout << ">" << std::endl;
+   out.beginOperator("IndexScan",expectedOutputCardinality,observedOutputCardinality);
+   out.addArgumentAnnotation(scanType);
+   out.addScanAnnotation(value1,bound1);
+   out.addScanAnnotation(value2,bound2);
+   out.addScanAnnotation(value3,bound3);
+   out.endOperator();
 }
 //---------------------------------------------------------------------------
 static void handleHints(Register* reg1,Register* reg2,Register* result,std::vector<Register*>& merges)
