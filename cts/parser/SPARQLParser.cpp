@@ -867,20 +867,13 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
 void SPARQLParser::parseWhere()
    // Parse the where part if any
 {
-   while (true) {
-      SPARQLLexer::Token token=lexer.getNext();
+   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("where")))
+      throw ParserException("'where' expected");
+   if (lexer.getNext()!=SPARQLLexer::LCurly)
+      throw ParserException("'{' expected");
 
-      if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("where"))) {
-         if (lexer.getNext()!=SPARQLLexer::LCurly)
-            throw ParserException("'{' expected");
-
-         patterns=PatternGroup();
-         parseGroupGraphPattern(patterns);
-      } else {
-         lexer.unget(token);
-         return;
-      }
-   }
+   patterns=PatternGroup();
+   parseGroupGraphPattern(patterns);
 }
 //---------------------------------------------------------------------------
 void SPARQLParser::parseLimit()

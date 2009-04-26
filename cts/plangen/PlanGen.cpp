@@ -740,7 +740,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
       }
    }
    // Extract the bestplan
-   if (!dpTable.back())
+   if (dpTable.empty()||(!dpTable.back()))
       return 0;
    Plan* plan=dpTable.back()->plans;
    if (!plan)
