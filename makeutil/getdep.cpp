@@ -176,30 +176,30 @@ static bool collect(const string& name,set<string>& headers,set<string>& missing
          string prefix;
          if (name.rfind('/')!=string::npos)
             prefix=name.substr(0,name.rfind('/')+1);
-         string name=normalize(prefix+index);
-         if (exists(name)) {
-            if (headers.count(name))
+         string fileName=normalize(prefix+index);
+         if (exists(fileName)) {
+            if (headers.count(fileName))
                continue;
-            headers.insert(name);
-            if (!collect(name,headers,missing,includePath,generated))
+            headers.insert(fileName);
+            if (!collect(fileName,headers,missing,includePath,generated))
                return false;
          }
-         if (missing.count(name))
+         if (missing.count(fileName))
             continue;
       }
       { bool found=false;
       for (vector<string>::const_iterator iter=includePath.begin();iter!=includePath.end();++iter) {
-         string name=normalize((*iter)+"/"+index);
-         if (exists(name)) {
+         string fileName=normalize((*iter)+"/"+index);
+         if (exists(fileName)) {
             found=true;
-            if (headers.count(name))
+            if (headers.count(fileName))
                break;
-            headers.insert(name);
-            if (!collect(name,headers,missing,includePath,generated))
+            headers.insert(fileName);
+            if (!collect(fileName,headers,missing,includePath,generated))
                return false;
             break;
          }
-         if (missing.count(name)) {
+         if (missing.count(fileName)) {
             found=true;
             break;
          }
@@ -208,17 +208,17 @@ static bool collect(const string& name,set<string>& headers,set<string>& missing
 
       // Could it be generated?
       if (checkLocal) {
-         string name=normalize(index);
-         if (generated.count(name)) {
-            headers.insert(name);
-            missing.insert(name);
+         string fileName=normalize(index);
+         if (generated.count(fileName)) {
+            headers.insert(fileName);
+            missing.insert(fileName);
             continue;
          }
       }
-      string name=couldBuild(index,includePath,generated);
+      string fileName=couldBuild(index,includePath,generated);
       if (name!="") {
-         headers.insert(name);
-         missing.insert(name);
+         headers.insert(fileName);
+         missing.insert(fileName);
       }
    }
 
