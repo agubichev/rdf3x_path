@@ -324,7 +324,7 @@ static void evalQuery(Database& db,const string& query,ostream& planOut,ostream&
 int main(int argc,char* argv[])
 {
    // Check the arguments
-   if (argc<2) {
+   if (argc<3) {
       cout << "usage: " << argv[0] << " <database> [sparqlfile(s)]" << endl;
       return 1;
    }
@@ -336,20 +336,35 @@ int main(int argc,char* argv[])
       return 1;
    }
 
-   // Retrieve the query
-   string query;
-   if (argc>2) {
+   if (argc==3) {
+      // Retrieve the query
+      string query;
       ifstream in(argv[2]);
       if (!in.is_open()) {
          cerr << "unable to open " << argv[2] << endl;
          return 1;
       }
       query=readInput(in);
-   } else {
-      query=readInput(cin);
-   }
 
-   // And evaluate it
-   evalQuery(db,query,cout,cerr);
+      // And evaluate it
+      evalQuery(db,query,cout,cerr);
+   } else {
+      for (int index=2;index<argc;index++) {
+         // Retrieve the query
+         string query;
+         ifstream in(argv[index]);
+         if (!in.is_open()) {
+            cerr << "unable to open " << argv[index] << endl;
+            return 1;
+         }
+         query=readInput(in);
+
+         // And produce the files
+         string planOutFile=string(argv[index])+".plan",predicatesOutFile=string(argv[index])+".predicates";
+         ofstream planOut(planOutFile.c_str()),predicatesOut(predicatesOutFile.c_str());
+         cerr << "processing " << argv[index] << " to " << planOutFile << " and " << predicatesOutFile << endl;
+         evalQuery(db,query,planOut,predicatesOut);
+      }
+   }
 }
 //---------------------------------------------------------------------------
