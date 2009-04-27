@@ -5,6 +5,7 @@ include tools/buildrdfstore/LocalMakefile
 include tools/checkrdfstore/LocalMakefile
 include tools/evalsparql/LocalMakefile
 include tools/extractschema/LocalMakefile
+include tools/extractstats/LocalMakefile
 include tools/extractqueries/LocalMakefile
 include tools/dumpredland/LocalMakefile
 include tools/dumpyago/LocalMakefile
@@ -25,6 +26,7 @@ src_tools:=				\
 	$(src_tools_buildrdfstore)	\
 	$(src_tools_evalsparql)		\
 	$(src_tools_extractschema)	\
+	$(src_tools_extractstats)	\
 	$(src_tools_extractqueries)	\
 	$(src_tools_dumpredland)	\
 	$(src_tools_dumpyago)		\
