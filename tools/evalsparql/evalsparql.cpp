@@ -73,6 +73,8 @@ static void evalQuery(Database& db,const string& query,bool silent)
    }
    if (getenv("SHOWCOSTS"))
       plan->print(0);
+   if (getenv("DISABLESKIPPING"))
+      Operator::disableSkipping=true;
 
    // Build a physical plan
    Runtime runtime(db);

@@ -44,6 +44,9 @@ class Operator
    virtual void addMergeHint(Register* reg1,Register* reg2) = 0;
    /// Register parts of the tree that can be executed asynchronous
    virtual void getAsyncInputCandidates(Scheduler& scheduler) = 0;
+
+   /// Disable scan skipping. Debugging only, this is a global property!
+   static bool disableSkipping;
 };
 //---------------------------------------------------------------------------
 #endif

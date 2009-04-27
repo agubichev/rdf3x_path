@@ -9,6 +9,8 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+bool Operator::disableSkipping = false;
+//---------------------------------------------------------------------------
 Operator::Operator(unsigned expectedOutputCardinality)
    : expectedOutputCardinality(expectedOutputCardinality),observedOutputCardinality(0)
    // Constructor

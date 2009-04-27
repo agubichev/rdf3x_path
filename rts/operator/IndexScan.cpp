@@ -222,7 +222,8 @@ void IndexScan::Hint::next(unsigned& value1,unsigned& value2,unsigned& value3)
 }
 //---------------------------------------------------------------------------
 IndexScan::IndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality)
-   : Operator(expectedOutputCardinality),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),facts(db.getFacts(order)),order(order),scan(&hint),hint(*this)
+   : Operator(expectedOutputCardinality),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),facts(db.getFacts(order)),order(order),
+     scan(disableSkipping?0:&hint),hint(*this)
    // Constructor
 {
 }

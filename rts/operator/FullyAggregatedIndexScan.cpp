@@ -76,7 +76,8 @@ void FullyAggregatedIndexScan::Hint::next(unsigned& value1)
 }
 //---------------------------------------------------------------------------
 FullyAggregatedIndexScan::FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality)
-   : Operator(expectedOutputCardinality),value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
+   : Operator(expectedOutputCardinality),value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order),
+     scan(disableSkipping?0:&hint),hint(*this)
    // Constructor
 {
 }

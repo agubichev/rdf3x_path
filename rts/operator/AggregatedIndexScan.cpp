@@ -131,7 +131,8 @@ void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
 }
 //---------------------------------------------------------------------------
 AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality)
-   : Operator(expectedOutputCardinality),value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order),scan(&hint),hint(*this)
+   : Operator(expectedOutputCardinality),value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order),
+     scan(disableSkipping?0:&hint),hint(*this)
    // Constructor
 {
 }
