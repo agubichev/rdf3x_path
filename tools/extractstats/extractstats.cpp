@@ -41,11 +41,11 @@ class PredicateCollector : public PlanPrinter
    /// The cardinalities
    vector<pair<unsigned,unsigned> > cardinalities;
    /// The relations
-   vector<set<string> > relations;
+   vector<set<unsigned> > relations;
    /// The predicates
-   vector<set<string> > predicates;
+   vector<set<pair<const Register*,unsigned> > > predicates;
    /// Unresolved equal conditions
-   vector<vector<pair<const Register*,const Register*> > > equal;
+   vector<set<pair<const Register*,const Register*> > > equal;
    /// The current operator characteristics
    string operatorName,operatorArgument;
    /// The argument slot
@@ -53,7 +53,7 @@ class PredicateCollector : public PlanPrinter
    /// The number of scans
    unsigned scanCount;
    /// Register bindings
-   map<const Register*,string> bindings;
+   map<const Register*,unsigned> bindings;
 
    public:
    /// Constructor
@@ -90,16 +90,14 @@ void PredicateCollector::beginOperator(const std::string& name,unsigned expected
    // Begin a new operator
 {
    supported.push_back(true);
-   relations.push_back(set<string>());
-   predicates.push_back(set<string>());
-   equal.push_back(vector<pair<const Register*,const Register*> >());
+   relations.push_back(set<unsigned>());
+   predicates.push_back(set<pair<const Register*,unsigned> >());
+   equal.push_back(set<pair<const Register*,const Register*> >());
    cardinalities.push_back(pair<unsigned,unsigned>(expectedOutputCardinality,observedOutputCardinality));
    operatorName=name;
 
    if ((name=="IndexScan")||(name=="AggregatedIndexScan")||(name=="FullyAggregatedIndexScan")) {
-      stringstream s;
-      s << "R" << (++scanCount);
-      relations.back().insert(s.str());
+      relations.back().insert(++scanCount);
    } else if ((name=="ResultsPrinter")||(name=="HashGroupify")||(name=="Union")) {
       supported.back()=false;
    }
@@ -115,73 +113,67 @@ void PredicateCollector::addArgumentAnnotation(const std::string& argument)
 void PredicateCollector::addScanAnnotation(const Register* reg,bool bound)
    // Add a scan annotation
 {
-   const char* arg="";
+   unsigned arg=0;
    if (operatorArgument=="SubjectPredicateObject") {
-      if (argSlot==0) arg="S";
-      if (argSlot==1) arg="P";
-      if (argSlot==2) arg="O";
+      if (argSlot==0) arg=0;
+      if (argSlot==1) arg=1;
+      if (argSlot==2) arg=2;
    } else if (operatorArgument=="SubjectObjectPredicate") {
-      if (argSlot==0) arg="S";
-      if (argSlot==1) arg="O";
-      if (argSlot==2) arg="P";
+      if (argSlot==0) arg=0;
+      if (argSlot==1) arg=2;
+      if (argSlot==2) arg=1;
    } else if (operatorArgument=="PredicateSubjectObject") {
-      if (argSlot==0) arg="P";
-      if (argSlot==1) arg="S";
-      if (argSlot==2) arg="O";
+      if (argSlot==0) arg=1;
+      if (argSlot==1) arg=0;
+      if (argSlot==2) arg=2;
    } else if (operatorArgument=="PredicateObjectSubject") {
-      if (argSlot==0) arg="P";
-      if (argSlot==1) arg="O";
-      if (argSlot==2) arg="S";
+      if (argSlot==0) arg=1;
+      if (argSlot==1) arg=2;
+      if (argSlot==2) arg=0;
    } else if (operatorArgument=="ObjectSubjectPredicate") {
-      if (argSlot==0) arg="O";
-      if (argSlot==1) arg="S";
-      if (argSlot==2) arg="P";
+      if (argSlot==0) arg=2;
+      if (argSlot==1) arg=0;
+      if (argSlot==2) arg=1;
    } else if (operatorArgument=="ObjectPredicateSubject") {
-      if (argSlot==0) arg="O";
-      if (argSlot==1) arg="P";
-      if (argSlot==2) arg="S";
+      if (argSlot==0) arg=2;
+      if (argSlot==1) arg=1;
+      if (argSlot==2) arg=0;
    } else if (operatorArgument=="SubjectPredicate") {
-      if (argSlot==0) arg="S";
-      if (argSlot==1) arg="P";
+      if (argSlot==0) arg=0;
+      if (argSlot==1) arg=1;
    } else if (operatorArgument=="SubjectObject") {
-      if (argSlot==0) arg="S";
-      if (argSlot==1) arg="O";
+      if (argSlot==0) arg=0;
+      if (argSlot==1) arg=2;
    } else if (operatorArgument=="PredicateSubject") {
-      if (argSlot==0) arg="P";
-      if (argSlot==1) arg="S";
+      if (argSlot==0) arg=1;
+      if (argSlot==1) arg=0;
    } else if (operatorArgument=="PredicateObject") {
-      if (argSlot==0) arg="P";
-      if (argSlot==1) arg="O";
+      if (argSlot==0) arg=1;
+      if (argSlot==1) arg=2;
    } else if (operatorArgument=="ObjectSubject") {
-      if (argSlot==0) arg="O";
-      if (argSlot==1) arg="S";
+      if (argSlot==0) arg=2;
+      if (argSlot==1) arg=0;
    } else if (operatorArgument=="ObjectPredicate") {
-      if (argSlot==0) arg="O";
-      if (argSlot==1) arg="P";
+      if (argSlot==0) arg=2;
+      if (argSlot==1) arg=1;
    } else if (operatorArgument=="Subject") {
-      if (argSlot==0) arg="S";
+      if (argSlot==0) arg=0;
    } else if (operatorArgument=="Predicate") {
-      if (argSlot==0) arg="P";
+      if (argSlot==0) arg=1;
    } else if (operatorArgument=="Object") {
-      if (argSlot==0) arg="O";
+      if (argSlot==0) arg=2;
    }
 
-   if (bound) {
-      stringstream s;
-      s << "R" << scanCount << "." << arg << "=" << reg->value;
-      predicates.back().insert(s.str());
-   } else {
-      stringstream s;
-      s << "R" << scanCount << "." << arg;
-      bindings[reg]=s.str();
-   }
+   if (bound)
+      predicates.back().insert(pair<const Register*,unsigned>(reg,reg->value));
+   bindings[reg]=(3*scanCount)+arg;
    ++argSlot;
 }
 //---------------------------------------------------------------------------
 void PredicateCollector::addEqualPredicateAnnotation(const Register* reg1,const Register* reg2)
    // Add a predicate annotate
 {
-   equal.back().push_back(pair<const Register*,const Register*>(reg1,reg2));
+   equal.back().insert(pair<const Register*,const Register*>(reg1,reg2));
 }
 //---------------------------------------------------------------------------
 void PredicateCollector::addMaterializationAnnotation(const std::vector<Register*>& /*regs*/)
@@ -199,20 +191,28 @@ void PredicateCollector::endOperator()
    // Close the current operator
 {
    if (supported.back()) {
-      for (vector<pair<const Register*,const Register*> >::const_iterator iter=equal.back().begin(),limit=equal.back().end();iter!=limit;++iter)
-         predicates.back().insert(bindings[(*iter).first]+"="+bindings[(*iter).second]);
+      map<unsigned,string> relationNames;
       out << "{";
-      for (set<string>::const_iterator start=relations.back().begin(),limit=relations.back().end(),iter=start;iter!=limit;++iter) {
-         if (iter!=start)
-            out << " ";
-         out << (*iter);
+      for (set<unsigned>::const_iterator start=relations.back().begin(),limit=relations.back().end(),iter=start;iter!=limit;++iter) {
+         if (iter!=start) out << " ";
+         stringstream s;
+         s << "R" << (relationNames.size()+1);
+         relationNames[*iter]=s.str();
+         out << s.str();
          if (relations.size()>1) relations[relations.size()-2].insert(*iter);
       }
       out << "} {";
-      for (set<string>::const_iterator start=predicates.back().begin(),limit=predicates.back().end(),iter=start;iter!=limit;++iter) {
-         if (iter!=start)
-            out << " ";
-         out << (*iter);
+      bool first=true;
+      for (set<pair<const Register*,const Register*> >::const_iterator iter=equal.back().begin(),limit=equal.back().end();iter!=limit;++iter) {
+         if (first) first=false; else out << " ";
+         unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
+         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
+         if (equal.size()>1) equal[equal.size()-2].insert(*iter);
+      }
+      for (set<pair<const Register*,unsigned> >::const_iterator start=predicates.back().begin(),limit=predicates.back().end(),iter=start;iter!=limit;++iter) {
+         if (first) first=false; else out << " ";
+         unsigned l=bindings[(*iter).first],r=(*iter).second;
+         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
          if (predicates.size()>1) predicates[predicates.size()-2].insert(*iter);
       }
       out << "} " << cardinalities.back().first << " " << cardinalities.back().second << endl;
