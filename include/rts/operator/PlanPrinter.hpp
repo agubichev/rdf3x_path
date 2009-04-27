@@ -48,6 +48,8 @@ class PlanPrinter
 class DebugPlanPrinter : public PlanPrinter
 {
    private:
+   /// The output
+   std::ostream& out;
    /// The runtime
    Runtime& runtime;
    /// Indentation level
@@ -61,6 +63,8 @@ class DebugPlanPrinter : public PlanPrinter
    public:
    /// Constructor
    DebugPlanPrinter(Runtime& runtime,bool showObserved);
+   /// Constructor
+   DebugPlanPrinter(std::ostream& out,Runtime& runtime,bool showObserved);
 
    /// Begin a new operator
    void beginOperator(const std::string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality);

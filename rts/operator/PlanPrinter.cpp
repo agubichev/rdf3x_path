@@ -23,7 +23,13 @@ PlanPrinter::~PlanPrinter()
 }
 //---------------------------------------------------------------------------
 DebugPlanPrinter::DebugPlanPrinter(Runtime& runtime,bool showObserved)
-   : runtime(runtime),level(0),showObserved(showObserved)
+   : out(cout),runtime(runtime),level(0),showObserved(showObserved)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+DebugPlanPrinter::DebugPlanPrinter(ostream& out,Runtime& runtime,bool showObserved)
+   : out(out),runtime(runtime),level(0),showObserved(showObserved)
    // Constructor
 {
 }
@@ -32,17 +38,17 @@ void DebugPlanPrinter::indent()
    // Indent
 {
    for (unsigned index=0;index<level;index++)
-      cout << " ";
+      out << " ";
 }
 //---------------------------------------------------------------------------
 void DebugPlanPrinter::beginOperator(const string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality)
    // Begin a new operator
 {
    indent();
-   cout << "<" << name << " " << expectedOutputCardinality;
+   out << "<" << name << " " << expectedOutputCardinality;
    if (showObserved)
-      cout << " " << observedOutputCardinality;
-   cout << endl;
+      out << " " << observedOutputCardinality;
+   out << endl;
    ++level;
 }
 //---------------------------------------------------------------------------
@@ -50,7 +56,7 @@ void DebugPlanPrinter::addArgumentAnnotation(const string& argument)
    // Add an operator argument annotation
 {
    indent();
-   cout << argument << endl;
+   out << argument << endl;
 }
 //---------------------------------------------------------------------------
 void DebugPlanPrinter::addScanAnnotation(const Register* reg,bool bound)
@@ -58,36 +64,36 @@ void DebugPlanPrinter::addScanAnnotation(const Register* reg,bool bound)
 {
    indent();
    if (bound)
-      cout << formatValue(reg->value); else
-      cout << formatRegister(reg);
-   cout << endl;
+      out << formatValue(reg->value); else
+      out << formatRegister(reg);
+   out << endl;
 }
 //---------------------------------------------------------------------------
 void DebugPlanPrinter::addEqualPredicateAnnotation(const Register* reg1,const Register* reg2)
    // Add a predicate annotate
 {
    indent();
-   cout << formatRegister(reg1) << "=" << formatRegister(reg2) << endl;
+   out << formatRegister(reg1) << "=" << formatRegister(reg2) << endl;
 }
 //---------------------------------------------------------------------------
 void DebugPlanPrinter::addMaterializationAnnotation(const vector<Register*>& regs)
    // Add a materialization annotation
 {
    indent();
-   cout << "[";
+   out << "[";
    bool first=true;
    for (vector<Register*>::const_iterator iter=regs.begin(),limit=regs.end();iter!=limit;++iter) {
-      if (first) first=false; else cout << " ";
-      cout << formatRegister(*iter);
+      if (first) first=false; else out << " ";
+      out << formatRegister(*iter);
    }
-   cout << "]" << endl;
+   out << "]" << endl;
 }
 //---------------------------------------------------------------------------
 void DebugPlanPrinter::addGenericAnnotation(const string& text)
    // Add a generic annotation
 {
    indent();
-   cout << text << endl;
+   out << text << endl;
 }
 //---------------------------------------------------------------------------
 void DebugPlanPrinter::endOperator()
@@ -95,7 +101,7 @@ void DebugPlanPrinter::endOperator()
 {
    if (level) --level;
    indent();
-   cout << ">" << endl;
+   out << ">" << endl;
 }
 //---------------------------------------------------------------------------
 string DebugPlanPrinter::formatRegister(const Register* reg)
