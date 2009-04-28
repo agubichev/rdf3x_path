@@ -104,6 +104,13 @@ class SPARQLParser
    };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };
+   /// Sort order
+   struct Order {
+      /// Variable id
+      unsigned id;
+      /// Desending
+      bool descending;
+   };
 
    private:
    /// The lexer
@@ -121,6 +128,8 @@ class SPARQLParser
    std::vector<unsigned> projection;
    /// The pattern
    PatternGroup patterns;
+   /// The sort order
+   std::vector<Order> order;
    /// The result limit
    unsigned limit;
 
@@ -176,6 +185,8 @@ class SPARQLParser
    void parseFrom();
    /// Parse the where part if any
    void parseWhere();
+   /// Parse the order by part if any
+   void parseOrderBy();
    /// Parse the limit part if any
    void parseLimit();
 
@@ -199,6 +210,13 @@ class SPARQLParser
    projection_iterator projectionBegin() const { return projection.begin(); }
    /// Iterator over the projection
    projection_iterator projectionEnd() const { return projection.end(); }
+
+   /// Iterator over the order by clause
+   typedef std::vector<Order>::const_iterator order_iterator;
+   /// Iterator over the order by clause
+   order_iterator orderBegin() const { return order.begin(); }
+   /// Iterator over the order by clause
+   order_iterator orderEnd() const { return order.end(); }
 
    /// The projection modifier
    ProjectionModifier getProjectionModifier() const { return projectionModifier; }

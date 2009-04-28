@@ -307,6 +307,20 @@ bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
       case SPARQLParser::Modifier_Duplicates: output.setDuplicateHandling(QueryGraph::ShowDuplicates); break;
    }
 
+   // Order by clause
+   for (SPARQLParser::order_iterator iter=input.orderBegin(),limit=input.orderEnd();iter!=limit;++iter) {
+      QueryGraph::Order o;
+      if (~(*iter).id) {
+         if (!binds(input.getPatterns(),(*iter).id))
+            continue;
+         o.id=(*iter).id;
+      } else {
+         o.id=~0u;
+      }
+      o.descending=(*iter).descending;
+      output.addOrder(o);
+   }
+
    // Set the limit
    output.setLimit(input.getLimit());
 

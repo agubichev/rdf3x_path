@@ -15,6 +15,7 @@
 #include "rts/operator/ResultsPrinter.hpp"
 #include "rts/operator/Selection.hpp"
 #include "rts/operator/SingletonScan.hpp"
+#include "rts/operator/Sort.hpp"
 #include "rts/operator/Union.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/DifferentialIndex.hpp"
@@ -628,10 +629,26 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
       set<unsigned> projection;
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
          projection.insert(*iter);
+      for (QueryGraph::order_iterator iter=query.orderBegin(),limit=query.orderEnd();iter!=limit;++iter)
+         if (~(*iter).id)
+            projection.insert((*iter).id);
 
       // And build the tree
       map<unsigned,Register*> context,bindings;
       tree=translatePlan(runtime,context,projection,bindings,registers,plan);
+
+      // Sort if necessary
+      if (query.orderBegin()!=query.orderEnd()) {
+         vector<Register*> regs;
+         vector<pair<Register*,bool> > order;
+         for (set<unsigned>::const_iterator iter=projection.begin(),limit=projection.end();iter!=limit;++iter)
+            regs.push_back(bindings[*iter]);
+         for (QueryGraph::order_iterator iter=query.orderBegin(),limit=query.orderEnd();iter!=limit;++iter)
+            if (~(*iter).id)
+               order.push_back(pair<Register*,bool>(bindings[(*iter).id],(*iter).descending)); else
+               order.push_back(pair<Register*,bool>(0,(*iter).descending));
+         tree=new Sort(runtime.getDatabase(),tree,regs,order,tree->getExpectedOutputCardinality());
+      }
 
       // Remember the output registers
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)

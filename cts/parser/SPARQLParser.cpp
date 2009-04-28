@@ -876,6 +876,55 @@ void SPARQLParser::parseWhere()
    parseGroupGraphPattern(patterns);
 }
 //---------------------------------------------------------------------------
+void SPARQLParser::parseOrderBy()
+   // Parse the order by part if any
+{
+   SPARQLLexer::Token token=lexer.getNext();
+   if ((token!=SPARQLLexer::Identifier)||(!lexer.isKeyword("order"))) {
+      lexer.unget(token);
+      return;
+   }
+   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("by")))
+      throw ParserException("'by' expected");
+
+   while (true) {
+      token=lexer.getNext();
+      if (token==SPARQLLexer::Identifier) {
+         if (lexer.isKeyword("asc")||lexer.isKeyword("desc")) {
+            Order o;
+            o.descending=lexer.isKeyword("desc");
+            if (lexer.getNext()!=SPARQLLexer::LParen)
+               throw ParserException("'(' expected");
+            token=lexer.getNext();
+            if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("count"))) {
+               o.id=~0u;
+            } else if (token==SPARQLLexer::Variable) {
+               o.id=nameVariable(lexer.getTokenValue());
+            } else throw ParserException("variable expected in order-by clause");
+            if (lexer.getNext()!=SPARQLLexer::RParen)
+               throw ParserException("')' expected");
+            order.push_back(o);
+         } else if (lexer.isKeyword("count")) {
+            Order o; o.id=~0u; o.descending=false;
+            order.push_back(o);
+         } else {
+            lexer.unget(token);
+            return;
+         }
+      } else if (token==SPARQLLexer::Variable) {
+         Order o;
+         o.id=nameVariable(lexer.getTokenValue());
+         o.descending=false;
+         order.push_back(o);
+      } else if (token==SPARQLLexer::Eof) {
+         lexer.unget(token);
+         return;
+      } else {
+         throw ParserException("variable expected in order-by clause");
+      }
+   }
+}
+//---------------------------------------------------------------------------
 void SPARQLParser::parseLimit()
    // Parse the limit part if any
 {
@@ -906,6 +955,9 @@ void SPARQLParser::parse()
 
    // Parse the where clause
    parseWhere();
+
+   // Parse the order by clause
+   parseOrderBy();
 
    // Parse the limit clause
    parseLimit();

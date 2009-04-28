@@ -88,6 +88,13 @@ class QueryGraph
       /// Union subqueries
       std::vector<std::vector<SubQuery> > unions;
    };
+   /// Order by entry
+   struct Order {
+      /// The variable
+      unsigned id;
+      /// Descending
+      bool descending;
+   };
    private:
    /// The query itself
    SubQuery query;
@@ -95,6 +102,8 @@ class QueryGraph
    std::vector<unsigned> projection;
    /// The duplicate handling
    DuplicateHandling duplicateHandling;
+   /// The order by clause
+   std::vector<Order> order;
    /// Maximum result size
    unsigned limit;
    /// Is the query known to produce an empty result?
@@ -140,6 +149,15 @@ class QueryGraph
    projection_iterator projectionBegin() const { return projection.begin(); }
    /// Iterator over the projection
    projection_iterator projectionEnd() const { return projection.end(); }
+
+   /// Add an entry to the sort order
+   void addOrder(const Order& o) { order.push_back(o); }
+   /// Iterator over the sort order
+   typedef std::vector<Order>::const_iterator order_iterator;
+   /// Iterator over the sort order
+   order_iterator orderBegin() const { return order.begin(); }
+   /// Iterator over the sort order
+   order_iterator orderEnd() const { return order.end(); }
 };
 //---------------------------------------------------------------------------
 #endif
