@@ -11,9 +11,11 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include <set>
+#include <vector>
 //---------------------------------------------------------------------------
 class Operator;
 class Plan;
+class Register;
 class Runtime;
 class QueryGraph;
 //---------------------------------------------------------------------------
@@ -23,6 +25,8 @@ class CodeGen
    public:
    /// Collect all variables contained in a plan
    static void collectVariables(std::set<unsigned>& variables,Plan* plan);
+   /// Translate an execution plan into an operator tree without output generation
+   static Operator* translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,std::vector<Register*>& output);
    /// Translate an execution plan into an operator tree
    static Operator* translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent=false);
 };

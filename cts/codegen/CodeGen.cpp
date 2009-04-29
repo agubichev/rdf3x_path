@@ -580,8 +580,8 @@ static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registe
    return id;
 }
 //---------------------------------------------------------------------------
-Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent)
-   // Perform a naive translation of a query into an operator tree
+Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,vector<Register*>& output)
+   // Perform a naive translation of a query into an operator tree withozt output generation
 {
    // Allocate registers for all relations
    map<const QueryGraph::Node*,unsigned> registers;
@@ -618,8 +618,6 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
 
    // Build the operator tree
    Operator* tree;
-   vector<Register*> output;
-
    if (query.knownEmpty()) {
       tree=new EmptyScan();
    } else if (!plan) {
@@ -656,6 +654,17 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
             output.push_back(bindings[*iter]); else
             output.push_back(runtime.getRegister(unboundVariable));
    }
+
+   return tree;
+}
+//---------------------------------------------------------------------------
+Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent)
+   // Perform a naive translation of a query into an operator tree
+{
+   // Build the tree itself
+   vector<Register*> output;
+   Operator* tree=translateIntern(runtime,query,plan,output);
+   if (!tree) return 0;
 
    // And add the output generation
    ResultsPrinter::DuplicateHandling duplicateHandling=ResultsPrinter::ExpandDuplicates;
