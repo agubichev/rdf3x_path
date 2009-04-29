@@ -44,8 +44,12 @@ class PredicateCollector : public PlanPrinter
    vector<set<unsigned> > relations;
    /// The predicates
    vector<set<pair<const Register*,unsigned> > > predicates;
+   /// The previous predicates
+   vector<set<pair<const Register*,unsigned> > > previousPredicates;
    /// Unresolved equal conditions
    vector<set<pair<const Register*,const Register*> > > equal;
+   /// Previous unresolved equal conditions
+   vector<set<pair<const Register*,const Register*> > > previousEqual;
    /// The current operator characteristics
    string operatorName,operatorArgument;
    /// The argument slot
@@ -92,7 +96,9 @@ void PredicateCollector::beginOperator(const std::string& name,unsigned expected
    supported.push_back(true);
    relations.push_back(set<unsigned>());
    predicates.push_back(set<pair<const Register*,unsigned> >());
+   previousPredicates.push_back(set<pair<const Register*,unsigned> >());
    equal.push_back(set<pair<const Register*,const Register*> >());
+   previousEqual.push_back(set<pair<const Register*,const Register*> >());
    cardinalities.push_back(pair<unsigned,unsigned>(expectedOutputCardinality,observedOutputCardinality));
    operatorName=name;
 
@@ -207,13 +213,27 @@ void PredicateCollector::endOperator()
          if (first) first=false; else out << " ";
          unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
          out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
-         if (equal.size()>1) equal[equal.size()-2].insert(*iter);
+         if (previousEqual.size()>1) previousEqual[previousEqual.size()-2].insert(*iter);
       }
       for (set<pair<const Register*,unsigned> >::const_iterator start=predicates.back().begin(),limit=predicates.back().end(),iter=start;iter!=limit;++iter) {
          if (first) first=false; else out << " ";
          unsigned l=bindings[(*iter).first],r=(*iter).second;
          out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
-         if (predicates.size()>1) predicates[predicates.size()-2].insert(*iter);
+         if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(*iter);
+      }
+      out << "} {";
+      first=true;
+      for (set<pair<const Register*,const Register*> >::const_iterator iter=previousEqual.back().begin(),limit=previousEqual.back().end();iter!=limit;++iter) {
+         if (first) first=false; else out << " ";
+         unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
+         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
+         if (previousEqual.size()>1) previousEqual[previousEqual.size()-2].insert(*iter);
+      }
+      for (set<pair<const Register*,unsigned> >::const_iterator start=previousPredicates.back().begin(),limit=previousPredicates.back().end(),iter=start;iter!=limit;++iter) {
+         if (first) first=false; else out << " ";
+         unsigned l=bindings[(*iter).first],r=(*iter).second;
+         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
+         if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(*iter);
       }
       out << "} " << cardinalities.back().first << " " << cardinalities.back().second << endl;
       supported.pop_back();
@@ -224,7 +244,9 @@ void PredicateCollector::endOperator()
    }
    relations.pop_back();
    predicates.pop_back();
+   previousPredicates.pop_back();
    equal.pop_back();
+   previousEqual.pop_back();
    cardinalities.pop_back();
 }
 //---------------------------------------------------------------------------
@@ -314,7 +336,7 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
 
    // Write the selectivities
    {
-      statsOut << "# Stats: {relations} {predicates} expectedCardinality observedCardinality" << endl;
+      statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality" << endl;
       PredicateCollector out(statsOut,runtime);
       operatorTree->print(out);
    }
