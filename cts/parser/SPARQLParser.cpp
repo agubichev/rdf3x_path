@@ -941,7 +941,7 @@ void SPARQLParser::parseLimit()
    }
 }
 //---------------------------------------------------------------------------
-void SPARQLParser::parse()
+void SPARQLParser::parse(bool multiQuery)
    // Parse the input
 {
    // Parse the prefix part
@@ -963,7 +963,7 @@ void SPARQLParser::parse()
    parseLimit();
 
    // Check that the input is done
-   if (lexer.getNext()!=SPARQLLexer::Eof)
+   if ((!multiQuery)&&(lexer.getNext()!=SPARQLLexer::Eof))
       throw ParserException("syntax error");
 
    // Fixup empty projections (i.e. *)

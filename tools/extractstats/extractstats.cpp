@@ -257,19 +257,19 @@ static string readInput(istream& in)
    return result;
 }
 //---------------------------------------------------------------------------
-static void evalQuery(Database& db,const string& query,ostream& planOut,ostream& statsOut)
+static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& statsOut)
    // Evaluate a query
 {
    QueryGraph queryGraph;
+   std::string::const_iterator queryStart=lexer.getReader();
    {
       // Parse the query
-      SPARQLLexer lexer(query);
       SPARQLParser parser(lexer);
       try {
-         parser.parse();
+         parser.parse(true);
       } catch (const SPARQLParser::ParserException& e) {
          cerr << "parse error: " << e.message << endl;
-         return;
+         return false;
       }
 
       // And perform the semantic anaylsis
@@ -277,7 +277,7 @@ static void evalQuery(Database& db,const string& query,ostream& planOut,ostream&
       semana.transform(parser,queryGraph);
       if (queryGraph.knownEmpty()) {
          cerr << "known empty result ignored" << endl;
-         return;
+         return true;
       }
    }
 
@@ -286,7 +286,7 @@ static void evalQuery(Database& db,const string& query,ostream& planOut,ostream&
    Plan* plan=plangen.translate(db,queryGraph);
    if (!plan) {
       cerr << "plan generation failed" << endl;
-      return;
+      return true;
    }
    Operator::disableSkipping=true;
 
@@ -301,7 +301,8 @@ static void evalQuery(Database& db,const string& query,ostream& planOut,ostream&
 
    // Write the plan
    planOut << "# SPARQL Query:" << endl << "# ";
-   for (string::const_iterator iter=query.begin(),limit=query.end();iter!=limit;++iter)
+   std::string::const_iterator queryEnd=lexer.getReader();
+   for (string::const_iterator iter=queryStart;iter!=queryEnd;++iter)
       if ((*iter)=='\n')
          planOut << endl << "# "; else
          planOut << *iter;
@@ -319,6 +320,24 @@ static void evalQuery(Database& db,const string& query,ostream& planOut,ostream&
    }
 
    delete operatorTree;
+   return true;
+}
+//---------------------------------------------------------------------------
+static void evalQueries(Database& db,const string& query,ostream& planOut,ostream& statsOut)
+   // Evaluate a query file
+{
+   unsigned count = 0;
+   SPARQLLexer lexer(query);
+   while (true) {
+      if (lexer.hasNext(SPARQLLexer::Eof))
+         break;
+      if (!evalQuery(db,lexer,planOut,statsOut))
+         break;
+      ++count;
+   }
+
+   if (!count)
+      cerr << "warning: no query processed" << endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
@@ -347,7 +366,7 @@ int main(int argc,char* argv[])
       query=readInput(in);
 
       // And evaluate it
-      evalQuery(db,query,cout,cerr);
+      evalQueries(db,query,cout,cerr);
    } else {
       for (int index=2;index<argc;index++) {
          // Retrieve the query
@@ -363,7 +382,7 @@ int main(int argc,char* argv[])
          string planOutFile=string(argv[index])+".plan",predicatesOutFile=string(argv[index])+".predicates";
          ofstream planOut(planOutFile.c_str()),predicatesOut(predicatesOutFile.c_str());
          cerr << "processing " << argv[index] << " to " << planOutFile << " and " << predicatesOutFile << endl;
-         evalQuery(db,query,planOut,predicatesOut);
+         evalQueries(db,query,planOut,predicatesOut);
       }
    }
 }

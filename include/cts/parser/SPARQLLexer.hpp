@@ -49,6 +49,9 @@ class SPARQLLexer
    void unget(Token value) { putBack=value; }
    /// Peek at the next token
    bool hasNext(Token value);
+
+   /// Return the read pointer
+   std::string::const_iterator getReader() const { return (putBack!=None)?tokenStart:pos; }
 };
 //---------------------------------------------------------------------------
 #endif

@@ -197,7 +197,7 @@ class SPARQLParser
    ~SPARQLParser();
 
    /// Parse the input. Throws an exception in the case of an error
-   void parse();
+   void parse(bool multiQuery = false);
 
    /// Get the patterns
    const PatternGroup& getPatterns() const { return patterns; }
