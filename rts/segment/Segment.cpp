@@ -172,7 +172,7 @@ unsigned long long Segment::readUint64(const unsigned char* data)
 {
    unsigned long long result=0;
    for (unsigned index=0;index<8;index++)
-      result=(result<<8)|static_cast<unsigned long long>(data[7-index]);
+      result=(result<<8)|static_cast<unsigned long long>(data[index]);
    return result;
 }
 //---------------------------------------------------------------------------

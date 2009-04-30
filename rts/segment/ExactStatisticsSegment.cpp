@@ -1047,7 +1047,7 @@ void ExactStatisticsSegment::computeExactStatistics(MemoryMappedFile& countMap)
    writeUint64(directory+72,exact0OS);
    writeUint64(directory+80,exact0OP);
    writeUint64(directory+88,exact0OO);
-   writeUint64(directory+92,cardinality);
+   writeUint64(directory+96,cardinality);
    directoryPage=page.getPageNo();
    page.unfixWithoutRecovery();
    setSegmentData(slotDirectoryPage,directoryPage);
