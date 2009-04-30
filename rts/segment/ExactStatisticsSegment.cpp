@@ -144,18 +144,18 @@ bool ExactStatisticsSegment::getJoinInfo2(unsigned root,unsigned value1,unsigned
    // Lookup join cardinalities for two constants
 {
    // Traverse the B-Tree
-#define readInner1(page,slot) Segment::readUint32Aligned((page)+16+12*(slot))
-#define readInner2(page,slot) Segment::readUint32Aligned((page)+16+12*(slot)+4)
-#define readInnerPage(page,slot) Segment::readUint32Aligned((page)+16+12*(slot)+8)
+#define readInner1(page,slot) Segment::readUint32Aligned((page)+24+12*(slot))
+#define readInner2(page,slot) Segment::readUint32Aligned((page)+24+12*(slot)+4)
+#define readInnerPage(page,slot) Segment::readUint32Aligned((page)+24+12*(slot)+8)
 #define greater(a1,a2,b1,b2) (((a1)>(b1))||(((a1)==(b1))&&((a2)>(b2))))
    BufferReference ref;
    ref=readShared(root);
    while (true) {
       const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
       // Inner node?
-      if (readUint32Aligned(page)==0xFFFFFFFF) {
+      if (readUint32Aligned(page+8)==0xFFFFFFFF) {
          // Perform a binary search. The test is more complex as we only have the upper bound for ranges
-         unsigned left=0,right=readUint32Aligned(page+8);
+         unsigned left=0,right=readUint32Aligned(page+16);
          while (left!=right) {
             unsigned middle=(left+right)/2;
             unsigned middle1=readInner1(page,middle),middle2=readInner2(page,middle);
@@ -186,8 +186,8 @@ bool ExactStatisticsSegment::getJoinInfo2(unsigned root,unsigned value1,unsigned
    // Decompress the leaf page
    const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
    unsigned char buffer[10*BufferReference::pageSize];
-   unsigned compressedLen=Segment::readUint32(page+4);
-   fastlz_decompress(page+8,compressedLen,buffer,sizeof(buffer));
+   unsigned compressedLen=Segment::readUint32(page+12);
+   fastlz_decompress(page+16,compressedLen,buffer,sizeof(buffer));
 
    // Find the potential range for matches
    const unsigned char* reader=buffer;
@@ -240,16 +240,16 @@ bool ExactStatisticsSegment::getJoinInfo1(unsigned root,unsigned value1,unsigned
    // Lookup join cardinalities for two constants
 {
    // Traverse the B-Tree
-#define readInner1(page,slot) Segment::readUint32Aligned(page+16+8*(slot))
-#define readInnerPage(page,slot) Segment::readUint32Aligned(page+16+8*(slot)+4)
+#define readInner1(page,slot) Segment::readUint32Aligned(page+24+8*(slot))
+#define readInnerPage(page,slot) Segment::readUint32Aligned(page+24+8*(slot)+4)
    BufferReference ref;
    ref=readShared(root);
    while (true) {
       const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
       // Inner node?
-      if (readUint32Aligned(page)==0xFFFFFFFF) {
+      if (readUint32Aligned(page+8)==0xFFFFFFFF) {
          // Perform a binary search. The test is more complex as we only have the upper bound for ranges
-         unsigned left=0,right=readUint32Aligned(page+8);
+         unsigned left=0,right=readUint32Aligned(page+16);
          while (left!=right) {
             unsigned middle=(left+right)/2;
             unsigned middle1=readInner1(page,middle);
@@ -278,8 +278,8 @@ bool ExactStatisticsSegment::getJoinInfo1(unsigned root,unsigned value1,unsigned
    // Decompress the leaf page
    const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
    unsigned char buffer[10*BufferReference::pageSize];
-   unsigned compressedLen=Segment::readUint32(page+4);
-   fastlz_decompress(page+8,compressedLen,buffer,sizeof(buffer));
+   unsigned compressedLen=Segment::readUint32(page+12);
+   fastlz_decompress(page+16,compressedLen,buffer,sizeof(buffer));
 
    // Find the exact position
    const unsigned char* reader=buffer;
