@@ -10,6 +10,7 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/operator/Scheduler.hpp"
+#include "rts/segment/FactsSegment.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -50,6 +51,8 @@ class PredicateCollector : public PlanPrinter
    vector<set<pair<const Register*,const Register*> > > equal;
    /// Previous unresolved equal conditions
    vector<set<pair<const Register*,const Register*> > > previousEqual;
+   /// Input sizes
+   vector<double> expectedInput,observedInput;
    /// The current operator characteristics
    string operatorName,operatorArgument;
    /// The argument slot
@@ -102,8 +105,17 @@ void PredicateCollector::beginOperator(const std::string& name,unsigned expected
    cardinalities.push_back(pair<unsigned,unsigned>(expectedOutputCardinality,observedOutputCardinality));
    operatorName=name;
 
+   if (!expectedInput.empty())
+      expectedInput.back()*=static_cast<double>(expectedOutputCardinality);
+   expectedInput.push_back(1);
+   if (!observedInput.empty())
+      observedInput.back()*=static_cast<double>(observedOutputCardinality);
+   observedInput.push_back(1);
+
    if ((name=="IndexScan")||(name=="AggregatedIndexScan")||(name=="FullyAggregatedIndexScan")) {
       relations.back().insert(++scanCount);
+      expectedInput.back()=runtime.getDatabase().getFacts(Database::Order_Subject_Predicate_Object).getCardinality();
+      observedInput.back()=runtime.getDatabase().getFacts(Database::Order_Subject_Predicate_Object).getCardinality();
    } else if ((name=="ResultsPrinter")||(name=="HashGroupify")||(name=="Union")) {
       supported.back()=false;
    }
@@ -235,7 +247,7 @@ void PredicateCollector::endOperator()
          out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
          if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(*iter);
       }
-      out << "} " << cardinalities.back().first << " " << cardinalities.back().second << endl;
+      out << "} " << cardinalities.back().first << " " << cardinalities.back().second << " " << (static_cast<double>(cardinalities.back().first)/expectedInput.back()) << " " << (static_cast<double>(cardinalities.back().second)/observedInput.back()) << endl;
       supported.pop_back();
    } else {
       supported.pop_back();
@@ -248,6 +260,8 @@ void PredicateCollector::endOperator()
    equal.pop_back();
    previousEqual.pop_back();
    cardinalities.pop_back();
+   expectedInput.pop_back();
+   observedInput.pop_back();
 }
 //---------------------------------------------------------------------------
 std::string PredicateCollector::formatRegister(const Register* /*reg*/)
@@ -336,7 +350,7 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
 
    // Write the selectivities
    {
-      statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality" << endl;
+      statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality expectedSelectivity observedSelectivity" << endl;
       PredicateCollector out(statsOut,runtime);
       operatorTree->print(out);
    }
