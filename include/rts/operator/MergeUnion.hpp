@@ -34,7 +34,7 @@ class MergeUnion : public Operator
 
    public:
    /// Constructor
-   MergeUnion(Register* result,Operator* left,Register* leftReg,Operator* right,Register* rightReg,unsigned expectedOutputCardinality);
+   MergeUnion(Register* result,Operator* left,Register* leftReg,Operator* right,Register* rightReg,double expectedOutputCardinality);
    /// Destructor
    ~MergeUnion();
 

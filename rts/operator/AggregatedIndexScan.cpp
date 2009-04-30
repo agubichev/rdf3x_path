@@ -16,7 +16,7 @@
 class AggregatedIndexScan::Scan : public AggregatedIndexScan {
    public:
    /// Constructor
-   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
+   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,double expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -32,7 +32,7 @@ class AggregatedIndexScan::ScanFilter2 : public AggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
+   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,double expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -48,7 +48,7 @@ class AggregatedIndexScan::ScanPrefix1 : public AggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
+   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,double expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -64,7 +64,7 @@ class AggregatedIndexScan::ScanPrefix12 : public AggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
+   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,double expectedOutputCardinality) : AggregatedIndexScan(db,order,value1,bound1,value2,bound2,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -130,7 +130,7 @@ void AggregatedIndexScan::Hint::next(unsigned& value1,unsigned& value2)
    }
 }
 //---------------------------------------------------------------------------
-AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality)
+AggregatedIndexScan::AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),value1(value1),value2(value2),bound1(bound1),bound2(bound2),facts(db.getAggregatedFacts(order)),order(order),
      scan(disableSkipping?0:&hint),hint(*this)
    // Constructor
@@ -188,7 +188,7 @@ void AggregatedIndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
 {
 }
 //---------------------------------------------------------------------------
-AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,unsigned expectedOutputCardinality)
+AggregatedIndexScan* AggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality)
    // Constructor
 {
    // Setup the slot bindings

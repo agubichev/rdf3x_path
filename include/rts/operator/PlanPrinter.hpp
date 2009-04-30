@@ -24,7 +24,7 @@ class PlanPrinter
    virtual ~PlanPrinter();
 
    /// Begin a new operator
-   virtual void beginOperator(const std::string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality) = 0;
+   virtual void beginOperator(const std::string& name,double expectedOutputCardinality,unsigned observedOutputCardinality) = 0;
    /// Add an operator argument annotation
    virtual void addArgumentAnnotation(const std::string& argument) = 0;
    /// Add a scan annotation
@@ -67,7 +67,7 @@ class DebugPlanPrinter : public PlanPrinter
    DebugPlanPrinter(std::ostream& out,Runtime& runtime,bool showObserved);
 
    /// Begin a new operator
-   void beginOperator(const std::string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality);
+   void beginOperator(const std::string& name,double expectedOutputCardinality,unsigned observedOutputCardinality);
    /// Add an operator argument annotation
    void addArgumentAnnotation(const std::string& argument);
    /// Add a scan annotation

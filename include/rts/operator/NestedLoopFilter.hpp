@@ -31,7 +31,7 @@ class NestedLoopFilter : public Operator
 
    public:
    /// Constructor
-   NestedLoopFilter(Operator* input,Register* filter,const std::vector<unsigned>& values,unsigned expectedOutputCardinality);
+   NestedLoopFilter(Operator* input,Register* filter,const std::vector<unsigned>& values,double expectedOutputCardinality);
    /// Destructor
    ~NestedLoopFilter();
 

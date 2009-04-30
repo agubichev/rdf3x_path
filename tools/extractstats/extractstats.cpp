@@ -40,7 +40,7 @@ class PredicateCollector : public PlanPrinter
    /// Currently supported
    vector<bool> supported;
    /// The cardinalities
-   vector<pair<unsigned,unsigned> > cardinalities;
+   vector<pair<double,unsigned> > cardinalities;
    /// The relations
    vector<set<unsigned> > relations;
    /// The predicates
@@ -67,7 +67,7 @@ class PredicateCollector : public PlanPrinter
    PredicateCollector(std::ostream& out,Runtime& runtime);
 
    /// Begin a new operator
-   void beginOperator(const std::string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality);
+   void beginOperator(const std::string& name,double expectedOutputCardinality,unsigned observedOutputCardinality);
    /// Add an operator argument annotation
    void addArgumentAnnotation(const std::string& argument);
    /// Add a scan annotation
@@ -93,7 +93,7 @@ PredicateCollector::PredicateCollector(std::ostream& out,Runtime& runtime)
 {
 }
 //---------------------------------------------------------------------------
-void PredicateCollector::beginOperator(const std::string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality)
+void PredicateCollector::beginOperator(const std::string& name,double expectedOutputCardinality,unsigned observedOutputCardinality)
    // Begin a new operator
 {
    supported.push_back(true);
@@ -102,11 +102,11 @@ void PredicateCollector::beginOperator(const std::string& name,unsigned expected
    previousPredicates.push_back(set<pair<const Register*,unsigned> >());
    equal.push_back(set<pair<const Register*,const Register*> >());
    previousEqual.push_back(set<pair<const Register*,const Register*> >());
-   cardinalities.push_back(pair<unsigned,unsigned>(expectedOutputCardinality,observedOutputCardinality));
+   cardinalities.push_back(pair<double,unsigned>(expectedOutputCardinality,observedOutputCardinality));
    operatorName=name;
 
    if (!expectedInput.empty())
-      expectedInput.back()*=static_cast<double>(expectedOutputCardinality);
+      expectedInput.back()*=expectedOutputCardinality;
    expectedInput.push_back(1);
    if (!observedInput.empty())
       observedInput.back()*=static_cast<double>(observedOutputCardinality);

@@ -11,7 +11,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-MergeUnion::MergeUnion(Register* result,Operator* left,Register* leftReg,Operator* right,Register* rightReg,unsigned expectedOutputCardinality)
+MergeUnion::MergeUnion(Register* result,Operator* left,Register* leftReg,Operator* right,Register* rightReg,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),left(left),right(right),leftReg(leftReg),rightReg(rightReg),result(result)
    // Constructor
 {

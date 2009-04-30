@@ -23,7 +23,7 @@ class NestedLoopJoin : public Operator
 
    public:
    /// Constructor
-   NestedLoopJoin(Operator* left,Operator* right,unsigned expectedOutputCardinality);
+   NestedLoopJoin(Operator* left,Operator* right,double expectedOutputCardinality);
    /// Destructor
    ~NestedLoopJoin();
 

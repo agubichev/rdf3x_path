@@ -53,7 +53,7 @@ class AggregatedIndexScan : public Operator
    std::vector<Register*> merge1,merge2;
 
    /// Constructor
-   AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,unsigned expectedOutputCardinality);
+   AggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,double expectedOutputCardinality);
 
    // Implementations
    class Scan;
@@ -78,7 +78,7 @@ class AggregatedIndexScan : public Operator
    void getAsyncInputCandidates(Scheduler& scheduler);
 
    /// Create a suitable operator
-   static AggregatedIndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality);
+   static AggregatedIndexScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality);
 };
 //---------------------------------------------------------------------------
 #endif

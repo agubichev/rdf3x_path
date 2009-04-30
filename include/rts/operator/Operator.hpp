@@ -20,11 +20,13 @@ class Operator
 {
    protected:
    /// Tuple counter
-   unsigned expectedOutputCardinality,observedOutputCardinality;
+   double expectedOutputCardinality;
+   /// Tuple counter
+   unsigned observedOutputCardinality;
 
    public:
    /// Constructor
-   explicit Operator(unsigned expectedOutputCardinality);
+   explicit Operator(double expectedOutputCardinality);
    /// Destructor
    virtual ~Operator();
 
@@ -34,9 +36,9 @@ class Operator
    virtual unsigned next() = 0;
 
    /// Tuple counter
-   unsigned getExpectedOutputCardinality() const { return expectedOutputCardinality; }
+   double getExpectedOutputCardinality() const { return expectedOutputCardinality; }
    /// Tuple counter
-   unsigned getObservedOutputCardinality() const { return observedOutputCardinality; }
+   double getObservedOutputCardinality() const { return observedOutputCardinality; }
 
    /// Print the operator tree. Debugging only.
    virtual void print(PlanPrinter& out) = 0;

@@ -1102,7 +1102,7 @@ void DifferentialIndex::sync()
       latches[index].unlock();
 }
 //---------------------------------------------------------------------------
-Operator* DifferentialIndex::createScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality)
+Operator* DifferentialIndex::createScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality)
    // Create a suitable scan operator scanning both the DB and the differential index
 {
    // Construct the database scan
@@ -1165,7 +1165,7 @@ Operator* DifferentialIndex::createScan(Database::DataOrder order,Register* subj
    return new DifferentialIndexScan(dbScan,latches[order],timestamp,triples[order],value1,value2,value3,bound2?value2->value:~0u,bound3?value3->value:~0u,lowerBound,upperBound);
 }
 //---------------------------------------------------------------------------
-Operator* DifferentialIndex::createAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality)
+Operator* DifferentialIndex::createAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality)
    // Create a suitable scan operator scanning both the DB and the differential index
 {
    // Construct the database scan
@@ -1226,7 +1226,7 @@ Operator* DifferentialIndex::createAggregatedScan(Database::DataOrder order,Regi
    return new AggregatedDifferentialIndexScan(dbScan,latches[order],timestamp,triples[order],value1,value2,bound2?value2->value:~0u,lowerBound,upperBound);
 }
 //---------------------------------------------------------------------------
-Operator* DifferentialIndex::createFullyAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,unsigned expectedOutputCardinality)
+Operator* DifferentialIndex::createFullyAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality)
    // Create a suitable scan operator scanning both the DB and the differential index
 {
    // Construct the database scan

@@ -118,7 +118,7 @@ void HashJoin::ProbePeek::run()
    done=true;
 }
 //---------------------------------------------------------------------------
-HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail,double hashPriority,double probePriority,unsigned expectedOutputCardinality)
+HashJoin::HashJoin(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail,double hashPriority,double probePriority,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),left(left),right(right),leftValue(leftValue),rightValue(rightValue),
      leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
      buildHashTableTask(*this),probePeekTask(*this),hashPriority(hashPriority),probePriority(probePriority)

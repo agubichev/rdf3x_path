@@ -514,7 +514,7 @@ class Selection : public Operator
 
    public:
    /// Constructor
-   Selection(Operator* input,Runtime& runtime,Predicate* predicate,unsigned expectedOutputCardinality);
+   Selection(Operator* input,Runtime& runtime,Predicate* predicate,double expectedOutputCardinality);
    /// Destructor
    ~Selection();
 

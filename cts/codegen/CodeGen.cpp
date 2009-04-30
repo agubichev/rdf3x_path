@@ -75,12 +75,12 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
 
    // And return the operator
    if (runtime.hasDifferentialIndex())
-      return runtime.getDifferentialIndex().createScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,static_cast<unsigned>(plan->cardinality));
+      return runtime.getDifferentialIndex().createScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,plan->cardinality);
    return IndexScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
                             subject,constSubject,
                             predicate,constPredicate,
                             object,constObject,
-			    static_cast<unsigned>(plan->cardinality));
+			    plan->cardinality);
 }
 //---------------------------------------------------------------------------
 static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
@@ -98,12 +98,12 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigne
 
    // And return the operator
    if (runtime.hasDifferentialIndex())
-      return runtime.getDifferentialIndex().createAggregatedScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,static_cast<unsigned>(plan->cardinality));
+      return runtime.getDifferentialIndex().createAggregatedScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,plan->cardinality);
    return AggregatedIndexScan::create(runtime.getDatabase(),order,
                                       subject,constSubject,
                                       predicate,constPredicate,
                                       object,constObject,
-				      static_cast<unsigned>(plan->cardinality));
+				      plan->cardinality);
 }
 //---------------------------------------------------------------------------
 static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
@@ -121,12 +121,12 @@ static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<un
 
    // And return the operator
    if (runtime.hasDifferentialIndex())
-      return runtime.getDifferentialIndex().createFullyAggregatedScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,static_cast<unsigned>(plan->cardinality));
+      return runtime.getDifferentialIndex().createFullyAggregatedScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,plan->cardinality);
    return FullyAggregatedIndexScan::create(runtime.getDatabase(),order,
                                            subject,constSubject,
                                            predicate,constPredicate,
                                            object,constObject,
-					   static_cast<unsigned>(plan->cardinality));
+					   plan->cardinality);
 }
 //---------------------------------------------------------------------------
 static void collectVariables(const map<unsigned,Register*>& context,set<unsigned>& variables,Plan* plan)
@@ -234,7 +234,7 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Reg
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    // Build the operator
-   Operator* result=new NestedLoopJoin(leftTree,rightTree,static_cast<unsigned>(plan->cardinality));
+   Operator* result=new NestedLoopJoin(leftTree,rightTree,plan->cardinality);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,~0u);
@@ -269,7 +269,7 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
          rightTail.push_back((*iter).second);
 
    // Build the operator
-   Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,static_cast<unsigned>(plan->cardinality));
+   Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,plan->cardinality);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
@@ -303,7 +303,7 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
          rightTail.push_back((*iter).second);
 
    // Build the operator
-   Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs,static_cast<unsigned>(plan->cardinality));
+   Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
@@ -323,7 +323,7 @@ static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Regis
       output.push_back((*iter).second);
 
    // Build the operator
-   return new HashGroupify(tree,output,static_cast<unsigned>(plan->cardinality));
+   return new HashGroupify(tree,output,plan->cardinality);
 }
 //---------------------------------------------------------------------------
 static void collectVariables(set<unsigned>& filterVariables,const QueryGraph::Filter& filter)
@@ -430,14 +430,14 @@ static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>&
       if (((filter.arg2->type==QueryGraph::Filter::Literal)||(filter.arg2->type==QueryGraph::Filter::IRI))&&(bindings.count(filter.arg1->id))) {
          vector<unsigned> values;
          values.push_back(filter.arg2->id);
-         result=new Filter(tree,bindings[filter.arg1->id],values,filter.type==QueryGraph::Filter::NotEqual,static_cast<unsigned>(plan->cardinality));
+         result=new Filter(tree,bindings[filter.arg1->id],values,filter.type==QueryGraph::Filter::NotEqual,plan->cardinality);
       }
    }
    if ((!result)&&((filter.type==QueryGraph::Filter::Equal)||(filter.type==QueryGraph::Filter::NotEqual))&&(filter.arg2->type==QueryGraph::Filter::Variable)) {
       if (((filter.arg1->type==QueryGraph::Filter::Literal)||(filter.arg1->type==QueryGraph::Filter::IRI))&&(bindings.count(filter.arg2->id))) {
          vector<unsigned> values;
          values.push_back(filter.arg1->id);
-         result=new Filter(tree,bindings[filter.arg2->id],values,filter.type==QueryGraph::Filter::NotEqual,static_cast<unsigned>(plan->cardinality));
+         result=new Filter(tree,bindings[filter.arg2->id],values,filter.type==QueryGraph::Filter::NotEqual,plan->cardinality);
       }
    }
    if ((!result)&&(filter.type==QueryGraph::Filter::Builtin_in)&&(filter.arg1->type==QueryGraph::Filter::Variable)&&(bindings.count(filter.arg1->id))) {
@@ -455,11 +455,11 @@ static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>&
          }
       }
       if (valid) {
-         result=new Filter(tree,bindings[filter.arg1->id],values,false,static_cast<unsigned>(plan->cardinality));
+         result=new Filter(tree,bindings[filter.arg1->id],values,false,plan->cardinality);
       }
    }
    if (!result) {
-      result=new Selection(tree,runtime,buildSelection(bindings,filter),static_cast<unsigned>(plan->cardinality));
+      result=new Selection(tree,runtime,buildSelection(bindings,filter),plan->cardinality);
    }
 
    // Cleanup the binding
@@ -513,7 +513,7 @@ static Operator* translateUnion(Runtime& runtime,const map<unsigned,Register*>& 
    }
 
    // Build the operator
-   Operator* result=new Union(trees,mappings,initializations,static_cast<unsigned>(plan->cardinality));
+   Operator* result=new Union(trees,mappings,initializations,plan->cardinality);
 
    return result;
 }
@@ -534,7 +534,7 @@ static Operator* translateMergeUnion(Runtime& runtime,const map<unsigned,Registe
    bindings[resultVar]=leftReg;
 
    // Build the operator
-   Operator* result=new MergeUnion(leftReg,left,leftReg,right,rightReg,static_cast<unsigned>(plan->cardinality));
+   Operator* result=new MergeUnion(leftReg,left,leftReg,right,rightReg,plan->cardinality);
 
    return result;
 }

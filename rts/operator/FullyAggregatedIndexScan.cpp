@@ -16,7 +16,7 @@
 class FullyAggregatedIndexScan::Scan : public FullyAggregatedIndexScan {
    public:
    /// Constructor
-   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality) : FullyAggregatedIndexScan(db,order,value1,bound1,expectedOutputCardinality) {}
+   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,double expectedOutputCardinality) : FullyAggregatedIndexScan(db,order,value1,bound1,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -32,7 +32,7 @@ class FullyAggregatedIndexScan::ScanPrefix1 : public FullyAggregatedIndexScan {
 
    public:
    /// Constructor
-   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality) : FullyAggregatedIndexScan(db,order,value1,bound1,expectedOutputCardinality) {}
+   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,double expectedOutputCardinality) : FullyAggregatedIndexScan(db,order,value1,bound1,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -75,7 +75,7 @@ void FullyAggregatedIndexScan::Hint::next(unsigned& value1)
    }
 }
 //---------------------------------------------------------------------------
-FullyAggregatedIndexScan::FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,unsigned expectedOutputCardinality)
+FullyAggregatedIndexScan::FullyAggregatedIndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),value1(value1),bound1(bound1),facts(db.getFullyAggregatedFacts(order)),order(order),
      scan(disableSkipping?0:&hint),hint(*this)
    // Constructor
@@ -131,7 +131,7 @@ void FullyAggregatedIndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
 {
 }
 //---------------------------------------------------------------------------
-FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,unsigned expectedOutputCardinality)
+FullyAggregatedIndexScan* FullyAggregatedIndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality)
    // Constructor
 {
    // Setup the slot bindings

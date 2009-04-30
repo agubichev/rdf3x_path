@@ -778,7 +778,7 @@ string Selection::BuiltinIn::print(PlanPrinter& out)
    return result;
 }
 //---------------------------------------------------------------------------
-Selection::Selection(Operator* input,Runtime& runtime,Predicate* predicate,unsigned expectedOutputCardinality)
+Selection::Selection(Operator* input,Runtime& runtime,Predicate* predicate,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),input(input),runtime(runtime),predicate(predicate)
    // Constructor
 {

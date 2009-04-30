@@ -52,7 +52,7 @@ class HashGroupify::Chainer {
    }
 };
 //---------------------------------------------------------------------------
-HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values,unsigned expectedOutputCardinality)
+HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),values(values),input(input),groups(0),groupsPool(values.size()*sizeof(unsigned))
    // Constructor
 {

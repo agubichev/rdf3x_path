@@ -11,7 +11,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude,unsigned expectedOutputCardinality)
+Filter::Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),input(input),filter(filter),exclude(exclude)
    // Constructor
 {

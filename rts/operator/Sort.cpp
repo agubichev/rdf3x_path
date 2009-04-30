@@ -93,7 +93,7 @@ bool Sort::Sorter::operator()(const Tuple* a,const Tuple* b)
    return false;
 }
 //---------------------------------------------------------------------------
-Sort::Sort(Database& db,Operator* input,const vector<Register*>& values,const vector<pair<Register*,bool> >& registerOrder,unsigned expectedOutputCardinality)
+Sort::Sort(Database& db,Operator* input,const vector<Register*>& values,const vector<pair<Register*,bool> >& registerOrder,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),values(values),input(input),tuplesPool(values.size()*sizeof(unsigned)),dict(db.getDictionary())
    // Constructor
 {

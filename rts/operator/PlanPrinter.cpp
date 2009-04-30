@@ -41,7 +41,7 @@ void DebugPlanPrinter::indent()
       out << " ";
 }
 //---------------------------------------------------------------------------
-void DebugPlanPrinter::beginOperator(const string& name,unsigned expectedOutputCardinality,unsigned observedOutputCardinality)
+void DebugPlanPrinter::beginOperator(const string& name,double expectedOutputCardinality,unsigned observedOutputCardinality)
    // Begin a new operator
 {
    indent();

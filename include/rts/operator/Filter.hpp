@@ -32,7 +32,7 @@ class Filter : public Operator
 
    public:
    /// Constructor
-   Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude,unsigned expectedOutputCardinality);
+   Filter(Operator* input,Register* filter,const std::vector<unsigned>& values,bool exclude,double expectedOutputCardinality);
    /// Destructor
    ~Filter();
 

@@ -45,7 +45,7 @@ class HashGroupify : public Operator
 
    public:
    /// Constructor
-   HashGroupify(Operator* input,const std::vector<Register*>& values,unsigned expectedOutputCardinality);
+   HashGroupify(Operator* input,const std::vector<Register*>& values,double expectedOutputCardinality);
    /// Destructor
    ~HashGroupify();
 

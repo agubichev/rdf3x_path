@@ -15,7 +15,7 @@
 class IndexScan::Scan : public IndexScan {
    public:
    /// Constructor
-   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   Scan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -31,7 +31,7 @@ class IndexScan::ScanFilter2 : public IndexScan {
 
    public:
    /// Constructor
-   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanFilter2(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -47,7 +47,7 @@ class IndexScan::ScanFilter3 : public IndexScan {
 
    public:
    /// Constructor
-   ScanFilter3(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanFilter3(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -63,7 +63,7 @@ class IndexScan::ScanFilter23 : public IndexScan {
 
    public:
    /// Constructor
-   ScanFilter23(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanFilter23(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -79,7 +79,7 @@ class IndexScan::ScanPrefix1 : public IndexScan {
 
    public:
    /// Constructor
-   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanPrefix1(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -97,7 +97,7 @@ class IndexScan::ScanPrefix1Filter3 : public IndexScan {
 
    public:
    /// Constructor
-   ScanPrefix1Filter3(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanPrefix1Filter3(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -113,7 +113,7 @@ class IndexScan::ScanPrefix12 : public IndexScan {
 
    public:
    /// Constructor
-   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanPrefix12(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -129,7 +129,7 @@ class IndexScan::ScanPrefix123 : public IndexScan {
 
    public:
    /// Constructor
-   ScanPrefix123(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
+   ScanPrefix123(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality) : IndexScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality) {}
 
    /// First tuple
    unsigned first();
@@ -221,7 +221,7 @@ void IndexScan::Hint::next(unsigned& value1,unsigned& value2,unsigned& value3)
    }
 }
 //---------------------------------------------------------------------------
-IndexScan::IndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,unsigned expectedOutputCardinality)
+IndexScan::IndexScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),facts(db.getFacts(order)),order(order),
      scan(disableSkipping?0:&hint),hint(*this)
    // Constructor
@@ -281,7 +281,7 @@ void IndexScan::getAsyncInputCandidates(Scheduler& /*scheduler*/)
 {
 }
 //---------------------------------------------------------------------------
-IndexScan* IndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,unsigned expectedOutputCardinality)
+IndexScan* IndexScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality)
    // Constructor
 {
    // Setup the slot bindings

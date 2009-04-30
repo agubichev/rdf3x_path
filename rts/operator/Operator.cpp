@@ -11,7 +11,7 @@
 //---------------------------------------------------------------------------
 bool Operator::disableSkipping = false;
 //---------------------------------------------------------------------------
-Operator::Operator(unsigned expectedOutputCardinality)
+Operator::Operator(double expectedOutputCardinality)
    : expectedOutputCardinality(expectedOutputCardinality),observedOutputCardinality(0)
    // Constructor
 {

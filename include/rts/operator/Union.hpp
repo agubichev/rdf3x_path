@@ -32,7 +32,7 @@ class Union : public Operator
 
    public:
    /// Constructor
-   Union(const std::vector<Operator*>& parts,const std::vector<std::vector<Register*> >& mappings,const std::vector<std::vector<Register*> >& initializations,unsigned expectedOutputCardinality);
+   Union(const std::vector<Operator*>& parts,const std::vector<std::vector<Register*> >& mappings,const std::vector<std::vector<Register*> >& initializations,double expectedOutputCardinality);
    /// Destructor
    ~Union();
 

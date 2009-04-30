@@ -53,7 +53,7 @@ class Sort : public Operator
 
    public:
    /// Constructor
-   Sort(Database& db,Operator* input,const std::vector<Register*>& values,const std::vector<std::pair<Register*,bool> >& order,unsigned expectedOutputCardinality);
+   Sort(Database& db,Operator* input,const std::vector<Register*>& values,const std::vector<std::pair<Register*,bool> >& order,double expectedOutputCardinality);
    /// Destructor
    ~Sort();
 

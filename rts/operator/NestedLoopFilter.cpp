@@ -12,7 +12,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-NestedLoopFilter::NestedLoopFilter(Operator* input,Register* filter,const std::vector<unsigned>& values,unsigned expectedOutputCardinality)
+NestedLoopFilter::NestedLoopFilter(Operator* input,Register* filter,const std::vector<unsigned>& values,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),input(input),filter(filter),values(values)
    // Constructor
 {
