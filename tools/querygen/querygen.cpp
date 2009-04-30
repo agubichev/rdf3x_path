@@ -51,6 +51,18 @@ static bool readInput(istream& in,vector<string>& projection,vector<string>& ter
    return true;
 }
 //---------------------------------------------------------------------------
+static string escape(const char* iter,const char* limit)
+   // Escape a string
+{
+   string s;
+   for (;iter!=limit;++iter) {
+      char c=(*iter);
+      if ((c=='\\')||(c=='\"')||(c=='\n')) s+='\\';
+      s+=c;
+   }
+   return s;
+}
+//---------------------------------------------------------------------------
 static void expandConstants(Database& db,const vector<string>& terms,vector<vector<string> >& constants)
    // Expand the constants
 {
@@ -131,14 +143,14 @@ static void expandConstants(Database& db,const vector<string>& terms,vector<vect
                break;
             switch (type) {
                case Type::URI: values.push_back("<"+string(start,stop)+">"); break;
-               case Type::Literal: values.push_back("\""+string(start,stop)+"\""); break;
-               case Type::CustomLanguage: values.push_back("\""+string(start,stop)+"\""); break; // XXX add language
-               case Type::CustomType: values.push_back("\""+string(start,stop)+"\""); break; // XXX add type
-               case Type::String: values.push_back("\""+string(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#string>"); break;
-               case Type::Integer: values.push_back("\""+string(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#integer>"); break;
-               case Type::Decimal: values.push_back("\""+string(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#decimal>"); break;
-               case Type::Double: values.push_back("\""+string(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#double>"); break;
-               case Type::Boolean: values.push_back("\""+string(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#boolean>"); break;
+               case Type::Literal: values.push_back("\""+escape(start,stop)+"\""); break;
+               case Type::CustomLanguage: values.push_back("\""+escape(start,stop)+"\""); break; // XXX add language
+               case Type::CustomType: values.push_back("\""+escape(start,stop)+"\""); break; // XXX add type
+               case Type::String: values.push_back("\""+escape(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#string>"); break;
+               case Type::Integer: values.push_back("\""+escape(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#integer>"); break;
+               case Type::Decimal: values.push_back("\""+escape(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#decimal>"); break;
+               case Type::Double: values.push_back("\""+escape(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#double>"); break;
+               case Type::Boolean: values.push_back("\""+escape(start,stop)+"\"^^<http://www.w3.org/2001/XMLSchema#boolean>"); break;
             }
          }
       }

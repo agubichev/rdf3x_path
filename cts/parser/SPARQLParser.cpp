@@ -202,6 +202,17 @@ void SPARQLParser::parseRDFLiteral(std::string& value,Element::SubType& subType,
       throw ParserException("literal expected");
    subType=Element::None;
    value=lexer.getTokenValue();
+   if (value.find('\\')!=string::npos) {
+      string v; v.swap(value);
+      for (string::const_iterator iter=v.begin(),limit=v.end();iter!=limit;++iter) {
+         char c=(*iter);
+         if (c=='\\') {
+            if ((++iter)==limit) break;
+            c=*iter;
+         }
+         value+=c;
+      }
+   }
 
    SPARQLLexer::Token token=lexer.getNext();
    if (token==SPARQLLexer::At) {
