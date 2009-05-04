@@ -277,7 +277,7 @@ bool GrowableMappedFile::read(ofs_t ofs,void* data,unsigned len)
       return false;
    return result==len;
 #else
-   return pread(this->data->file,data,len,ofs)==len;
+   return static_cast<unsigned>(pread(this->data->file,data,len,ofs))==len;
 #endif
 }
 //----------------------------------------------------------------------------
@@ -295,7 +295,7 @@ bool GrowableMappedFile::write(ofs_t ofs,const void* data,unsigned len)
       return false;
    return result==len;
 #else
-   return pwrite(this->data->file,data,len,ofs)==len;
+   return static_cast<unsigned>(pwrite(this->data->file,data,len,ofs))==len;
 #endif
 }
 //----------------------------------------------------------------------------
