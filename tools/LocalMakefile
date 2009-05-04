@@ -13,6 +13,7 @@ include tools/querygen/LocalMakefile
 include tools/rdf3xdump/LocalMakefile
 include tools/rdf3xembedded/LocalMakefile
 include tools/rdf3xload/LocalMakefile
+include tools/rdf3xreorg/LocalMakefile
 include tools/rdf3xupdate/LocalMakefile
 include tools/rdf3xquery/LocalMakefile
 include tools/resolvestrings/LocalMakefile
@@ -35,6 +36,7 @@ src_tools:=				\
 	$(src_tools_rdf3xdump)		\
 	$(src_tools_rdf3xembedded)	\
 	$(src_tools_rdf3xload)		\
+	$(src_tools_rdf3xreorg)		\
 	$(src_tools_rdf3xupdate)	\
 	$(src_tools_rdf3xquery)		\
 	$(src_tools_resolvestrings)	\

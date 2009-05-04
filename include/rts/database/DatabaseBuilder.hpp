@@ -137,6 +137,9 @@ class DatabaseBuilder
    /// Destructor
    ~DatabaseBuilder();
 
+   /// Close
+   void close() { out.close(); }
+
    /// Loads the facts in a given order
    void loadFacts(unsigned order,FactsReader& reader);
    /// Load the raw strings (must be in id order, ids 0,1,2,...)
