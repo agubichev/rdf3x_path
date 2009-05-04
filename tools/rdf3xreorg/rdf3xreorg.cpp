@@ -7,6 +7,7 @@
 #include "../rdf3xload/Sorter.hpp"
 #include "../rdf3xload/TempFile.hpp"
 #include <iostream>
+#include <map>
 #include <set>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -68,13 +69,14 @@ static void reorderIds(Database& db,TempFile& idMap,TempFile& dictionary)
    cerr << "Reordering the id space..." << endl;
 
    // Collect all subtypes
-   set<unsigned> subTypes,observedSubTypes;
+   map<unsigned,unsigned> subTypes;
+   set<unsigned> observedSubTypes;
    {
       DictionarySegment& dict=db.getDictionary();
       for (unsigned index=0,limit=dict.getNextId();index<limit;++index) {
          const char* start,*stop; Type::ID type; unsigned subType;
          if (dict.lookupById(index,start,stop,type,subType)&&Type::hasSubType(type))
-            subTypes.insert(subType);
+            subTypes[subType];
       }
    }
 
@@ -119,9 +121,9 @@ static void reorderIds(Database& db,TempFile& idMap,TempFile& dictionary)
    }
 
    // Write additional entries for subtypes (if necessary)
-   for (set<unsigned>::const_iterator iter=subTypes.begin(),limit=subTypes.end();iter!=limit;++iter)
-      if (!observedSubTypes.count(*iter)) {
-         counts.writeId(*iter);
+   for (map<unsigned,unsigned>::const_iterator iter=subTypes.begin(),limit=subTypes.end();iter!=limit;++iter)
+      if (!observedSubTypes.count((*iter).first)) {
+         counts.writeId((*iter).first);
          counts.writeId(0);
          counts.writeId(0);
          counts.writeId((~0u)-1);
@@ -140,30 +142,35 @@ static void reorderIds(Database& db,TempFile& idMap,TempFile& dictionary)
          throw;
       DictionarySegment& dict=db.getDictionary();
       unsigned newId=0;
-      for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;++iter,++newId) {
+      for (const char* iter=in.getBegin(),*limit=in.getEnd();iter!=limit;++newId) {
          uint64_t id,s,p,o;
          iter=TempFile::readId(TempFile::readId(TempFile::readId(TempFile::readId(iter,id),s),p),o);
          // Write the new id
          newIds.writeId(id);
          newIds.writeId(newId);
+         if (subTypes.count(id))
+            subTypes[id]=newId;
 
          // And produce the new dictionary entry
          const char* start,*stop; Type::ID type; unsigned subType;
          if (dict.lookupById(id,start,stop,type,subType)) {
-            dictionary.writeId(type);
-            dictionary.writeId(subType);
             dictionary.writeString(stop-start,start);
+            if (Type::hasSubType(type))
+               dictionary.writeId(static_cast<uint64_t>(type)|(static_cast<uint64_t>(subTypes[subType])<<8)); else
+               dictionary.writeId(type);
+
          } else {
             // Cannot happen!
-            dictionary.writeId(0);
-            dictionary.writeId(0);
             dictionary.writeString(0,0);
+            dictionary.writeId(0);
          }
       }
    }
 
    // Sort the id map
    Sorter::sort(newIds,idMap,skipIdMap,cmpIdMap);
+
+   dictionary.close();
 }
 //---------------------------------------------------------------------------
 static const char* skipIdIdId(const char* reader)
@@ -416,6 +423,147 @@ static void loadFacts(DatabaseBuilder& builder,TempFile& facts)
    }
 }
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Load the strings from the table
+class StringReader : public DatabaseBuilder::StringsReader {
+   private:
+   /// The input file
+   MemoryMappedFile in;
+   /// The output file
+   TempFile out;
+   /// Pointers to the data
+   const char* iter,*limit;
+
+   public:
+   /// Constructor
+   StringReader(TempFile& file) : out(file.getBaseFile()) { file.close(); if (!in.open(file.getFile().c_str())) throw; iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Close the input
+   void closeIn() { in.close(); }
+   /// Get the output
+   TempFile& getOut() { out.close(); return out; }
+
+   /// Read the next entry
+   bool next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType);
+   /// Remember string info
+   void rememberInfo(unsigned page,unsigned ofs,unsigned hash);
+};
+//---------------------------------------------------------------------------
+bool StringReader::next(unsigned& len,const char*& data,Type::ID& type,unsigned& subType)
+   // Read the next entry
+{
+   if (iter==limit)
+      return false;
+   iter=TempFile::readString(iter,len,data);
+   uint64_t typeInfo;
+   iter=TempFile::readId(iter,typeInfo);
+   type=static_cast<Type::ID>(typeInfo&0xFF);
+   subType=static_cast<unsigned>(typeInfo>>8);
+   return true;
+}
+//---------------------------------------------------------------------------
+void StringReader::rememberInfo(unsigned page,unsigned ofs,unsigned hash)
+   // Remember string info
+{
+   out.writeId(hash);
+   out.writeId(page);
+   out.writeId(ofs);
+}
+//---------------------------------------------------------------------------
+/// Read the string mapping
+class StringMappingReader : public DatabaseBuilder::StringInfoReader
+{
+   private:
+   /// The input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
+
+   public:
+   /// Constructor
+   StringMappingReader(TempFile& file) { file.close(); if (!in.open(file.getFile().c_str())) throw; iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Read the next entry
+   bool next(unsigned& v1,unsigned& v2);
+};
+//---------------------------------------------------------------------------
+bool StringMappingReader::next(unsigned& v1,unsigned& v2)
+   // Read the next entry
+{
+   if (iter==limit)
+      return false;
+   uint64_t i1,i2,i3;
+   iter=TempFile::readId(TempFile::readId(TempFile::readId(iter,i1),i2),i3);
+   v1=i2; v2=i3;
+   return true;
+}
+//---------------------------------------------------------------------------
+/// Read the string hashes
+class StringHashesReader : public DatabaseBuilder::StringInfoReader
+{
+   private:
+   /// The input
+   MemoryMappedFile in;
+   /// Points into the data
+   const char* iter,*limit;
+
+   public:
+   /// Constructor
+   StringHashesReader(TempFile& file) { file.close(); if (!in.open(file.getFile().c_str())) throw; iter=in.getBegin(); limit=in.getEnd(); }
+
+   /// Read the next entry
+   bool next(unsigned& v1,unsigned& v2);
+};
+//---------------------------------------------------------------------------
+bool StringHashesReader::next(unsigned& v1,unsigned& v2)
+   // Read the next entry
+{
+   if (iter==limit)
+      return false;
+   uint64_t i1,i2,i3;
+   iter=TempFile::readId(TempFile::readId(TempFile::readId(iter,i1),i2),i3);
+   v1=i1; v2=i2;
+   return true;
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+static void loadStrings(DatabaseBuilder& builder,TempFile& stringTable)
+   // Load the strings
+{
+   cout << "Loading strings..." << endl;
+
+   // Load the raw strings
+   StringReader reader(stringTable);
+   builder.loadStrings(reader);
+   reader.closeIn();
+
+   // Load the strings mappings
+   {
+      StringMappingReader infoReader(reader.getOut());
+      builder.loadStringMappings(infoReader);
+   }
+
+   // Load the hash->page mappings
+   {
+      TempFile sortedByHash(stringTable.getBaseFile());
+      Sorter::sort(reader.getOut(),sortedByHash,skipIdIdId,compareValue);
+      StringHashesReader infoReader(sortedByHash);
+      builder.loadStringHashes(infoReader);
+   }
+}
+//---------------------------------------------------------------------------
+static void loadStatistics(DatabaseBuilder& builder,TempFile& facts)
+   // Compute the statistics
+{
+   cout << "Computing statistics..." << endl;
+
+   TempFile tmp(facts.getBaseFile());
+   tmp.close();
+   builder.computeExactStatistics(tmp.getFile().c_str());
+}
+//---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    // Warn first
@@ -457,12 +605,15 @@ int main(int argc,char* argv[])
    loadFacts(builder,facts);
    facts.discard();
 
-//XXX load strings
+   // Load the strings
+   loadStrings(builder,dictionary);
+   dictionary.discard();
 
-//XXX build statistics
+   // Load the statistics
+   loadStatistics(builder,facts);
 
    // Move back
    builder.close();
-   // XXX rename
+   rename(newDB.getFile().c_str(),argv[1]);
 }
 //---------------------------------------------------------------------------
