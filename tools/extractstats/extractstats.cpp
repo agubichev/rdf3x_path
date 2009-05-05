@@ -37,6 +37,8 @@ class PredicateCollector : public PlanPrinter
    std::ostream& out;
    /// The runtime
    Runtime& runtime;
+   /// Show join selecitivities only
+   bool showJoins;
    /// Currently supported
    vector<bool> supported;
    /// The cardinalities
@@ -64,7 +66,7 @@ class PredicateCollector : public PlanPrinter
 
    public:
    /// Constructor
-   PredicateCollector(std::ostream& out,Runtime& runtime);
+   PredicateCollector(std::ostream& out,Runtime& runtime,bool showJoins);
 
    /// Begin a new operator
    void beginOperator(const std::string& name,double expectedOutputCardinality,unsigned observedOutputCardinality);
@@ -87,8 +89,8 @@ class PredicateCollector : public PlanPrinter
    std::string formatValue(unsigned value);
 };
 //---------------------------------------------------------------------------
-PredicateCollector::PredicateCollector(std::ostream& out,Runtime& runtime)
-   : out(out),runtime(runtime),scanCount(0)
+PredicateCollector::PredicateCollector(std::ostream& out,Runtime& runtime,bool showJoins)
+   : out(out),runtime(runtime),showJoins(showJoins),scanCount(0)
    // Constructor
 {
 }
@@ -209,45 +211,92 @@ void PredicateCollector::endOperator()
    // Close the current operator
 {
    if (supported.back()) {
-      map<unsigned,string> relationNames;
-      out << "{";
-      for (set<unsigned>::const_iterator start=relations.back().begin(),limit=relations.back().end(),iter=start;iter!=limit;++iter) {
-         if (iter!=start) out << " ";
-         stringstream s;
-         s << "R" << (relationNames.size()+1);
-         relationNames[*iter]=s.str();
-         out << s.str();
-         if (relations.size()>1) relations[relations.size()-2].insert(*iter);
+      // Show the predicates
+      if (showJoins) {
+         // Only show simple joins
+         if ((equal.back().size()==1)&&(predicates.back().empty())) {
+            map<const Register*,unsigned> localBindings;
+            { unsigned index=0;
+            for (set<unsigned>::const_iterator iter=relations.back().begin(),limit=relations.back().end();iter!=limit;++iter,++index) {
+               for (map<const Register*,unsigned>::const_iterator iter2=bindings.begin(),limit2=bindings.end();iter2!=limit2;++iter2)
+                  if ((*iter)==((*iter2).second/3))
+                     localBindings[(*iter2).first]=(index*3)+((*iter2).second%3);
+            } }
+            out << relations.back().size()
+                << " " << (static_cast<double>(cardinalities.back().first)/expectedInput.back()) << " " << (static_cast<double>(cardinalities.back().second)/observedInput.back());
+            unsigned l=localBindings[(*equal.back().begin()).first],r=localBindings[(*equal.back().begin()).second];
+            if (l>r) swap(l,r);
+            out << " " << l << " " << r;
+
+            vector<int> attributes;
+            attributes.resize(relations.back().size()*3);
+            for (vector<int>::iterator iter=attributes.begin(),limit=attributes.end();iter!=limit;++iter)
+               (*iter)=-1;
+            for (set<pair<const Register*,unsigned> >::const_iterator start=previousPredicates.back().begin(),limit=previousPredicates.back().end(),iter=start;iter!=limit;++iter)
+               attributes[localBindings[(*iter).first]]=(*iter).second;
+            int nextClass=-2;
+            for (set<pair<const Register*,const Register*> >::const_iterator iter=previousEqual.back().begin(),limit=previousEqual.back().end();iter!=limit;++iter) {
+               l=localBindings[(*iter).first]; r=localBindings[(*iter).second];
+               if ((attributes[l]==-1)&&(attributes[r]==-1)) {
+                  attributes[l]=attributes[r]=nextClass--;
+               } else if (attributes[l]==-1) {
+                  attributes[l]=attributes[r];
+               } else if (attributes[r]==-1) {
+                  attributes[r]=attributes[l];
+               } else {
+                  int rc=attributes[r];
+                  for (vector<int>::iterator iter=attributes.begin(),limit=attributes.end();iter!=limit;++iter)
+                     if ((*iter)==rc)
+                        (*iter)=attributes[l];
+               }
+            }
+            for (vector<int>::iterator iter=attributes.begin(),limit=attributes.end();iter!=limit;++iter)
+               out << " " << (*iter);
+            out << endl;
+         }
+      } else {
+         map<unsigned,string> relationNames;
+         out << "{";
+         for (set<unsigned>::const_iterator start=relations.back().begin(),limit=relations.back().end(),iter=start;iter!=limit;++iter) {
+            if (iter!=start) out << " ";
+            stringstream s;
+            s << "R" << (relationNames.size()+1);
+            relationNames[*iter]=s.str();
+            out << s.str();
+         }
+         out << "} {";
+         bool first=true;
+         for (set<pair<const Register*,const Register*> >::const_iterator iter=equal.back().begin(),limit=equal.back().end();iter!=limit;++iter) {
+            if (first) first=false; else out << " ";
+            unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
+            out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
+         }
+         for (set<pair<const Register*,unsigned> >::const_iterator start=predicates.back().begin(),limit=predicates.back().end(),iter=start;iter!=limit;++iter) {
+            if (first) first=false; else out << " ";
+            unsigned l=bindings[(*iter).first],r=(*iter).second;
+            out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
+         }
+         out << "} {";
+         first=true;
+         for (set<pair<const Register*,const Register*> >::const_iterator iter=previousEqual.back().begin(),limit=previousEqual.back().end();iter!=limit;++iter) {
+            if (first) first=false; else out << " ";
+            unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
+            out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
+
+         }
+         for (set<pair<const Register*,unsigned> >::const_iterator start=previousPredicates.back().begin(),limit=previousPredicates.back().end(),iter=start;iter!=limit;++iter) {
+            if (first) first=false; else out << " ";
+            unsigned l=bindings[(*iter).first],r=(*iter).second;
+            out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
+         }
+         out << "} " << cardinalities.back().first << " " << cardinalities.back().second << " " << (static_cast<double>(cardinalities.back().first)/expectedInput.back()) << " " << (static_cast<double>(cardinalities.back().second)/observedInput.back()) << endl;
       }
-      out << "} {";
-      bool first=true;
-      for (set<pair<const Register*,const Register*> >::const_iterator iter=equal.back().begin(),limit=equal.back().end();iter!=limit;++iter) {
-         if (first) first=false; else out << " ";
-         unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
-         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
-         if (previousEqual.size()>1) previousEqual[previousEqual.size()-2].insert(*iter);
-      }
-      for (set<pair<const Register*,unsigned> >::const_iterator start=predicates.back().begin(),limit=predicates.back().end(),iter=start;iter!=limit;++iter) {
-         if (first) first=false; else out << " ";
-         unsigned l=bindings[(*iter).first],r=(*iter).second;
-         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
-         if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(*iter);
-      }
-      out << "} {";
-      first=true;
-      for (set<pair<const Register*,const Register*> >::const_iterator iter=previousEqual.back().begin(),limit=previousEqual.back().end();iter!=limit;++iter) {
-         if (first) first=false; else out << " ";
-         unsigned l=bindings[(*iter).first],r=bindings[(*iter).second];
-         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << relationNames[r/3] << "." << ("SPO"[r%3]);
-         if (previousEqual.size()>1) previousEqual[previousEqual.size()-2].insert(*iter);
-      }
-      for (set<pair<const Register*,unsigned> >::const_iterator start=previousPredicates.back().begin(),limit=previousPredicates.back().end(),iter=start;iter!=limit;++iter) {
-         if (first) first=false; else out << " ";
-         unsigned l=bindings[(*iter).first],r=(*iter).second;
-         out << relationNames[l/3] << "." << ("SPO"[l%3]) << "=" << r;
-         if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(*iter);
-      }
-      out << "} " << cardinalities.back().first << " " << cardinalities.back().second << " " << (static_cast<double>(cardinalities.back().first)/expectedInput.back()) << " " << (static_cast<double>(cardinalities.back().second)/observedInput.back()) << endl;
+
+      if (relations.size()>1) relations[relations.size()-2].insert(relations.back().begin(),relations.back().end());
+      if (previousEqual.size()>1) previousEqual[previousEqual.size()-2].insert(equal.back().begin(),equal.back().end());
+      if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(predicates.back().begin(),predicates.back().end());
+      if (previousEqual.size()>1) previousEqual[previousEqual.size()-2].insert(previousEqual.back().begin(),previousEqual.back().end());
+      if (previousPredicates.size()>1) previousPredicates[previousPredicates.size()-2].insert(previousPredicates.back().begin(),previousPredicates.back().end());
       supported.pop_back();
    } else {
       supported.pop_back();
@@ -293,7 +342,7 @@ static string readInput(istream& in)
    return result;
 }
 //---------------------------------------------------------------------------
-static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& statsOut)
+static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& statsOut,bool showJoins)
    // Evaluate a query
 {
    QueryGraph queryGraph;
@@ -350,8 +399,10 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
 
    // Write the selectivities
    {
-      statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality expectedSelectivity observedSelectivity" << endl;
-      PredicateCollector out(statsOut,runtime);
+      if (showJoins)
+         statsOut << "# relations expectedSelectivity observedSelectivity joinVar1 joinVar2 bindings" << endl; else
+         statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality expectedSelectivity observedSelectivity" << endl;
+      PredicateCollector out(statsOut,runtime,showJoins);
       operatorTree->print(out);
    }
 
@@ -359,7 +410,7 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
    return true;
 }
 //---------------------------------------------------------------------------
-static void evalQueries(Database& db,const string& query,ostream& planOut,ostream& statsOut)
+static void evalQueries(Database& db,const string& query,ostream& planOut,ostream& statsOut,bool showJoins)
    // Evaluate a query file
 {
    unsigned count = 0;
@@ -367,7 +418,7 @@ static void evalQueries(Database& db,const string& query,ostream& planOut,ostrea
    while (true) {
       if (lexer.hasNext(SPARQLLexer::Eof))
          break;
-      if (!evalQuery(db,lexer,planOut,statsOut))
+      if (!evalQuery(db,lexer,planOut,statsOut,showJoins))
          break;
       ++count;
    }
@@ -391,7 +442,7 @@ int main(int argc,char* argv[])
       return 1;
    }
 
-   if (argc==3) {
+   if ((argc==3)||((argc==4)&&(string(argv[3])=="--joins"))) {
       // Retrieve the query
       string query;
       ifstream in(argv[2]);
@@ -402,7 +453,7 @@ int main(int argc,char* argv[])
       query=readInput(in);
 
       // And evaluate it
-      evalQueries(db,query,cout,cerr);
+      evalQueries(db,query,cout,cerr,((argc==4)&&(string(argv[3])=="--joins")));
    } else {
       for (int index=2;index<argc;index++) {
          // Retrieve the query
@@ -418,7 +469,7 @@ int main(int argc,char* argv[])
          string planOutFile=string(argv[index])+".plan",predicatesOutFile=string(argv[index])+".predicates";
          ofstream planOut(planOutFile.c_str()),predicatesOut(predicatesOutFile.c_str());
          cerr << "processing " << argv[index] << " to " << planOutFile << " and " << predicatesOutFile << endl;
-         evalQueries(db,query,planOut,predicatesOut);
+         evalQueries(db,query,planOut,predicatesOut,false);
       }
    }
 }
