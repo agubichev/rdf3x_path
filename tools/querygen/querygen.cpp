@@ -15,6 +15,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cstdlib>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -63,11 +64,9 @@ static string escape(const char* iter,const char* limit)
    return s;
 }
 //---------------------------------------------------------------------------
-static void expandConstants(Database& db,const vector<string>& terms,vector<vector<string> >& constants)
+static void expandConstants(Database& db,const vector<string>& terms,vector<vector<string> >& constants,unsigned maxSize)
    // Expand the constants
 {
-   const unsigned maxSize = 10000;
-
    // Count the number of constants
    unsigned constantCount = 0;
    for (vector<string>::const_iterator iter=terms.begin(),limit=terms.end();iter!=limit;++iter)
@@ -180,12 +179,15 @@ int main(int argc,char* argv[])
 
    // Retrieve the query
    vector<string> projection,terms;
+   unsigned count = 10000;
    if (argc>2) {
       ifstream in(argv[2]);
       if (!in.is_open()) {
          cout << "unable to open " << argv[2] << endl;
          return 1;
       }
+      if ((argc>3)&&(atoi(argv[3])))
+         count=atoi(argv[3]);
       if (!readInput(in,projection,terms))
          return 1;
    } else {
@@ -195,7 +197,7 @@ int main(int argc,char* argv[])
 
    // Expand constants
    vector<vector<string> > constants;
-   expandConstants(db,terms,constants);
+   expandConstants(db,terms,constants,count);
 
    // And build queries
    for (vector<vector<string> >::const_iterator iter=constants.begin(),limit=constants.end();iter!=limit;++iter) {
