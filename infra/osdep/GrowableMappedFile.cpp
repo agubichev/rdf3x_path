@@ -11,6 +11,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #endif
+#ifdef CONFIG_DARWIN
+#include <sys/stat.h>
+#endif
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -171,7 +174,11 @@ bool GrowableMappedFile::flush()
    for (vector<pair<char*,char*> >::const_iterator iter=data->mappings.begin(),limit=data->mappings.end();iter!=limit;++iter)
       if (msync((*iter).first,(*iter).second-(*iter).first,MS_SYNC)!=0)
          return false;
+# ifdef CONFIG_DARWIN
+   return fsync(data->file)==0;
+# else
    return fdatasync(data->file)==0;
+# endif
 #endif
 }
 //----------------------------------------------------------------------------
@@ -205,6 +212,21 @@ bool GrowableMappedFile::growPhysically(ofs_t increment)
       return false;
    }
    delete[] buffer;
+#elif defined(CONFIG_DARWIN)
+   fstore_t fst;
+   fst.fst_flags = F_ALLOCATECONTIG | F_ALLOCATEALL;
+   fst.fst_posmode = F_PEOFPOSMODE;
+   fst.fst_offset = 0;//data->size;
+   fst.fst_length = increment;
+   fst.fst_bytesalloc = 0;
+   if (fcntl (data->file, F_PREALLOCATE, &fst)==-1)
+      return false;
+
+   struct stat64 stat;
+   if (fstat64 (data -> file, &stat)!=0)
+      return false;
+   if (ftruncate(data->file, stat.st_size + increment)!=0) // NOT fst.fst_bytesAllocated!
+      return false;
 #else
    if (posix_fallocate(data->file,data->size,increment)!=0) {
       return false;

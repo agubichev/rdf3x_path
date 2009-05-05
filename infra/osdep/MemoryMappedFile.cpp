@@ -110,6 +110,8 @@ void MemoryMappedFile::prefetch(const char* start,const char* end)
 
 #ifdef CONFIG_WINDOWS
    // XXX todo
+#elif defined(CONFIG_DARWIN)
+   // XXX todo
 #else
    posix_fadvise(data->file,start-begin,end-start+1,POSIX_FADV_WILLNEED);
 #endif

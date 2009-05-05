@@ -35,6 +35,10 @@ ifeq ($(SYS),SunOS)
 LIBS:=$(LIBS) -lsocket -lnsl
 endif
 
+ifeq ($(SYS),Darwin)
+CXXFLAGS:=$(CXXFLAGS) -DCONFIG_DARWIN -Wno-error -m64
+endif
+
 ifneq ($(SYS),Darwin)
 LIBS:=$(LIBS) -lrt
 endif
