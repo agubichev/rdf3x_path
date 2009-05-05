@@ -222,8 +222,7 @@ void PredicateCollector::endOperator()
                   if ((*iter)==((*iter2).second/3))
                      localBindings[(*iter2).first]=(index*3)+((*iter2).second%3);
             } }
-            out << relations.back().size()
-                << " " << (static_cast<double>(cardinalities.back().first)/expectedInput.back()) << " " << (static_cast<double>(cardinalities.back().second)/observedInput.back());
+            out << relations.back().size();
             unsigned l=localBindings[(*equal.back().begin()).first],r=localBindings[(*equal.back().begin()).second];
             if (l>r) swap(l,r);
             out << " " << l << " " << r;
@@ -252,6 +251,7 @@ void PredicateCollector::endOperator()
             }
             for (vector<int>::iterator iter=attributes.begin(),limit=attributes.end();iter!=limit;++iter)
                out << " " << (*iter);
+            out << " " << (static_cast<double>(cardinalities.back().first)/expectedInput.back()) << " " << (static_cast<double>(cardinalities.back().second)/observedInput.back());
             out << endl;
          }
       } else {
@@ -400,7 +400,7 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
    // Write the selectivities
    {
       if (showJoins)
-         statsOut << "# relations expectedSelectivity observedSelectivity joinVar1 joinVar2 bindings" << endl; else
+         statsOut << "# relations joinVar1 joinVar2 bindings expectedSelectivity observedSelectivity" << endl; else
          statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality expectedSelectivity observedSelectivity" << endl;
       PredicateCollector out(statsOut,runtime,showJoins);
       operatorTree->print(out);
@@ -442,7 +442,13 @@ int main(int argc,char* argv[])
       return 1;
    }
 
-   if ((argc==3)||((argc==4)&&(string(argv[3])=="--joins"))) {
+   bool showJoins=false;
+   if (string(argv[argc-1])=="--joins") {
+      showJoins=true;
+      argc--;
+   }
+
+   if (argc==3) {
       // Retrieve the query
       string query;
       ifstream in(argv[2]);
@@ -453,7 +459,7 @@ int main(int argc,char* argv[])
       query=readInput(in);
 
       // And evaluate it
-      evalQueries(db,query,cout,cerr,((argc==4)&&(string(argv[3])=="--joins")));
+      evalQueries(db,query,cout,cerr,showJoins);
    } else {
       for (int index=2;index<argc;index++) {
          // Retrieve the query
@@ -466,10 +472,10 @@ int main(int argc,char* argv[])
          query=readInput(in);
 
          // And produce the files
-         string planOutFile=string(argv[index])+".plan",predicatesOutFile=string(argv[index])+".predicates";
+         string planOutFile=string(argv[index])+".plan",predicatesOutFile=string(argv[index])+(showJoins?".joins":".predicates");
          ofstream planOut(planOutFile.c_str()),predicatesOut(predicatesOutFile.c_str());
          cerr << "processing " << argv[index] << " to " << planOutFile << " and " << predicatesOutFile << endl;
-         evalQueries(db,query,planOut,predicatesOut,false);
+         evalQueries(db,query,planOut,predicatesOut,showJoins);
       }
    }
 }
