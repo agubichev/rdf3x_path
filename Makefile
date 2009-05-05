@@ -54,7 +54,7 @@ $(PREFIX)%$(OBJEXT): %.cpp $(PREFIX)makeutil/getdep$(EXEEXT)
 # Cleanup
 
 clean:
-	find bin -name '*.d' -delete -o -name '*.o' -delete -o '(' -perm /u=x '!' -type d ')' -delete
+	find bin -name '*.d' -delete -o -name '*.o' -delete -o '(' -perm -u=x '!' -type d ')' -delete
 
 #############################################################################
 # Executable
