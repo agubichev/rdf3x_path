@@ -117,7 +117,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case '<':
             tokenStart=pos;
             // Try to parse as URI
-            for (++pos;pos!=input.end();++pos) {
+            for (;pos!=input.end();++pos) {
               char c=*pos;
               // Escape chars
               if (c=='\\') {
@@ -214,6 +214,38 @@ std::string SPARQLLexer::getTokenValue() const
    if (hasTokenEnd)
       return std::string(tokenStart,tokenEnd); else
       return std::string(tokenStart,pos);
+}
+//---------------------------------------------------------------------------
+std::string SPARQLLexer::getIRIValue() const
+   // Get the value of the current token interpreting IRI escapes
+{
+   std::string::const_iterator limit=(hasTokenEnd?tokenEnd:pos);
+   std::string result;
+   for (std::string::const_iterator iter=tokenStart,limit=(hasTokenEnd?tokenEnd:pos);iter!=limit;++iter) {
+      char c=*iter;
+      if (c=='\\') {
+         if ((++iter)==limit) break;
+         c=*iter;
+      }
+      result+=c;
+   }
+   return result;
+}
+//---------------------------------------------------------------------------
+std::string SPARQLLexer::getLiteralValue() const
+   // Get the value of the current token interpreting literal escapes
+{
+   std::string::const_iterator limit=(hasTokenEnd?tokenEnd:pos);
+   std::string result;
+   for (std::string::const_iterator iter=tokenStart,limit=(hasTokenEnd?tokenEnd:pos);iter!=limit;++iter) {
+      char c=*iter;
+      if (c=='\\') {
+         if ((++iter)==limit) break;
+         c=*iter;
+      }
+      result+=c;
+   }
+   return result;
 }
 //---------------------------------------------------------------------------
 bool SPARQLLexer::isKeyword(const char* keyword) const

@@ -66,6 +66,19 @@ static bool readInput(istream& in,vector<string>& projection,vector<string>& ter
    return true;
 }
 //---------------------------------------------------------------------------
+static string escapeURI(const char* iter,const char* limit)
+   // Escape a string
+{
+   string s;
+   for (;iter!=limit;++iter) {
+      char c=(*iter);
+      if ((c=='\\')||(c=='<')||(c=='>')||(c=='\"')||(c=='{')||(c=='}')||(c=='^')||(c=='|')||(c=='`')||((c&0xFF)<=0x20))
+         s+='\\';
+      s+=c;
+   }
+   return s;
+}
+//---------------------------------------------------------------------------
 static string escape(const char* iter,const char* limit)
    // Escape a string
 {
@@ -155,7 +168,7 @@ static void expandConstants(Database& db,const vector<string>& terms,vector<vect
             if (!db.getDictionary().lookupById(v,start,stop,type,subType))
                break;
             switch (type) {
-               case Type::URI: values.push_back("<"+string(start,stop)+">"); break;
+               case Type::URI: values.push_back("<"+escapeURI(start,stop)+">"); break;
                case Type::Literal: values.push_back("\""+escape(start,stop)+"\""); break;
                case Type::CustomLanguage: values.push_back("\""+escape(start,stop)+"\""); break; // XXX add language
                case Type::CustomType: values.push_back("\""+escape(start,stop)+"\""); break; // XXX add type

@@ -129,7 +129,7 @@ void SPARQLParser::parsePrefix()
             throw ParserException("':' expected");
          if (lexer.getNext()!=SPARQLLexer::IRI)
             throw ParserException("IRI expected");
-         string iri=lexer.getTokenValue();
+         string iri=lexer.getIRIValue();
 
          // Register the new prefix
          if (prefixes.count(name))
@@ -201,7 +201,7 @@ void SPARQLParser::parseRDFLiteral(std::string& value,Element::SubType& subType,
    if (lexer.getNext()!=SPARQLLexer::String)
       throw ParserException("literal expected");
    subType=Element::None;
-   value=lexer.getTokenValue();
+   value=lexer.getLiteralValue();
    if (value.find('\\')!=string::npos) {
       string v; v.swap(value);
       for (string::const_iterator iter=v.begin(),limit=v.end();iter!=limit;++iter) {
@@ -224,7 +224,7 @@ void SPARQLParser::parseRDFLiteral(std::string& value,Element::SubType& subType,
       token=lexer.getNext();
       if (token==SPARQLLexer::IRI) {
          subType=Element::CustomType;
-         valueType=lexer.getTokenValue();
+         valueType=lexer.getIRIValue();
       } else {
          throw ParserException("type URI expeted after '^^'");
       }
@@ -241,7 +241,7 @@ SPARQLParser::Filter* SPARQLParser::parseIRIrefOrFunction(std::map<std::string,u
       throw ParserException("IRI expected");
    auto_ptr<Filter> result(new Filter);
    result->type=Filter::IRI;
-   result->value=lexer.getTokenValue();
+   result->value=lexer.getIRIValue();
 
    // Arguments?
    if (lexer.hasNext(SPARQLLexer::LParen)) {
@@ -732,7 +732,7 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
       parseRDFLiteral(result.value,result.subType,result.subTypeValue);
    } else if (token==SPARQLLexer::IRI) {
       result.type=Element::IRI;
-      result.value=lexer.getTokenValue();
+      result.value=lexer.getIRIValue();
    } else if (token==SPARQLLexer::Anon) {
       result.type=Element::Variable;
       result.id=variableCount++;
@@ -771,7 +771,7 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
          if (lexer.getNext()!=SPARQLLexer::Identifier)
             throw ParserException("identifier expected after ':'");
          result.type=Element::IRI;
-         result.value=prefixes[prefix]+lexer.getTokenValue();
+         result.value=prefixes[prefix]+lexer.getIRIValue();
       }
    } else {
       throw ParserException("invalid pattern element");

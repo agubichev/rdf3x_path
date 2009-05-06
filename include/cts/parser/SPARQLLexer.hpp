@@ -43,6 +43,10 @@ class SPARQLLexer
    Token getNext();
    /// Get the value of the current token
    std::string getTokenValue() const;
+   /// Get the value of the current token interpreting IRI escapes
+   std::string getIRIValue() const;
+   /// Get the value of the current token interpreting literal escapes
+   std::string getLiteralValue() const;
    /// Check if the current token matches a keyword
    bool isKeyword(const char* keyword) const;
    /// Put the last token back
