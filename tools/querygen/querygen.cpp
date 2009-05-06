@@ -31,11 +31,20 @@ using namespace std;
 static bool readInput(istream& in,vector<string>& projection,vector<string>& terms)
    // Read the input query
 {
+   projection.clear();
+   terms.clear();
+
    string s;
    while (true) {
       if (!(in>>s)) {
-         cerr << "malformed query template" << endl;
+         if (!projection.empty())
+            cerr << "malformed query template" << endl;
          return false;
+      }
+      if (s=="#") {
+         char c;
+         while (in.get(c)) if (c=='\n') break;
+         continue;
       }
       if (s=="-") break;
       projection.push_back(s);
@@ -43,6 +52,11 @@ static bool readInput(istream& in,vector<string>& projection,vector<string>& ter
    while (true) {
       if (!(in>>s))
          break;
+      if (s=="#") {
+         char c;
+         while (in.get(c)) if (c=='\n') break;
+         break;
+      }
       terms.push_back(s);
    }
    if (terms.size()%3) {
@@ -162,6 +176,33 @@ static void expandConstants(Database& db,const vector<string>& terms,vector<vect
    delete operatorTree;
 }
 //---------------------------------------------------------------------------
+static void produceQueries(Database& db,const vector<string>& projection,const vector<string>& terms,unsigned count)
+   // Produce SPARQL queries
+{
+   // Expand constants
+   vector<vector<string> > constants;
+   expandConstants(db,terms,constants,count);
+
+   // And build queries
+   for (vector<vector<string> >::const_iterator iter=constants.begin(),limit=constants.end();iter!=limit;++iter) {
+      const vector<string>& c=(*iter);
+      cout << "select";
+      for (vector<string>::const_iterator iter=projection.begin(),limit=projection.end();iter!=limit;++iter)
+         cout << " " << (*iter);
+      cout << " where {";
+      unsigned constantCount=0;
+      for (unsigned index=0;index<terms.size();index++) {
+         if (terms[index]=="@") {
+            cout << " " << c[constantCount++];
+         } else {
+            cout << " "  << terms[index];
+         }
+         if ((index%3)==2) cout << " .";
+      }
+      cout << " }" << endl;
+   }
+}
+//---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    // Check the arguments
@@ -188,34 +229,17 @@ int main(int argc,char* argv[])
       }
       if ((argc>3)&&(atoi(argv[3])))
          count=atoi(argv[3]);
-      if (!readInput(in,projection,terms))
-         return 1;
-   } else {
-      if (!readInput(cin,projection,terms))
-         return 1;
-   }
-
-   // Expand constants
-   vector<vector<string> > constants;
-   expandConstants(db,terms,constants,count);
-
-   // And build queries
-   for (vector<vector<string> >::const_iterator iter=constants.begin(),limit=constants.end();iter!=limit;++iter) {
-      const vector<string>& c=(*iter);
-      cout << "select";
-      for (vector<string>::const_iterator iter=projection.begin(),limit=projection.end();iter!=limit;++iter)
-         cout << " " << (*iter);
-      cout << " where {";
-      unsigned constantCount=0;
-      for (unsigned index=0;index<terms.size();index++) {
-         if (terms[index]=="@") {
-            cout << " " << c[constantCount++];
-         } else {
-            cout << " "  << terms[index];
-         }
-         if ((index%3)==2) cout << " .";
+      while (true) {
+         if (!readInput(in,projection,terms))
+            break;
+         produceQueries(db,projection,terms,count);
       }
-      cout << " }" << endl;
+   } else {
+      while (true) {
+         if (!readInput(cin,projection,terms))
+            break;
+         produceQueries(db,projection,terms,count);
+      }
    }
 }
 //---------------------------------------------------------------------------
