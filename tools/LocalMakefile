@@ -9,6 +9,7 @@ include tools/extractstats/LocalMakefile
 include tools/extractqueries/LocalMakefile
 include tools/dumpredland/LocalMakefile
 include tools/dumpyago/LocalMakefile
+include tools/predtest/LocalMakefile
 include tools/querygen/LocalMakefile
 include tools/rdf3xdump/LocalMakefile
 include tools/rdf3xembedded/LocalMakefile

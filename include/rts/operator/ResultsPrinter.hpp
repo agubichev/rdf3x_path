@@ -50,6 +50,8 @@ class ResultsPrinter : public Operator
 
    /// Set the output mode
    void setOutputMode(OutputMode o) { outputMode=o; }
+   /// Get the input
+   Operator* getInput() const { return input; }
 
    /// Produce the first tuple
    unsigned first();
