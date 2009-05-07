@@ -106,7 +106,7 @@ int main(int argc,char* argv[])
 
       // Output the counts
       trueCard=realRoot->getObservedOutputCardinality();
-      cout << predb << "\t" << predb << "\t" << trueCard << "\t" << estCard << "\t" << realRoot->getExpectedOutputCardinality() << "\t" << qError(estCard,trueCard) << "\t" << qError(realRoot->getExpectedOutputCardinality(),trueCard) << endl;
+      cout << preda << "\t" << predb << "\t" << trueCard << "\t" << estCard << "\t" << realRoot->getExpectedOutputCardinality() << "\t" << qError(estCard,trueCard) << "\t" << qError(realRoot->getExpectedOutputCardinality(),trueCard) << endl;
    }
 }
 //---------------------------------------------------------------------------
