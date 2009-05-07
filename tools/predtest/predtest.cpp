@@ -107,6 +107,8 @@ int main(int argc,char* argv[])
       // Output the counts
       trueCard=realRoot->getObservedOutputCardinality();
       cout << preda << "\t" << predb << "\t" << trueCard << "\t" << estCard << "\t" << realRoot->getExpectedOutputCardinality() << "\t" << qError(estCard,trueCard) << "\t" << qError(realRoot->getExpectedOutputCardinality(),trueCard) << endl;
+
+      delete operatorTree;
    }
 }
 //---------------------------------------------------------------------------
