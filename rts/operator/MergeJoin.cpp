@@ -224,6 +224,9 @@ unsigned MergeJoin::next()
             }
             { unsigned l=leftValue->value,r=rightValue->value;
             if (l<r) {
+               if (Operator::disableSkipping) {
+                  while (right->next()) ;
+               }
                scanState=empty;
                return false;
             }
@@ -246,6 +249,9 @@ unsigned MergeJoin::next()
             scanState=loopEmptyRight;
             { unsigned l=leftValue->value,r=rightValue->value;
             if (l>r) {
+               if (Operator::disableSkipping) {
+                  while (left->next()) ;
+               }
                scanState=empty;
                return false;
             }
@@ -263,6 +269,9 @@ unsigned MergeJoin::next()
             // Block on the left hand side
             if (scanState==loopEqualLeft) {
                if ((leftCount=left->next())==0) {
+                  if (Operator::disableSkipping) {
+                     while (right->next()) ;
+                  }
                   scanState=empty;
                   continue;
                }
@@ -281,9 +290,12 @@ unsigned MergeJoin::next()
             swapRight();
             // Fallthrough
          case loopEqualRight:
-            // Block on the right hand  side
+            // Block on the right hand side
             if (scanState==loopEqualRight) {
                if ((rightCount=right->next())==0) {
+                  if (Operator::disableSkipping) {
+                     while (left->next()) ;
+                  }
                   scanState=empty;
                   continue;
                }
@@ -315,6 +327,9 @@ unsigned MergeJoin::next()
                   leftInCopy=false;
                } else {
                   if ((leftCount=left->next())==0) {
+                     if (Operator::disableSkipping) {
+                        while (right->next()) ;
+                     }
                      scanState=empty;
                      return false;
                   }
@@ -327,6 +342,9 @@ unsigned MergeJoin::next()
                } else {
                   // No, right hand side empty?
                   if (scanState==loopSpooledRightEmpty) {
+                     if (Operator::disableSkipping) {
+                        while (left->next()) ;
+                     }
                      scanState=empty;
                      return false;
                   } else {
