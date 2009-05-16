@@ -9,6 +9,7 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/PlanPrinter.hpp"
+#include "rts/operator/ResultsPrinter.hpp"
 #include "rts/operator/Scheduler.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <iostream>
@@ -378,10 +379,11 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
    // Build a physical plan
    Runtime runtime(db);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,true);
+   Operator* root=dynamic_cast<ResultsPrinter*>(operatorTree)->getInput();
 
    // And execute it
    Scheduler scheduler;
-   scheduler.execute(operatorTree);
+   scheduler.execute(root);
    Timestamp stop;
 
    // Write the plan
@@ -394,7 +396,7 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
    planOut << endl << endl << "# Execution plan: <Operator expectedCardinality observedCardinalit [args] [input]>" << endl << endl;
    {
       DebugPlanPrinter out(planOut,runtime,true);
-      operatorTree->print(out);
+      root->print(out);
    }
 
    // Write the selectivities
@@ -403,7 +405,7 @@ static bool evalQuery(Database& db,SPARQLLexer& lexer,ostream& planOut,ostream& 
          statsOut << "# relations joinVar1 joinVar2 bindings expectedSelectivity observedSelectivity" << endl; else
          statsOut << "# Stats: {relations} {new predicates(s)} {previous predicate(s)} expectedCardinality observedCardinality expectedSelectivity observedSelectivity" << endl;
       PredicateCollector out(statsOut,runtime,showJoins);
-      operatorTree->print(out);
+      root->print(out);
    }
 
    delete operatorTree;
