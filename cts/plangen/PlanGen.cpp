@@ -194,17 +194,6 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
    addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
-static unsigned getAggregatedCardinality(Database& db,Database::DataOrder order,unsigned c1,unsigned c2)
-   // Estimate the cardinality of a predicate
-{
-   if ((~c1)&&(~c2))
-      return 1;
-   if (!~c1)
-      return db.getAggregatedFacts(order).getLevel2Groups();
-   // XXX overstimates as it ignores the grouping
-   return min(getCardinality(db,order,c1,c2,~0u),db.getAggregatedFacts(order).getLevel2Groups());
-}
-//---------------------------------------------------------------------------
 void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C)
    // Build an aggregated index scan
 {
@@ -217,23 +206,18 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
    plan->next=0;
 
    // Compute the statistics
-   unsigned scanned=getAggregatedCardinality(*db,order,value1C,value2C);
-   unsigned fullSize=getCardinality(*db,order,value1C,value2C,~0u);
+   unsigned scanned=getCardinality(*db,order,value1C,value2C,~0u);
+   unsigned fullSize=db->getFacts(order).getCardinality();
    if (scanned>fullSize)
-      scanned=fullSize-1;
+      scanned=fullSize;
    if (!scanned) scanned=1;
    plan->cardinality=scanned;
    if (!~value1) {
       plan->ordering=value2;
    } else {
-      scanned=getAggregatedCardinality(*db,order,value1C,~0u);
-      fullSize=getCardinality(*db,order,value1C,~0u,~0u);
-      if (scanned>fullSize)
-         scanned=fullSize-1;
-      if (!scanned) scanned=1;
       plan->ordering=value1;
    }
-   unsigned pages=1+static_cast<unsigned>(db->getAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getAggregatedFacts(order).getLevel2Groups())));
+   unsigned pages=1+static_cast<unsigned>(db->getAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(fullSize)));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
 
    // Apply filters
@@ -241,14 +225,6 @@ void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Databas
 
    // And store it
    addPlan(result,plan);
-}
-//---------------------------------------------------------------------------
-static unsigned getFullyAggregatedCardinality(Database& db,Database::DataOrder order,unsigned c1)
-   // Estimate the cardinality of a predicate
-{
-   if (~c1)
-      return 1;
-   return db.getFullyAggregatedFacts(order).getLevel1Groups();
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C)
@@ -263,23 +239,18 @@ void PlanGen::buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Da
    plan->next=0;
 
    // Compute the statistics
-   unsigned scanned=getFullyAggregatedCardinality(*db,order,value1C);
-   unsigned fullSize=getCardinality(*db,order,value1C,~0u,~0u);
+   unsigned scanned=getCardinality(*db,order,value1C,~0u,~0u);
+   unsigned fullSize=db->getFacts(order).getCardinality();
    if (scanned>fullSize)
-      scanned=fullSize-1;
+      scanned=fullSize;
    if (!scanned) scanned=1;
    plan->cardinality=scanned;
    if (!~value1) {
       plan->ordering=~0u;
    } else {
-      scanned=getFullyAggregatedCardinality(*db,order,~0u);
-      fullSize=getCardinality(*db,order,~0u,~0u,~0u);
-      if (scanned>fullSize)
-         scanned=fullSize-1;
-      if (!scanned) scanned=1;
       plan->ordering=value1;
    }
-   unsigned pages=1+static_cast<unsigned>(db->getFullyAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getFullyAggregatedFacts(order).getLevel1Groups())));
+   unsigned pages=1+static_cast<unsigned>(db->getFullyAggregatedFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(fullSize)));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
 
    // Apply filters
