@@ -31,6 +31,9 @@ class SpaceInventorySegment : public Segment
       Action_UpdateFreePage
    };
 
+   /// Helper to allow test access to private members
+   class TestInterface;
+
    private:
    /// The position of the root. Intentionally hard coded, there is only one space inventory per partition.
    /// Note: the "next" pointer of the root is start of the free list!
@@ -40,11 +43,11 @@ class SpaceInventorySegment : public Segment
    Mutex mutex;
 
    /// Allocate a new page
-   void allocPage(BufferReferenceModified& page);
+   void allocPage(BufferReferenceExclusive& rootPage,BufferReferenceModified& page);
    /// Split an inner node
-   void splitInner(BufferReferenceExclusive& parent,BufferReferenceExclusive& page);
+   void splitInner(BufferReferenceExclusive& rootPage,BufferReferenceExclusive& parent,BufferReferenceExclusive& page);
    /// Split a leaf node
-   void splitLeaf(BufferReferenceExclusive& parent,BufferReferenceExclusive& page);
+   void splitLeaf(BufferReferenceExclusive& rootPage,BufferReferenceExclusive& parent,BufferReferenceExclusive& page);
    /// Find the appropriate leaf node. Returns false if it had to split a page
    bool findLeaf(BufferReferenceExclusive& parent,BufferReferenceExclusive& page,unsigned segmentId,unsigned from,unsigned to,bool ensureSpace);
 

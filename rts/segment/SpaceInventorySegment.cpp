@@ -253,7 +253,7 @@ unsigned LeafNode::find(unsigned segmentId,unsigned from,unsigned to) const
       } else if (getFrom(middle)>to) {
          right=middle;
       } else {
-         break;
+         return middle;
       }
    }
    return left;
@@ -303,8 +303,8 @@ void BuildLeafNode::undo(void* /*page*/) const { /* no undo operation */ }
 //---------------------------------------------------------------------------
 LOGACTION4(SpaceInventorySegment,ShrinkLeafNode,uint32_t,oldNext,uint32_t,oldCount,uint32_t,newNext,uint32_t,newCount);
 //---------------------------------------------------------------------------
-void ShrinkLeafNode::redo(void* page) const { LeafNode::interpret(page)->setNext(newNext); LeafNode::interpret(page)->setNext(newCount); }
-void ShrinkLeafNode::undo(void* page) const { LeafNode::interpret(page)->setNext(oldNext); LeafNode::interpret(page)->setNext(oldCount); }
+void ShrinkLeafNode::redo(void* page) const { LeafNode::interpret(page)->setNext(newNext); LeafNode::interpret(page)->setCount(newCount); }
+void ShrinkLeafNode::undo(void* page) const { LeafNode::interpret(page)->setNext(oldNext); LeafNode::interpret(page)->setCount(oldCount); }
 //---------------------------------------------------------------------------
 LOGACTION4(SpaceInventorySegment,InsertLeafInterval,uint32_t,pos,uint32_t,segmentId,uint32_t,from,uint32_t,to)
 //---------------------------------------------------------------------------
@@ -387,13 +387,9 @@ void SpaceInventorySegment::formatRoot()
    BuildLeafNode(0,0,LogData(0,0)).apply(rootPage);
 }
 //---------------------------------------------------------------------------
-void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
+void SpaceInventorySegment::allocPage(BufferReferenceExclusive& rootPage,BufferReferenceModified& page)
    // Allocate a new page
 {
-   // Access the root
-   BufferReferenceExclusive rootPage;
-   rootPage=readExclusive(root);
-
    while (true) {
       // Is there a free page available?
       if (InnerNode::interpret(rootPage.getPage())->getNext()) {
@@ -402,7 +398,7 @@ void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
 	 FreePage* current=FreePage::interpret(page.getPage());
 
 	 // More than one page?
-	 if (current->getRange()) {
+	 if (current->getRange()>1) {
 	    // Access the next page
 	    BufferReferenceModified nextFree;
 	    nextFree=modifyExclusive(page.getPageNo()+1);
@@ -414,12 +410,12 @@ void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
 	    // Update the root
 	    BufferReferenceModified root;
 	    root.modify(rootPage);
-	    UpdateInnerNext(page.getPageNo(),page.getPageNo()+1).apply(root);
+	    UpdateInnerNext(page.getPageNo(),page.getPageNo()+1).applyButKeep(root,rootPage);
 	 } else {
 	    // Just a single page, update the root
 	    BufferReferenceModified root;
 	    root.modify(rootPage);
-	    UpdateInnerNext(page.getPageNo(),current->getNext()).apply(root);
+	    UpdateInnerNext(page.getPageNo(),current->getNext()).applyButKeep(root,rootPage);
 	 }
 
 	 // We have found a free one
@@ -440,12 +436,11 @@ void SpaceInventorySegment::allocPage(BufferReferenceModified& page)
       // Update the root
       BufferReferenceModified root;
       root.modify(rootPage);
-      UpdateInnerNext(0,start).apply(root);
-      rootPage=readExclusive(SpaceInventorySegment::root);
+      UpdateInnerNext(0,start).applyButKeep(root,rootPage);
    }
 }
 //---------------------------------------------------------------------------
-void SpaceInventorySegment::splitInner(BufferReferenceExclusive& parent,BufferReferenceExclusive& page)
+void SpaceInventorySegment::splitInner(BufferReferenceExclusive& rootPage,BufferReferenceExclusive& parent,BufferReferenceExclusive& page)
    // Split an inner node
 {
    // Do we have to split the root?
@@ -453,8 +448,8 @@ void SpaceInventorySegment::splitInner(BufferReferenceExclusive& parent,BufferRe
       // Allocate two new pages
       BufferReferenceModified left,right;
       unsigned leftId,rightId;
-      allocPage(left); leftId=left.getPageNo();
-      allocPage(right); rightId=right.getPageNo();
+      allocPage(page,left); leftId=left.getPageNo();
+      allocPage(page,right); rightId=right.getPageNo();
 
       // Build a separator
       const InnerNode* inner=InnerNode::interpret(page.getPage());
@@ -481,7 +476,7 @@ void SpaceInventorySegment::splitInner(BufferReferenceExclusive& parent,BufferRe
       BufferReferenceModified left,right;
       unsigned leftId,rightId;
       left.modify(page); leftId=left.getPageNo();
-      allocPage(right); rightId=right.getPageNo();
+      allocPage((parent.getPageNo()==root)?parent:rootPage,right); rightId=right.getPageNo();
 
       // Build a separator
       const InnerNode* inner=InnerNode::interpret(left.getPage());
@@ -501,12 +496,12 @@ void SpaceInventorySegment::splitInner(BufferReferenceExclusive& parent,BufferRe
       // And insert into the parent
       BufferReferenceModified current;
       current.modify(parent);
-      unsigned pos=InnerNode::interpret(page.getPage())->find(separator[0],separator[1],separator[2]);
+      unsigned pos=InnerNode::interpret(current.getPage())->find(separator[0],separator[1],separator[2]);
       InsertInnerInterval(pos,separator[0],separator[1],separator[2],separator[3],rightId).apply(current);
    }
 }
 //---------------------------------------------------------------------------
-void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferReferenceExclusive& page)
+void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& rootPage,BufferReferenceExclusive& parent,BufferReferenceExclusive& page)
    // Split a leaf node
 {
    // Do we have to split the root?
@@ -514,8 +509,8 @@ void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferRef
       // Allocate two new pages
       BufferReferenceModified left,right;
       unsigned leftId,rightId;
-      allocPage(left); leftId=left.getPageNo();
-      allocPage(right); rightId=right.getPageNo();
+      allocPage(page,left); leftId=left.getPageNo();
+      allocPage(page,right); rightId=right.getPageNo();
 
       // Build a separator
       const LeafNode* leaf=LeafNode::interpret(page.getPage());
@@ -541,7 +536,7 @@ void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferRef
       BufferReferenceModified left,right;
       unsigned leftId,rightId;
       left.modify(page); leftId=left.getPageNo();
-      allocPage(right); rightId=right.getPageNo();
+      allocPage((parent.getPageNo()==root)?parent:rootPage,right); rightId=right.getPageNo();
 
       // Build a separator
       const LeafNode* leaf=LeafNode::interpret(left.getPage());
@@ -559,7 +554,7 @@ void SpaceInventorySegment::splitLeaf(BufferReferenceExclusive& parent,BufferRef
       // And insert into the parent
       BufferReferenceModified current;
       current.modify(parent);
-      unsigned pos=InnerNode::interpret(page.getPage())->find(separator[0],separator[1],separator[2]);
+      unsigned pos=InnerNode::interpret(current.getPage())->find(separator[0],separator[1],separator[2]);
       InsertInnerInterval(pos,separator[0],separator[1],separator[2],separator[3],rightId).apply(current);
    }
 }
@@ -568,6 +563,7 @@ bool SpaceInventorySegment::findLeaf(BufferReferenceExclusive& parent,BufferRefe
    // Find the appropriate leaf node. Returns false if it had to split a page
 {
    // Access the root
+   BufferReferenceExclusive rootPage;
    page=readExclusive(root);
 
    // Navigate down
@@ -577,7 +573,7 @@ bool SpaceInventorySegment::findLeaf(BufferReferenceExclusive& parent,BufferRefe
          const InnerNode* node=InnerNode::interpret(page.getPage());
          // Is the node full?
          if (ensureSpace&&node->isFull()) {
-            splitInner(parent,page);
+            splitInner(rootPage,parent,page);
             return false;
          }
          // Find the right place
@@ -588,13 +584,15 @@ bool SpaceInventorySegment::findLeaf(BufferReferenceExclusive& parent,BufferRefe
          if (pos>=node->getCount())
             next=node->getRightmost(); else
             next=node->getChild(pos);
+         if ((!!parent)&&(parent.getPageNo()==root))
+            rootPage.swap(parent);
          parent.swap(page);
          page=readExclusive(next);
       } else { // No, a leaf node
          const LeafNode* node=LeafNode::interpret(page.getPage());
          // Is the node full?
          if (ensureSpace&&node->isFull()) {
-            splitLeaf(parent,page);
+            splitLeaf(rootPage,parent,page);
             return false;
          }
          // No, we reached the right node
@@ -628,8 +626,8 @@ void SpaceInventorySegment::insertInterval(unsigned segmentId,unsigned from,unsi
       }
 
       // Before the next interval?
-      if (((pos+1)<leaf->getCount())&&(leaf->getSegment(pos+1)==segmentId)&&(to>=leaf->getFrom(pos+1))) {
-         UpdateLeafInterval(pos+1,leaf->getFrom(pos+1),leaf->getTo(pos+1),from,leaf->getTo(pos+1)).apply(leafPage);
+      if ((pos<leaf->getCount())&&(leaf->getSegment(pos)==segmentId)&&(to>=leaf->getFrom(pos))) {
+         UpdateLeafInterval(pos,leaf->getFrom(pos),leaf->getTo(pos),from,leaf->getTo(pos)).apply(leafPage);
          return;
       }
 
