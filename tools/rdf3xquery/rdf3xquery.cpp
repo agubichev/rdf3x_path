@@ -40,9 +40,9 @@ static string readInput(istream& in)
    while (true) {
       string s;
       getline(in,s);
+      result+=s;
       if (!in.good())
          break;
-      result+=s;
       result+='\n';
    }
    return result;
