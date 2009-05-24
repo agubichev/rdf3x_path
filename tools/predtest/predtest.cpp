@@ -194,6 +194,28 @@ static void doAnalyze(Database& db)
    }
 }
 //---------------------------------------------------------------------------
+static void doSets(Database& db)
+{
+   map<set<unsigned>,unsigned> predSets;
+   set<unsigned> current; unsigned currentSubject=~0;
+   AggregatedFactsSegment::Scan scan;
+   if (scan.first(db.getAggregatedFacts(Database::Order_Subject_Predicate_Object))) do {
+      if (scan.getValue1()==currentSubject) {
+         current.insert(scan.getValue2());
+      } else {
+         if (!current.empty())
+            predSets[current]++;
+         current.clear();
+         current.insert(scan.getValue2());
+         currentSubject=scan.getValue1();
+      }
+   } while (scan.next());
+   if (!current.empty())
+      predSets[current]++;
+
+   cout << "found " << predSets.size() << " predicate combinations" << endl;
+}
+//---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    // Check the arguments
@@ -214,6 +236,9 @@ int main(int argc,char* argv[])
       return 0;
    } else if (string(argv[2])=="--analyze") {
       doAnalyze(db);
+      return 0;
+   } else if (string(argv[2])=="--sets") {
+      doSets(db);
       return 0;
    }
 
