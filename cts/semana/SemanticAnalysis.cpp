@@ -16,6 +16,26 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
+/// ID used for table functions
+static const char tableFunctionId[] = "http://www.mpi-inf.mpg.de/rdf3x/tableFunction";
+//---------------------------------------------------------------------------
+SemanticAnalysis::SemanticException::SemanticException(const std::string& message)
+  : message(message)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+SemanticAnalysis::SemanticException::SemanticException(const char* message)
+  : message(message)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+SemanticAnalysis::SemanticException::~SemanticException()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
 SemanticAnalysis::SemanticAnalysis(Database& db)
    : db(db)
    // Constructor
@@ -129,7 +149,6 @@ static bool encodeTernaryFilter(QueryGraph::Filter::Type type,Database& db,const
    output.arg3=new QueryGraph::Filter();
    return encodeFilter(db,group,*input.arg1,*output.arg1)&&encodeFilter(db,group,*input.arg2,*output.arg2)&&encodeFilter(db,group,*input.arg3,*output.arg3);
 }
-
 //---------------------------------------------------------------------------
 static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
    // Encode an element for the query graph
@@ -192,7 +211,10 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
             output.value=input.value;
          }
          } return true;
-      case SPARQLParser::Filter::Function: return encodeBinaryFilter(QueryGraph::Filter::Function,db,group,input,output);
+      case SPARQLParser::Filter::Function:
+         if (input.value==tableFunctionId)
+            throw SemanticAnalysis::SemanticException(std::string("<")+tableFunctionId+"> calls must be placed in seperate filter clauses");
+         return encodeBinaryFilter(QueryGraph::Filter::Function,db,group,input,output);
       case SPARQLParser::Filter::ArgumentList: return encodeBinaryFilter(QueryGraph::Filter::ArgumentList,db,group,input,output);
       case SPARQLParser::Filter::Builtin_str: return encodeUnaryFilter(QueryGraph::Filter::Builtin_str,db,group,input,output);
       case SPARQLParser::Filter::Builtin_lang: return encodeUnaryFilter(QueryGraph::Filter::Builtin_lang,db,group,input,output);
@@ -280,7 +302,7 @@ static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& gro
    return true;
 }
 //---------------------------------------------------------------------------
-bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
+void SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
    // Perform the transformation
 {
    output.clear();
@@ -288,7 +310,7 @@ bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
    if (!transformSubquery(db,input.getPatterns(),output.getQuery())) {
       // A constant could not be resolved. This will produce an empty result
       output.markAsKnownEmpty();
-      return true;
+      return;
    }
 
    // Compute the edges
@@ -323,7 +345,5 @@ bool SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
 
    // Set the limit
    output.setLimit(input.getLimit());
-
-   return true;
 }
 //---------------------------------------------------------------------------

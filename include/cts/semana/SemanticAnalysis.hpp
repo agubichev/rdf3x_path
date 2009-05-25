@@ -1,6 +1,8 @@
 #ifndef H_cts_semana_SemanticAnalysis
 #define H_cts_semana_SemanticAnalysis
 //---------------------------------------------------------------------------
+#include <string>
+//---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
 //
@@ -17,6 +19,20 @@ class QueryGraph;
 /// Semantic anaylsis for SPARQL queries. Transforms the parse result into a query graph
 class SemanticAnalysis
 {
+   public:
+   /// A semantic exception
+   struct SemanticException {
+      /// The message
+      std::string message;
+
+      /// Constructor
+      SemanticException(const std::string& message);
+      /// Constructor
+      SemanticException(const char* message);
+      /// Destructor
+      ~SemanticException();
+   };
+
    private:
    /// The database. Used for string and IRI resolution
    Database& db;
@@ -26,7 +42,7 @@ class SemanticAnalysis
    explicit SemanticAnalysis(Database& db);
 
    /// Perform the transformation
-   bool transform(const SPARQLParser& input,QueryGraph& output);
+   void transform(const SPARQLParser& input,QueryGraph& output);
 };
 //---------------------------------------------------------------------------
 #endif

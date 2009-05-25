@@ -88,8 +88,13 @@ static void runQuery(Database& db,const string& query,bool explain)
       }
 
       // And perform the semantic anaylsis
-      SemanticAnalysis semana(db);
-      semana.transform(parser,queryGraph);
+      try {
+         SemanticAnalysis semana(db);
+         semana.transform(parser,queryGraph);
+      } catch (const SemanticAnalysis::SemanticException& e) {
+         cerr << "semantic error: " << e.message << endl;
+         return;
+      }
       if (queryGraph.knownEmpty()) {
          if (explain)
             cerr << "static analysis determined that the query result will be empty" << endl; else

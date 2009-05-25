@@ -56,8 +56,13 @@ static void evalQuery(Database& db,const string& query,bool silent)
       }
 
       // And perform the semantic anaylsis
-      SemanticAnalysis semana(db);
-      semana.transform(parser,queryGraph);
+      try {
+         SemanticAnalysis semana(db);
+         semana.transform(parser,queryGraph);
+      } catch (const SemanticAnalysis::SemanticException& e) {
+         cout << "semantic error: " << e.message << endl;
+         return;
+      }
       if (queryGraph.knownEmpty()) {
          cout << "<empty result>" << endl;
          return;
