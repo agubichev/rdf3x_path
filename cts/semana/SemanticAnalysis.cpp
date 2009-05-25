@@ -6,6 +6,7 @@
 #include "rts/segment/FactsSegment.hpp"
 #include <set>
 #include <cassert>
+#include <cstdlib>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -212,7 +213,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
          }
          } return true;
       case SPARQLParser::Filter::Function:
-         if (input.value==tableFunctionId)
+         if (input.arg1->value==tableFunctionId)
             throw SemanticAnalysis::SemanticException(std::string("<")+tableFunctionId+"> calls must be placed in seperate filter clauses");
          return encodeBinaryFilter(QueryGraph::Filter::Function,db,group,input,output);
       case SPARQLParser::Filter::ArgumentList: return encodeBinaryFilter(QueryGraph::Filter::ArgumentList,db,group,input,output);
@@ -248,6 +249,47 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
    return encodeFilter(db,group,input,output.filters.back());
 }
 //---------------------------------------------------------------------------
+static void encodeTableFunction(Database& /*db*/,const SPARQLParser::PatternGroup& /*group*/,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
+   // Produce a table function call
+{
+   // Collect all arguments
+   std::vector<SPARQLParser::Filter*> args;
+   for (SPARQLParser::Filter* iter=input.arg2;iter;iter=iter->arg2)
+      args.push_back(iter->arg1);
+
+   // Check the call
+   if ((args.size()<2)||(args[0]->type!=SPARQLParser::Filter::Literal)||(args[1]->type!=SPARQLParser::Filter::Literal))
+      throw SemanticAnalysis::SemanticException("malformed table function call");
+   unsigned inputArgs=std::atoi(args[1]->value.c_str());
+   if ((inputArgs+2)>=args.size())
+      throw SemanticAnalysis::SemanticException("too few arguments to table function");
+   for (unsigned index=0;index<inputArgs;index++)
+      if ((args[2+index]->type!=SPARQLParser::Filter::Literal)&&(args[2+index]->type!=SPARQLParser::Filter::IRI)&&(args[2+index]->type!=SPARQLParser::Filter::Variable))
+         throw SemanticAnalysis::SemanticException("table function arguments must be literals or variables");
+   for (unsigned index=2+inputArgs;index<args.size();index++)
+      if (args[index]->type!=SPARQLParser::Filter::Variable)
+         throw SemanticAnalysis::SemanticException("table function output must consist of variables");
+
+   // Translate it
+   output.tableFunctions.resize(output.tableFunctions.size()+1);
+   QueryGraph::TableFunction& func=output.tableFunctions.back();
+   func.name=args[0]->value;
+   func.input.resize(inputArgs);
+   func.output.resize(args.size()-2-inputArgs);
+   for (unsigned index=0;index<inputArgs;index++) {
+      if (args[index+2]->type==SPARQLParser::Filter::Variable) {
+         func.input[index].id=args[index+2]->valueArg;
+      } else {
+         func.input[index].id=~0u;
+         if (args[index+2]->type==SPARQLParser::Filter::IRI)
+            func.input[index].value="<"+args[index+2]->value+">"; else
+            func.input[index].value="\""+args[index+2]->value+"\"";
+      }
+   }
+   for (unsigned index=2+inputArgs;index<args.size();index++)
+      func.output[index-2-inputArgs]=args[index]->valueArg;
+}
+//---------------------------------------------------------------------------
 static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& group,QueryGraph::SubQuery& output)
    // Transform a subquery
 {
@@ -266,6 +308,10 @@ static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& gro
 
    // Encode the filter conditions
    for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.filters.begin(),limit=group.filters.end();iter!=limit;++iter) {
+      if (((*iter).type==SPARQLParser::Filter::Function)&&((*iter).arg1->value==tableFunctionId)) {
+         encodeTableFunction(db,group,*iter,output);
+         continue;
+      }
       if (!encodeFilter(db,group,*iter,output)) {
          // The filter variable is not bound. This will produce an empty result
          return false;

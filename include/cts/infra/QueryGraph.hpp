@@ -75,6 +75,22 @@ class QueryGraph
       /// Could be applied?
       bool isApplicable(const std::set<unsigned>& variables) const;
    };
+   /// A table function
+   struct TableFunction {
+      /// An argument
+      struct Argument {
+         /// The variable id if any
+         unsigned id;
+         /// The string value
+         std::string value;
+      };
+      /// The function name
+      std::string name;
+      /// Input
+      std::vector<Argument> input;
+      /// Output
+      std::vector<unsigned> output;
+   };
    /// Description of a subquery
    struct SubQuery {
       /// The nodes
@@ -87,6 +103,8 @@ class QueryGraph
       std::vector<SubQuery> optional;
       /// Union subqueries
       std::vector<std::vector<SubQuery> > unions;
+      /// The table functions
+      std::vector<TableFunction> tableFunctions;
    };
    /// Order by entry
    struct Order {

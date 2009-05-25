@@ -191,6 +191,16 @@ SPARQLLexer::Token SPARQLLexer::getNext()
             }
             tokenEnd=pos; hasTokenEnd=true;
             return Variable;
+         // Number
+         case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+           while (pos!=input.end()) {
+              char c=*pos;
+              if ((c>='0')&&(c<='9')) {
+                 ++pos;
+              } else break;
+           }
+           tokenEnd=pos; hasTokenEnd=true;
+           return Integer;
          // Identifier
          default:
             --pos;

@@ -262,7 +262,6 @@ SPARQLParser::Filter* SPARQLParser::parseIRIrefOrFunction(std::map<std::string,u
                tail=tail->arg2=new Filter;
                tail->type=Filter::ArgumentList;
                tail->arg1=parseExpression(localVars);
-               break;
             } else {
                if (lexer.getNext()!=SPARQLLexer::RParen)
                   throw ParserException("')' expected");
@@ -423,6 +422,7 @@ SPARQLParser::Filter* SPARQLParser::parsePrimaryExpression(map<string,unsigned>&
    if (token==SPARQLLexer::String) {
       lexer.unget(token);
       auto_ptr<Filter> result(new Filter);
+      result->type=Filter::Literal;
       Element::SubType type;
       parseRDFLiteral(result->value,type,result->valueType);
       result->valueArg=type;
@@ -430,7 +430,7 @@ SPARQLParser::Filter* SPARQLParser::parsePrimaryExpression(map<string,unsigned>&
    }
    if (token==SPARQLLexer::Integer) {
       auto_ptr<Filter> result(new Filter);
-      result->type=Filter::Variable;
+      result->type=Filter::Literal;
       result->value=lexer.getTokenValue();
       result->valueType="http://www.w3.org/2001/XMLSchema#integer";
       result->valueArg=Element::CustomType;
@@ -438,7 +438,7 @@ SPARQLParser::Filter* SPARQLParser::parsePrimaryExpression(map<string,unsigned>&
    }
    if (token==SPARQLLexer::Decimal) {
       auto_ptr<Filter> result(new Filter);
-      result->type=Filter::Variable;
+      result->type=Filter::Literal;
       result->value=lexer.getTokenValue();
       result->valueType="http://www.w3.org/2001/XMLSchema#decimal";
       result->valueArg=Element::CustomType;
@@ -446,7 +446,7 @@ SPARQLParser::Filter* SPARQLParser::parsePrimaryExpression(map<string,unsigned>&
    }
    if (token==SPARQLLexer::Double) {
       auto_ptr<Filter> result(new Filter);
-      result->type=Filter::Variable;
+      result->type=Filter::Literal;
       result->value=lexer.getTokenValue();
       result->valueType="http://www.w3.org/2001/XMLSchema#double";
       result->valueArg=Element::CustomType;
