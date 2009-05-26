@@ -643,7 +643,7 @@ static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registe
 }
 //---------------------------------------------------------------------------
 Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,vector<Register*>& output)
-   // Perform a naive translation of a query into an operator tree withozt output generation
+   // Perform a naive translation of a query into an operator tree without output generation
 {
    // Allocate registers for all relations
    map<const QueryGraph::Node*,unsigned> registers;
@@ -737,7 +737,7 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
       case QueryGraph::NoDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break;
       case QueryGraph::ShowDuplicates: duplicateHandling=ResultsPrinter::ShowDuplicates; break;
    }
-   tree=new ResultsPrinter(runtime.getDatabase(),tree,output,duplicateHandling,query.getLimit(),silent);
+   tree=new ResultsPrinter(runtime,tree,output,duplicateHandling,query.getLimit(),silent);
 
    return tree;
 }

@@ -456,6 +456,7 @@ SPARQLParser::Filter* SPARQLParser::parsePrimaryExpression(map<string,unsigned>&
       auto_ptr<Filter> result(new Filter);
       result->type=Filter::Variable;
       result->value=lexer.getTokenValue();
+      result->valueArg=nameVariable(result->value);
       return result.release();
    }
    throw ParserException("syntax error in primary expression");

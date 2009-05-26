@@ -7,6 +7,7 @@
 #include "infra/osdep/Timestamp.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/operator/Scheduler.hpp"
@@ -82,7 +83,8 @@ static void evalQuery(Database& db,const string& query,bool silent)
       Operator::disableSkipping=true;
 
    // Build a physical plan
-   Runtime runtime(db);
+   TemporaryDictionary tempDict(db.getDictionary());
+   Runtime runtime(db,0,&tempDict);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,silent);
 
    if (getenv("SHOWPLAN")) {

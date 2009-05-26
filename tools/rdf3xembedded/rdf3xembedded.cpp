@@ -7,6 +7,7 @@
 #include "infra/osdep/Timestamp.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/ResultsPrinter.hpp"
 #include <iostream>
@@ -69,7 +70,7 @@ static void runQuery(Database& db,const string& query)
    try {
       SemanticAnalysis semana(db);
       semana.transform(parser,queryGraph);
-   } catch (SemanticAnalysis::SemanticException& e) {
+   } catch (const SemanticAnalysis::SemanticException& e) {
       cout << "semantic error: " << e.message << endl;
       return;
    }
@@ -90,7 +91,8 @@ static void runQuery(Database& db,const string& query)
    }
 
    // Build a physical plan
-   Runtime runtime(db);
+   TemporaryDictionary tempDict(db.getDictionary());
+   Runtime runtime(db,0,&tempDict);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,false);
    dynamic_cast<ResultsPrinter*>(operatorTree)->setOutputMode(ResultsPrinter::Embedded);
 

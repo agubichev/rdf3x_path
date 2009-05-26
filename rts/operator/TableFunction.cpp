@@ -54,6 +54,7 @@ void TableFunction::requestTable()
    // Request the table
    cout << "callback " << id << " ";
    escapeOutput(name.begin(),name.end());
+   cout << " " << outputVars.size();
    for (unsigned index=0;index<inputArgs.size();index++) {
       cout << " ";
       if (inputArgs[index].reg) {
@@ -136,17 +137,11 @@ void TableFunction::requestTable()
    if (cin.get()!='\n') cin.unget();
 
    // Collect input
-   while (true) {
+   bool done=false;
+   while (!done) {
       char c;
       if (!cin.get(c)) break;
 
-      // Done?
-      if (c=='.') {
-         char c2;
-         if (!cin.get(c2)) break;
-         if ((c2=='\n')||(c2=='\r')) break;
-         cin.unget();
-      }
       // Ignore leading CR
       if (c=='\r') continue;
 
@@ -156,6 +151,10 @@ void TableFunction::requestTable()
       while (true) {
          if (c=='\\') {
             if (!cin.get(c)) break;
+            if ((c=='.')&&(line.empty())&&(current.length()==0)) {
+               done=true;
+               break;
+            }
             current+=c;
          } else if (c==' ') {
             line.push_back(current);
@@ -168,6 +167,7 @@ void TableFunction::requestTable()
          }
          if (!cin.get(c)) break;
       }
+      if (done) break;
 
       // Store it if appropirate
       if (line.size()!=outputVars.size()) {
@@ -193,6 +193,7 @@ void TableFunction::requestTable()
             for (;iter<limit;++iter)
                if (s[iter]=='\\') ++iter; else
                if (s[iter]=='"') break;
+            v=s.substr(1,iter-1);
             if (iter+1==limit) {
                type=Type::Literal;
             } else if ((iter+1<limit)&&(s[iter+1]=='@')) {

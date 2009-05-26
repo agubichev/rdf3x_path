@@ -13,9 +13,9 @@
 #include "rts/operator/Operator.hpp"
 #include <vector>
 //---------------------------------------------------------------------------
-class Database;
 class DictionarySegment;
 class Register;
+class Runtime;
 //---------------------------------------------------------------------------
 /// Consumes its input and prints it. Produces a single empty tuple.
 class ResultsPrinter : public Operator
@@ -31,6 +31,8 @@ class ResultsPrinter : public Operator
    std::vector<Register*> output;
    /// The input
    Operator* input;
+   /// The runtime
+   Runtime& runtime;
    /// The dictionary
    DictionarySegment& dictionary;
    /// The duplicate handling
@@ -44,7 +46,7 @@ class ResultsPrinter : public Operator
 
    public:
    /// Constructor
-   ResultsPrinter(Database& db,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit=~0u,bool silent=false);
+   ResultsPrinter(Runtime& runtime,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit=~0u,bool silent=false);
    /// Destructor
    ~ResultsPrinter();
 

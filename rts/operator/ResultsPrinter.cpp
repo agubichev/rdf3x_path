@@ -2,6 +2,7 @@
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include <iostream>
 #include <map>
@@ -18,8 +19,8 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-ResultsPrinter::ResultsPrinter(Database& db,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
-   : Operator(1),output(output),input(input),dictionary(db.getDictionary()),duplicateHandling(duplicateHandling),outputMode(DefaultOutput),limit(limit),silent(silent)
+ResultsPrinter::ResultsPrinter(Runtime& runtime,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
+   : Operator(1),output(output),input(input),runtime(runtime),dictionary(runtime.getDatabase().getDictionary()),duplicateHandling(duplicateHandling),outputMode(DefaultOutput),limit(limit),silent(silent)
    // Constructor
 {
 }
@@ -129,15 +130,20 @@ unsigned ResultsPrinter::first()
 
    // Lookup the strings
    set<unsigned> subTypes;
+   TemporaryDictionary* tempDict=runtime.hasTemporaryDictionary()?(&runtime.getTemporaryDictionary()):0;
    for (map<unsigned,CacheEntry>::iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter) {
       CacheEntry& c=(*iter).second;
-      dictionary.lookupById((*iter).first,c.start,c.stop,c.type,c.subType);
+      if (tempDict)
+         tempDict->lookupById((*iter).first,c.start,c.stop,c.type,c.subType); else
+         dictionary.lookupById((*iter).first,c.start,c.stop,c.type,c.subType);
       if (Type::hasSubType(c.type))
          subTypes.insert(c.subType);
    }
    for (set<unsigned>::const_iterator iter=subTypes.begin(),limit=subTypes.end();iter!=limit;++iter) {
       CacheEntry& c=stringCache[*iter];
-      dictionary.lookupById(*iter,c.start,c.stop,c.type,c.subType);
+      if (tempDict)
+         tempDict->lookupById(*iter,c.start,c.stop,c.type,c.subType); else
+         dictionary.lookupById(*iter,c.start,c.stop,c.type,c.subType);
    }
 
    // Skip printing the results?
