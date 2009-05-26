@@ -13,7 +13,7 @@ import java.util.Properties;
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 
-final class Statement implements java.sql.Statement
+public final class Statement implements java.sql.Statement
 {
    // The connection
    private Connection connection;
@@ -43,8 +43,8 @@ final class Statement implements java.sql.Statement
    public boolean execute(String sql, String[] columnNames) throws SQLException { throw new SQLFeatureNotSupportedException(); }
    // Execute a batch
    public int[] executeBatch() throws SQLException { throw new SQLFeatureNotSupportedException(); }
-   // Exeucte a query
-   public java.sql.ResultSet executeQuery(String query) throws SQLException{
+   // Execute a query
+   private java.sql.ResultSet executeQueryInternal(String query,FunctionCallback callback) throws SQLException{
       synchronized (connection) {
          // Send the query
          connection.assertOpen();
@@ -63,11 +63,39 @@ final class Statement implements java.sql.Statement
          while (true) {
             String[] row=connection.readResultLine();
             if (row==null) break;
+            if ((row.length>=4)&&("callback".equals(row[0]))) {
+               java.util.List<String[]> values;
+               int columns;
+               try { columns=Integer.parseInt(row[3]); } catch (NumberFormatException e) { columns=0; }
+               if (callback==null) {
+                  values=null;
+               } else {
+                  String[] args=new String[row.length-4];
+                  System.arraycopy(row,4,args,0,args.length);
+                  values=callback.eval(row[2],args);
+               }
+               connection.writeResultLine(new String[]{"ok",row[1]});
+               if (values!=null) {
+                  for (String[] l:values)
+                     if ((l!=null)&&(l.length==columns))
+                        connection.writeResultLine(l);
+               }
+               connection.writeResultLine(null);
+               continue;
+            }
             result.add(row);
          }
 
          return new ResultSet(header,result.toArray(new String[0][]));
       }
+   }
+   // Execute a query
+   public java.sql.ResultSet executeQuery(String query) throws SQLException{
+      return executeQueryInternal(query,null);
+   }
+   // Execute a query
+   public java.sql.ResultSet executeQueryWithFunctions(String query,FunctionCallback functions) throws SQLException{
+      return executeQueryInternal(query,functions);
    }
    // Execute a statement
    public int executeUpdate(String sql) throws SQLException { throw new SQLFeatureNotSupportedException(); }

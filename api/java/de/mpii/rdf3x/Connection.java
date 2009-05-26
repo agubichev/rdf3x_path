@@ -204,6 +204,59 @@ final class Connection implements java.sql.Connection
          throw new SQLException(e);
       }
    }
+   /// Send a line to the server
+   void writeResultLine(String[] cols) throws SQLException
+   {
+      try {
+         java.io.OutputStream out=process.getOutputStream();
+         if (cols==null) {
+            // End marker
+            out.write('\\');
+            out.write('.');
+            out.write('\n');
+            out.flush();
+            return;
+         }
+         for (int index=0;index<cols.length;index++) {
+            String s=cols[index];
+            if (index>0) out.write(' ');
+            for (int index2=0;index2<s.length();index2++) {
+               char c=s.charAt(index2);
+               if (c<0x80) {
+                  byte b1=(byte)c;
+                  if ((b1==' ')||(b1=='\n')||(b1=='\\'))
+                     out.write('\\');
+                  out.write(b1);
+               } else if (c<0x800) {
+                  byte b1=(byte)(0xc0 | (0x1f & (c >> 6)));
+                  byte b2=(byte)(0x80 | (0x3f & c));
+                  if ((b1==' ')||(b1=='\n')||(b1=='\\'))
+                     out.write('\\');
+                  out.write(b1);
+                  if ((b2==' ')||(b2=='\n')||(b2=='\\'))
+                     out.write('\\');
+                  out.write(b2);
+               } else {
+                  byte b1=(byte)(0xe0 | (0x0f & (c >> 12)));
+                  byte b2=(byte)(0x80 | (0x3f & (c >>  6)));
+                  byte b3=(byte)(0x80 | (0x3f & c));
+                  if ((b1==' ')||(b1=='\n')||(b1=='\\'))
+                     out.write('\\');
+                  out.write(b1);
+                  if ((b2==' ')||(b2=='\n')||(b2=='\\'))
+                     out.write('\\');
+                  out.write(b2);
+                  if ((b3==' ')||(b3=='\n')||(b3=='\\'))
+                     out.write('\\');
+                  out.write(b3);
+               }
+            }
+         }
+         out.write('\n');
+      } catch (java.io.IOException e) {
+         throw new SQLException(e);
+      }
+   }
    /// Read the next line
    String readLine() throws SQLException
    {
