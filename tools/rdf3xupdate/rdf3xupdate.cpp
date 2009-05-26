@@ -1,4 +1,4 @@
-#include "../rdf3xload/TurtleParser.hpp"
+#include "cts/parser/TurtleParser.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/runtime/BulkOperation.hpp"
 #include <iostream>

@@ -1,7 +1,7 @@
 #include "Sorter.hpp"
 #include "StringLookup.hpp"
 #include "TempFile.hpp"
-#include "TurtleParser.hpp"
+#include "cts/parser/TurtleParser.hpp"
 #include "infra/osdep/MemoryMappedFile.hpp"
 #include "rts/database/DatabaseBuilder.hpp"
 #include <iostream>

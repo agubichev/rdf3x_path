@@ -1,4 +1,4 @@
-#include "../rdf3xload/TurtleParser.hpp"
+#include "cts/parser/TurtleParser.hpp"
 #include "cts/codegen/CodeGen.hpp"
 #include "cts/infra/QueryGraph.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
