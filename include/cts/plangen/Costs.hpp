@@ -37,6 +37,8 @@ class Costs
    static cost_t hashJoin(double leftCard,double rightCard) { return 300000+(leftCard/10)+(rightCard/100); }
    /// Costs for a filter
    static cost_t filter(double card) { return card/(cpuSpeed/3); }
+   /// Costs for a table function
+   static cost_t tableFunction(double leftCard) { return leftCard*10000.0; }
 };
 //---------------------------------------------------------------------------
 #endif

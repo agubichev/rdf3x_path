@@ -16,6 +16,7 @@
 #include "rts/operator/Selection.hpp"
 #include "rts/operator/SingletonScan.hpp"
 #include "rts/operator/Sort.hpp"
+#include "rts/operator/TableFunction.hpp"
 #include "rts/operator/Union.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/DifferentialIndex.hpp"
@@ -157,7 +158,15 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
       case Plan::Filter:
          collectVariables(context,variables,plan->left);
          break;
-
+      case Plan::TableFunction: {
+         const QueryGraph::TableFunction& func=*reinterpret_cast<QueryGraph::TableFunction*>(plan->right);
+         for (vector<unsigned>::const_iterator iter=func.output.begin(),limit=func.output.end();iter!=limit;++iter)
+            variables.insert(*iter);
+         collectVariables(context,variables,plan->left);
+         break;
+      }
+      case Plan::Singleton:
+         break;
    }
 }
 //---------------------------------------------------------------------------
@@ -539,6 +548,50 @@ static Operator* translateMergeUnion(Runtime& runtime,const map<unsigned,Registe
    return result;
 }
 //---------------------------------------------------------------------------
+static Operator* translateTableFunction(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate a table function into an operator tree
+{
+   const QueryGraph::TableFunction& function=*reinterpret_cast<QueryGraph::TableFunction*>(plan->right);
+
+   // Build the input trees
+   set<unsigned> newProjection=projection;
+   for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter=function.input.begin(),limit=function.input.end();iter!=limit;++iter)
+      if (~(*iter).id)
+         newProjection.insert((*iter).id);
+   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
+   vector<TableFunction::FunctionArgument> input;
+   for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter=function.input.begin(),limit=function.input.end();iter!=limit;++iter) {
+      TableFunction::FunctionArgument arg;
+      if (~(*iter).id) {
+         arg.reg=bindings[(*iter).id];
+      } else {
+         arg.reg=0;
+         arg.value=(*iter).value;
+      }
+      input.push_back(arg);
+   }
+
+   // Examine output registers
+   vector<Register*> output;
+   unsigned slot=0;
+   for (vector<unsigned>::const_iterator iter=function.output.begin(),limit=function.output.end();iter!=limit;++iter,++slot) {
+      Register* reg=runtime.getRegister((*registers.find(reinterpret_cast<const QueryGraph::Node*>(&function))).second+slot);
+      output.push_back(reg);
+      if (projection.count(*iter))
+         bindings[*iter]=reg;
+   }
+
+   // Build the operator
+   Operator* result=new TableFunction(tree,runtime,0 /* XXX */,function.name,input,output,plan->cardinality);
+
+   // Cleanup the binding
+   for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter=function.input.begin(),limit=function.input.end();iter!=limit;++iter)
+      if ((~(*iter).id)&&(!projection.count((*iter).id)))
+         bindings.erase((*iter).id);
+
+   return result;
+}
+//---------------------------------------------------------------------------
 static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
    // Translate a plan into an operator tree
 {
@@ -554,6 +607,8 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::Filter: result=translateFilter(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan); break;
       case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::TableFunction: result=translateTableFunction(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::Singleton: result=new SingletonScan(); break;
    }
    return result;
 }
@@ -577,6 +632,13 @@ static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registe
    for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter)
       for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          id=allocateRegisters(registers,registerClasses,(*iter2),id);
+   for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter) {
+      registers[reinterpret_cast<const QueryGraph::Node*>(&(*iter))]=id;
+      unsigned slot=0;
+      for (vector<unsigned>::const_iterator iter2=(*iter).output.begin(),limit2=(*iter).output.end();iter2!=limit2;++iter2,++slot)
+         registerClasses[*iter2].insert(id+slot);
+      id+=(*iter).output.size();
+   }
    return id;
 }
 //---------------------------------------------------------------------------

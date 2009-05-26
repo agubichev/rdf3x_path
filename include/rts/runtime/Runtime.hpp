@@ -15,6 +15,7 @@
 //---------------------------------------------------------------------------
 class Database;
 class DifferentialIndex;
+class TemporaryDictionary;
 //---------------------------------------------------------------------------
 /// A runtime register storing a single value
 class Register
@@ -37,6 +38,8 @@ class Runtime
    Database& db;
    /// The differential index (if any)
    DifferentialIndex* diff;
+   /// The temporary dictionary (if any)
+   TemporaryDictionary* temporaryDictionary;
    /// The registers
    std::vector<Register> registers;
    /// The domain descriptions
@@ -44,7 +47,7 @@ class Runtime
 
    public:
    /// Constructor
-   Runtime(Database& db,DifferentialIndex* diff=0);
+   Runtime(Database& db,DifferentialIndex* diff=0,TemporaryDictionary* temporaryDictionary=0);
    /// Destructor
    ~Runtime();
 
@@ -54,6 +57,10 @@ class Runtime
    bool hasDifferentialIndex() const { return diff; }
    /// Get the differential index
    DifferentialIndex& getDifferentialIndex() const { return *diff; }
+   /// Has a temporary dictionary?
+   bool hasTemporaryDictionary() const { return temporaryDictionary; }
+   /// Get the temporary dictionary
+   TemporaryDictionary& getTemporaryDictionary() const { return *temporaryDictionary; }
    /// Set the number of registers
    void allocateRegisters(unsigned count);
    /// Get the number of registers

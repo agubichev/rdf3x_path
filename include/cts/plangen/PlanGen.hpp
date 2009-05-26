@@ -58,6 +58,8 @@ class PlanGen
    Problem* buildOptional(const QueryGraph::SubQuery& query,unsigned id);
    /// Generate a union part
    Problem* buildUnion(const std::vector<QueryGraph::SubQuery>& query,unsigned id);
+   /// Generate a table function access
+   Problem* buildTableFunction(const QueryGraph::TableFunction& function,unsigned id);
 
    /// Translate a query into an operator tree
    Plan* translate(const QueryGraph::SubQuery& query);

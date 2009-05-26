@@ -31,6 +31,8 @@ struct PlanGen::JoinDescription
    unsigned ordering;
    /// Selectivity
    double selectivity;
+   /// Table function
+   const QueryGraph::TableFunction* tableFunction;
 };
 //---------------------------------------------------------------------------
 PlanGen::PlanGen()
@@ -375,6 +377,7 @@ PlanGen::JoinDescription PlanGen::buildJoinInfo(const QueryGraph::SubQuery& quer
       result.ordering=(~0u)-1;
       result.selectivity=-1;
    }
+   result.tableFunction=0;
 
    return result;
 }
@@ -542,6 +545,19 @@ PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,
    return result;
 }
 //---------------------------------------------------------------------------
+PlanGen::Problem* PlanGen::buildTableFunction(const QueryGraph::TableFunction& /*function*/,unsigned id)
+   // Generate a table function access
+{
+   // Create new problem instance
+   Problem* result=problems.alloc();
+   result->next=0;
+   result->plans=0;
+   result->relations=BitSet();
+   result->relations.set(id);
+
+   return result;
+}
+//---------------------------------------------------------------------------
 static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
    // Find all filters already applied in a plan
 {
@@ -553,6 +569,7 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
       case Plan::IndexScan:
       case Plan::AggregatedIndexScan:
       case Plan::FullyAggregatedIndexScan:
+      case Plan::Singleton:
          // We reached a leaf.
          break;
       case Plan::Filter:
@@ -565,7 +582,7 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
          findFilters(plan->left,filters);
          findFilters(plan->right,filters);
          break;
-      case Plan::HashGroupify:
+      case Plan::HashGroupify: case Plan::TableFunction:
          findFilters(plan->left,filters);
          break;
    }
@@ -574,13 +591,15 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
 Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    // Translate a query into an operator tree
 {
+   bool singletonNeeded=(!(query.nodes.size()+query.optional.size()+query.unions.size()))&&query.tableFunctions.size();
+
    // Check if we could handle the query
-   if ((query.nodes.size()+query.optional.size()+query.unions.size())>BitSet::maxWidth)
+   if ((query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded)>BitSet::maxWidth)
       return 0;
 
    // Seed the DP table with scans
    vector<Problem*> dpTable;
-   dpTable.resize(query.nodes.size()+query.optional.size()+query.unions.size());
+   dpTable.resize(query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded);
    Problem* last=0;
    unsigned id=0;
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter,++id) {
@@ -604,11 +623,73 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
          dpTable[0]=p;
       last=p;
    }
+   unsigned functionIds=id;
+   for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter,++id) {
+      Problem* p=buildTableFunction(*iter,id);
+      if (last)
+         last->next=p; else
+         dpTable[0]=p;
+      last=p;
+   }
+   unsigned singletonId=id;
+   if (singletonNeeded) {
+      Plan* plan=plans.alloc();
+      plan->op=Plan::Singleton;
+      plan->opArg=0;
+      plan->left=0;
+      plan->right=0;
+      plan->next=0;
+      plan->cardinality=1;
+      plan->ordering=~0u;
+      plan->costs=0;
+
+      Problem* problem=problems.alloc();
+      problem->next=0;
+      problem->plans=plan;
+      problem->relations=BitSet();
+      problem->relations.set(id);
+      if (last)
+         last->next=problem; else
+         dpTable[0]=problem;
+      last=problem;
+   }
 
    // Construct the join info
    vector<JoinDescription> joins;
    for (vector<QueryGraph::Edge>::const_iterator iter=query.edges.begin(),limit=query.edges.end();iter!=limit;++iter)
       joins.push_back(buildJoinInfo(query,*iter));
+   id=functionIds;
+   for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter,++id) {
+      JoinDescription join;
+      set<unsigned> input;
+      for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter2=(*iter).input.begin(),limit2=(*iter).input.end();iter2!=limit2;++iter2)
+         if (~(*iter2).id)
+            input.insert((*iter2).id);
+      for (unsigned index=0;index<query.nodes.size();index++) {
+         unsigned s=query.nodes[index].constSubject?~0u:query.nodes[index].subject;
+         unsigned p=query.nodes[index].constPredicate?~0u:query.nodes[index].predicate;
+         unsigned o=query.nodes[index].constObject?~0u:query.nodes[index].object;
+         if (input.count(s)||input.count(p)||input.count(o)||input.empty())
+            join.left.set(index);
+      }
+      if (singletonNeeded&&input.empty())
+         join.left.set(singletonId);
+      for (unsigned index=0;index<query.tableFunctions.size();index++) {
+         bool found=false;
+         for (vector<unsigned>::const_iterator iter=query.tableFunctions[index].output.begin(),limit=query.tableFunctions[index].output.end();iter!=limit;++iter)
+            if (input.count(*iter)) {
+               found=true;
+               break;
+            }
+         if (found)
+            join.left.set(functionIds+index);
+      }
+      join.right.set(id);
+      join.ordering=~0u;
+      join.selectivity=1;
+      join.tableFunction=&(*iter);
+      joins.push_back(join);
+   }
 
    // Build larger join trees
    vector<unsigned> joinOrderings;
@@ -628,6 +709,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                double selectivity=1;
                for (vector<JoinDescription>::const_iterator iter3=joins.begin(),limit3=joins.end();iter3!=limit3;++iter3)
                   if (((*iter3).left.subsetOf(leftRel))&&((*iter3).right.subsetOf(rightRel))) {
+                     if (!iter->plans) break;
                      // We can join it...
                      BitSet relations=leftRel.unionWith(rightRel);
                      if (lookup.count(relations)) {
@@ -638,6 +720,23 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         problem->plans=0;
                         problem->next=dpTable[index];
                         dpTable[index]=problem;
+                     }
+                     // Table function call?
+                     if ((*iter3).tableFunction) {
+                        for (Plan* leftPlan=iter->plans;leftPlan;leftPlan=leftPlan->next) {
+                           Plan* p=plans.alloc();
+                           p->op=Plan::TableFunction;
+                           p->opArg=0;
+                           p->left=leftPlan;
+                           p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::TableFunction*>((*iter3).tableFunction));
+                           p->cardinality=leftPlan->cardinality;
+                           p->costs=leftPlan->costs+Costs::tableFunction(leftPlan->cardinality);
+                           p->ordering=leftPlan->ordering;
+                           addPlan(problem,p);
+                        }
+
+                        problem=0;
+                        break;
                      }
                      // Collect selectivities and join order candidates
                      joinOrderings.clear();
