@@ -9,13 +9,19 @@ IFLAGS-test:=-Igtest/include
 OBJEXT:=.o
 EXEEXT:=
 TARGET:=-o 
-EXETARGET:=-o 
+EXETARGET:=-o
 
 nativefile=$(1)
 
 define checkdir
 @mkdir -p $(dir $@)
 endef
+
+ifeq ($(CXX),icc)
+CXXFLAGS:=-g -O3
+LIBS:=-lstdc++ -lpthread
+FORCELIBS:=1
+endif
 
 ifeq ($(LINEEDITOR),)
 ifeq ($(wildcard lineeditor/LineEditor.cpp),lineeditor/LineEditor.cpp)

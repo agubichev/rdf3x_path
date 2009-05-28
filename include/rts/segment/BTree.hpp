@@ -125,12 +125,12 @@ template <class T> template <class V> bool BTree<T>::findLeaf(BufferReference& r
             if (innerKey<key) {
                left=middle+1;
             } else if (!middle) {
-               ref=readShared(getInnerChildPage(page,middle));
+               ref=T::readShared(getInnerChildPage(page,middle));
                break;
             } else {
                T::readInnerKey(innerKey,getInnerPtr(page,middle-1));
                if (innerKey<key) {
-                  ref=readShared(getInnerChildPage(page,middle));
+                  ref=T::readShared(getInnerChildPage(page,middle));
                   break;
                } else {
                   right=middle;
