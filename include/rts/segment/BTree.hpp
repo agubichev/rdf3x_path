@@ -55,16 +55,11 @@
   * /// Read a specific page
   * BufferRequestExclusive readExclusive(unsigned page) const;
   */
-template <class T> class BTree
+template <class T> class BTree : public T
 {
    protected:
    /// Helper for updates
    class Updater;
-
-   /// Get the implementation
-   T& impl() { return *static_cast<T*>(this); }
-   /// Get the implementation
-   const T& impl() const { return *static_cast<const T*>(this); }
 
    // Layout of an inner page: LSN[8] marker[4] next[4] count[4] padding[4] entries[?)
 
@@ -75,7 +70,7 @@ template <class T> class BTree
    /// Size of an entry on an inner page
    static const unsigned innerEntrySize = T::innerKeySize+4;
    /// Maximum number of entries on an inner page
-   static const unsigned maxInnerCount = (BufferReference::pageSize-innerHeaderSize)/T::innerEntrySize;
+   static const unsigned maxInnerCount = (BufferReference::pageSize-innerHeaderSize)/innerEntrySize;
 
    /// Is a page an inner page?
    static bool isInnerPage(const unsigned char* page) { return Segment::readUint32Aligned(page+8)==0xFFFFFFFF; }
@@ -101,6 +96,9 @@ template <class T> class BTree
    template <class S,class V> void packLeaves(S& reader,std::vector<std::pair<V,unsigned> >& boundaries);
 
    public:
+   /// Constructor
+   template <class V> explicit BTree(V& v) : T(v) {}
+
    /// Navigate to a leaf node
    template <class V> bool findLeaf(BufferReference& leaf,const V& key);
    /// Perform an initial bulkload
@@ -113,7 +111,7 @@ template <class T> template <class V> bool BTree<T>::findLeaf(BufferReference& r
    /// Navigate to a leaf node
 {
    // Traverse the B-Tree
-   ref=impl().readShared(impl().getRootPage());
+   ref=readShared(T::getRootPage());
    while (true) {
       const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
       // Inner node?
@@ -127,12 +125,12 @@ template <class T> template <class V> bool BTree<T>::findLeaf(BufferReference& r
             if (innerKey<key) {
                left=middle+1;
             } else if (!middle) {
-               ref=impl().readShared(getInnerChildPage(page,middle));
+               ref=readShared(getInnerChildPage(page,middle));
                break;
             } else {
                T::readInnerKey(innerKey,getInnerPtr(page,middle-1));
                if (innerKey<key) {
-                  ref=impl().readShared(getInnerChildPage(page,middle));
+                  ref=readShared(getInnerChildPage(page,middle));
                   break;
                } else {
                   right=middle;
@@ -176,7 +174,7 @@ template <class T> template <class S,class V> void BTree<T>::packLeaves(S& reade
       assert(stored);
 
       // And write the page
-      chainer.store(&impl().getSegment(),buffer);
+      chainer.store(&T::getSegment(),buffer);
       boundaries.push_back(std::pair<V,unsigned>(T::deriveInnerKey(entries[stored-1]),chainer.getPageNo()));
       entries.erase(entries.begin(),entries.begin()+stored);
 
@@ -193,7 +191,7 @@ template <class T> template <class S,class V> void BTree<T>::packLeaves(S& reade
 
    chainer.finish();
 
-   impl().updateLeafInfo(chainer.getFirstPageNo(),chainer.getPages());
+   T::updateLeafInfo(chainer.getFirstPageNo(),chainer.getPages());
 }
 //---------------------------------------------------------------------------
 template <class T> template <class V> void BTree<T>::packInner(const std::vector<std::pair<V,unsigned> >& data,std::vector<std::pair<V,unsigned> >& boundaries)
@@ -216,7 +214,7 @@ template <class T> template <class V> void BTree<T>::packInner(const std::vector
          Segment::writeUint32Aligned(buffer+20,0);
          for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
             buffer[index]=0;
-         chainer.store(&impl().getSegment(),buffer);
+         chainer.store(&T::getSegment(),buffer);
          boundaries.push_back(std::pair<typename T::InnerKey,unsigned>((*(iter-1)).first,chainer.getPageNo()));
          bufferPos=innerHeaderSize; bufferCount=0;
       }
@@ -235,7 +233,7 @@ template <class T> template <class V> void BTree<T>::packInner(const std::vector
    Segment::writeUint32Aligned(buffer+20,0);
    for (unsigned index=bufferPos;index<BufferReference::pageSize;index++)
       buffer[index]=0;
-   chainer.store(&impl().getSegment(),buffer);
+   chainer.store(&T::getSegment(),buffer);
    boundaries.push_back(std::pair<typename T::InnerKey,unsigned>(data.back().first,chainer.getPageNo()));
    chainer.finish();
 }
@@ -262,7 +260,7 @@ template <class T> template <class S> void BTree<T>::performBulkload(S& source)
    }
 
    // Remember the index root
-   impl().setRootPage(boundaries.back().second);
+   setRootPage(boundaries.back().second);
 }
 //---------------------------------------------------------------------------
 /// Namespace with log actin helpers
@@ -337,7 +335,7 @@ template <class T> void BTree<T>::Updater::lookup(const typename T::InnerKey& ke
       pages[--depth].reset();
 
    // Traverse the B-Tree
-   pages[0]=tree.impl().readExclusive(tree.impl().getRootPage());
+   pages[0]=tree.readExclusive(tree.getRootPage());
    positions[0]=0;
    depth=1;
    while (true) {
@@ -370,7 +368,7 @@ template <class T> void BTree<T>::Updater::lookup(const typename T::InnerKey& ke
             left=total-1;
 
          // Go down
-         pages[depth]=tree.impl().readExclusive(getInnerChildPage(page,left));
+         pages[depth]=tree.readExclusive(getInnerChildPage(page,left));
          positions[depth]=left;
          ++depth;
       } else {
@@ -422,7 +420,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
    } else {
       // Allocate a new page
       BufferReferenceModified newLeaf;
-      tree.impl().allocPage(newLeaf);
+      this->tree.allocPage(newLeaf);
       unsigned newLeafNo=newLeaf.getPageNo();
       unsigned char oldNext[4],newNext[4];
       Segment::writeUint32Aligned(newNext,newLeafNo);
@@ -458,7 +456,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
          }
          // No, we have to split
          BufferReferenceModified newInner;
-         tree.impl().allocPage(newInner);
+         tree.allocPage(newInner);
          unsigned char leftPage[BufferReference::pageSize],rightPage[BufferReference::pageSize];
          memset(leftPage,0,BufferReference::pageSize);
          Segment::writeUint32Aligned(leftPage+8,~0u);
@@ -501,7 +499,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
             }
             ++depth;
             BufferReferenceModified newRoot;
-            tree.impl().allocPage(newRoot);
+            tree.allocPage(newRoot);
             unsigned char newPage[BufferReference::pageSize];
             Segment::writeUint32(newPage+8,~0u);
             Segment::writeUint32(newPage+12,0);
@@ -512,7 +510,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
             T::writeInnerKey(newPage+innerHeaderSize+innerEntrySize,rightMax);
             Segment::writeUint32(newPage+innerHeaderSize+innerEntrySize+T::innerKeySize,insertPage);
             BTreeLogActions::UpdateInnerPage(LogData(static_cast<unsigned char*>(newRoot.getPage())+8,BufferReference::pageSize-8),LogData(newPage+8,BufferReference::pageSize-8)).applyButKeep(newRoot,pages[0]);
-            tree.impl().setRootPage(pages[0].getPageNo());
+            tree.setRootPage(pages[0].getPageNo());
             break;
          }
       }
@@ -529,7 +527,7 @@ template <class T> void BTree<T>::Updater::getNextLeafStart(typename T::InnerKey
    // Get the first value of the next leaf page
 {
    unsigned nextPageNo=Segment::readUint32Aligned(getLeafPage()+leafHeaderNextPos);
-   BufferReference page(tree.impl().readShared(nextPageNo));
+   BufferReference page(tree.readShared(nextPageNo));
    T::readFirstLeafEntryKey(key,static_cast<const unsigned char*>(page.getPage())+leafHeaderSize);
 }
 //---------------------------------------------------------------------------
@@ -577,7 +575,7 @@ template <class T> template <class S> void BTree<T>::performUpdate(S& source)
       std::vector<typename T::LeafEntry> mergedEntries;
       while (true) {
          // Merge more triples if necessary
-         while (mergedEntries.size()<T::maxLeafCount) {
+         while (mergedEntries.size()<maxLeafCount) {
             // Make sure we have data if possible
             if ((!hasCurrent)&&(!sourceDone)) {
                if (!source.next(current))

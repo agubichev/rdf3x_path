@@ -28,7 +28,7 @@ const unsigned entriesOnFirstMappingPage = (BufferReference::pageSize-16)/8;
 const unsigned entriesPerMappingPage = (BufferReference::pageSize-8)/8;
 //---------------------------------------------------------------------------
 /// Index hash-value -> string
-class DictionarySegment::HashIndex : public BTree<HashIndex>
+class DictionarySegment::HashIndexImplementation
 {
    public:
    /// The size of an inner key
@@ -98,7 +98,7 @@ class DictionarySegment::HashIndex : public BTree<HashIndex>
 
    public:
    /// Constructor
-   explicit HashIndex(DictionarySegment& segment) : segment(segment) {}
+   explicit HashIndexImplementation(DictionarySegment& segment) : segment(segment) {}
 
    /// Get the segment
    Segment& getSegment() const { return segment; }
@@ -122,24 +122,21 @@ class DictionarySegment::HashIndex : public BTree<HashIndex>
    static unsigned packLeafEntries(unsigned char* writer,unsigned char* limit,vector<LeafEntry>::const_iterator entriesStart,vector<LeafEntry>::const_iterator entriesLimit);
    /// Unpack leaf entries
    static void unpackLeafEntries(vector<LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit);
-
-   /// Size of the leaf header (used for scans)
-   using BTree<HashIndex>::leafHeaderSize;
 };
 //---------------------------------------------------------------------------
-void DictionarySegment::HashIndex::setRootPage(unsigned page)
+void DictionarySegment::HashIndexImplementation::setRootPage(unsigned page)
    // Se the root page
 {
    segment.indexRoot=page;
    segment.setSegmentData(slotIndexRoot,segment.indexRoot);
 }
 //---------------------------------------------------------------------------
-void DictionarySegment::HashIndex::updateLeafInfo(unsigned /*firstLeaf*/,unsigned /*leafCount*/)
+void DictionarySegment::HashIndexImplementation::updateLeafInfo(unsigned /*firstLeaf*/,unsigned /*leafCount*/)
    // Store info about the leaf pages
 {
 }
 //---------------------------------------------------------------------------
-unsigned DictionarySegment::HashIndex::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<DictionarySegment::HashIndex::LeafEntry>::const_iterator entriesStart,vector<DictionarySegment::HashIndex::LeafEntry>::const_iterator entriesLimit)
+unsigned DictionarySegment::HashIndexImplementation::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<DictionarySegment::HashIndexImplementation::LeafEntry>::const_iterator entriesStart,vector<DictionarySegment::HashIndexImplementation::LeafEntry>::const_iterator entriesLimit)
    // Store the hash/page pairs
 {
    // Too small?
@@ -165,7 +162,7 @@ unsigned DictionarySegment::HashIndex::packLeafEntries(unsigned char* writer,uns
    return len;
 }
 //---------------------------------------------------------------------------
-void DictionarySegment::HashIndex::unpackLeafEntries(vector<DictionarySegment::HashIndex::LeafEntry>& entries,const unsigned char* reader,const unsigned char* /*limit*/)
+void DictionarySegment::HashIndexImplementation::unpackLeafEntries(vector<DictionarySegment::HashIndexImplementation::LeafEntry>& entries,const unsigned char* reader,const unsigned char* /*limit*/)
    // Read the hash/page pairs
 {
    // Read the len
@@ -178,6 +175,17 @@ void DictionarySegment::HashIndex::unpackLeafEntries(vector<DictionarySegment::H
       entries[index].page=Segment::readUint32Aligned(reader); reader+=4;
    }
 }
+//---------------------------------------------------------------------------
+/// Index hash-value -> string
+class DictionarySegment::HashIndex : public BTree<HashIndexImplementation>
+{
+   public:
+   /// Constructor
+   explicit HashIndex(DictionarySegment& segment) : BTree<HashIndexImplementation>(segment) {}
+
+   /// Size of the leaf header (used for scans)
+   using BTree<HashIndexImplementation>::leafHeaderSize;
+};
 //---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------

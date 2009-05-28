@@ -72,6 +72,7 @@ class DictionarySegment : public Segment
       virtual bool next(unsigned& hash,unsigned& page) = 0;
    };
 
+   class HashIndexImplementation;
    class HashIndex;
 
    private:

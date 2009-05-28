@@ -42,6 +42,8 @@ class FactsSegment : public Segment
    };
 
    /// The index
+   class IndexImplementation;
+   /// The index
    class Index;
 
    private:

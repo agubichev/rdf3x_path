@@ -32,6 +32,8 @@ class AggregatedFactsSegment : public Segment
    };
 
    private:
+   /// The index implementation layer
+   class IndexImplementation;
    /// The index
    class Index;
 

@@ -31,6 +31,8 @@ class FullyAggregatedFactsSegment : public Segment
 
    private:
    /// The index
+   class IndexImplementation;
+   /// The index
    class Index;
 
    /// The start of the raw facts table

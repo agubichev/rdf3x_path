@@ -26,7 +26,7 @@ static inline bool greater(unsigned a1,unsigned a2,unsigned b1,unsigned b2) {
 }
 //---------------------------------------------------------------------------
 /// An index
-class AggregatedFactsSegment::Index : public BTree<Index>
+class AggregatedFactsSegment::IndexImplementation
 {
    public:
    /// The size of an inner key
@@ -99,7 +99,7 @@ class AggregatedFactsSegment::Index : public BTree<Index>
 
    public:
    /// Constructor
-   explicit Index(AggregatedFactsSegment& segment) : segment(segment) {}
+   explicit IndexImplementation(AggregatedFactsSegment& segment) : segment(segment) {}
 
    /// Get the segment
    Segment& getSegment() const { return segment; }
@@ -123,19 +123,16 @@ class AggregatedFactsSegment::Index : public BTree<Index>
    static unsigned packLeafEntries(unsigned char* writer,unsigned char* limit,vector<LeafEntry>::const_iterator entriesStart,vector<LeafEntry>::const_iterator entriesLimit);
    /// Unpack leaf entries
    static void unpackLeafEntries(vector<LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit);
-
-   /// Size of the leaf header (used for scans)
-   using BTree<Index>::leafHeaderSize;
 };
 //---------------------------------------------------------------------------
-void AggregatedFactsSegment::Index::setRootPage(unsigned page)
+void AggregatedFactsSegment::IndexImplementation::setRootPage(unsigned page)
    // Se the root page
 {
    segment.indexRoot=page;
    segment.setSegmentData(slotIndexRoot,segment.indexRoot);
 }
 //---------------------------------------------------------------------------
-void AggregatedFactsSegment::Index::updateLeafInfo(unsigned firstLeaf,unsigned leafCount)
+void AggregatedFactsSegment::IndexImplementation::updateLeafInfo(unsigned firstLeaf,unsigned leafCount)
    // Store info about the leaf pages
 {
    segment.tableStart=firstLeaf;
@@ -179,7 +176,7 @@ static unsigned char* writeDelta0(unsigned char* writer,unsigned value)
    } else return writer;
 }
 //---------------------------------------------------------------------------
-unsigned AggregatedFactsSegment::Index::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<AggregatedFactsSegment::Index::LeafEntry>::const_iterator entriesStart,vector<AggregatedFactsSegment::Index::LeafEntry>::const_iterator entriesLimit)
+unsigned AggregatedFactsSegment::IndexImplementation::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<AggregatedFactsSegment::IndexImplementation::LeafEntry>::const_iterator entriesStart,vector<AggregatedFactsSegment::IndexImplementation::LeafEntry>::const_iterator entriesLimit)
    // Pack the facts into leaves using prefix compression
 {
    unsigned lastValue1=0,lastValue2=0;
@@ -236,7 +233,7 @@ static unsigned readDelta2(const unsigned char* pos) { return (pos[0]<<8)|pos[1]
 static unsigned readDelta3(const unsigned char* pos) { return (pos[0]<<16)|(pos[1]<<8)|pos[2]; }
 static unsigned readDelta4(const unsigned char* pos) { return (pos[0]<<24)|(pos[1]<<16)|(pos[2]<<8)|pos[3]; }
 //---------------------------------------------------------------------------
-void AggregatedFactsSegment::Index::unpackLeafEntries(vector<AggregatedFactsSegment::Index::LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit)
+void AggregatedFactsSegment::IndexImplementation::unpackLeafEntries(vector<AggregatedFactsSegment::IndexImplementation::LeafEntry>& entries,const unsigned char* reader,const unsigned char* limit)
    // Read the facts stored on a leaf page
 {
    // Decompress the first triple
@@ -390,6 +387,16 @@ void AggregatedFactsSegment::Index::unpackLeafEntries(vector<AggregatedFactsSegm
       entries.push_back(e);
    }
 }
+//---------------------------------------------------------------------------
+/// An index
+class AggregatedFactsSegment::Index : public BTree<IndexImplementation>
+{
+   public:
+   /// Constructor
+   Index(AggregatedFactsSegment& seg) : BTree<IndexImplementation>(seg) {}
+
+   using BTree<IndexImplementation>::leafHeaderSize;
+};
 //---------------------------------------------------------------------------
 AggregatedFactsSegment::Source::~Source()
    // Destructor
