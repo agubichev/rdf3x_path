@@ -11,6 +11,7 @@
 #include "rts/operator/Scheduler.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include "rts/segment/PredicateSetSegment.hpp"
 #include "infra/osdep/MemoryMappedFile.hpp"
 #include <iostream>
 #include <fstream>
@@ -196,24 +197,8 @@ static void doAnalyze(Database& db)
 //---------------------------------------------------------------------------
 static void doSets(Database& db)
 {
-   map<set<unsigned>,unsigned> predSets;
-   set<unsigned> current; unsigned currentSubject=~0;
-   AggregatedFactsSegment::Scan scan;
-   if (scan.first(db.getAggregatedFacts(Database::Order_Subject_Predicate_Object))) do {
-      if (scan.getValue1()==currentSubject) {
-         current.insert(scan.getValue2());
-      } else {
-         if (!current.empty())
-            predSets[current]++;
-         current.clear();
-         current.insert(scan.getValue2());
-         currentSubject=scan.getValue1();
-      }
-   } while (scan.next());
-   if (!current.empty())
-      predSets[current]++;
-
-   cout << "found " << predSets.size() << " predicate combinations" << endl;
+   PredicateSetSegment ps(db.getFirstPartition());
+   ps.computePredicateSets();
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])

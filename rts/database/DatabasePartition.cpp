@@ -8,6 +8,7 @@
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #include "rts/segment/SegmentInventorySegment.hpp"
 #include "rts/segment/SpaceInventorySegment.hpp"
+#include "rts/segment/PredicateSetSegment.hpp"
 #include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -85,6 +86,7 @@ void DatabasePartition::open()
          case Segment::Type_Dictionary: seg=new DictionarySegment(*this); break;
          case Segment::Type_ExactStatistics: seg=new ExactStatisticsSegment(*this); break;
          case Segment::Type_BTree: break; // Pseudo-Type
+         case Segment::Type_PredicateSet: seg=new PredicateSetSegment(*this); break;
       }
       assert(seg);
       seg->id=id++;
