@@ -34,6 +34,11 @@ struct PredicateSetSegment::PredSet
 
    /// Compare by occuring predicates
    bool operator<(const PredSet& other) const;
+
+   /// Check for subset relationship of the contained predicates
+   bool subsetOf(const PredSet& other) const;
+   /// Transfer predicates to a subset
+   void transferTo(PredSet& target);
 };
 //---------------------------------------------------------------------------
 bool PredicateSetSegment::PredSet::operator<(const PredSet& other) const
@@ -48,6 +53,61 @@ bool PredicateSetSegment::PredSet::operator<(const PredSet& other) const
       if (p1>p2) return false;
    }
    return false;
+}
+//---------------------------------------------------------------------------
+bool PredicateSetSegment::PredSet::subsetOf(const PredSet& other) const
+   // Check for subset relationship of the contained predicates
+{
+   if (predicates.size()>other.predicates.size()) return false;
+
+   vector<Entry>::const_iterator iter2=other.predicates.begin(),limit2=other.predicates.end();
+   for (vector<Entry>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
+      // Examine the next value
+      if (iter2==limit2) return false;
+      unsigned v=(*iter).predicate;
+
+      // Fits directly?
+      if (v==((*iter2).predicate)) {
+         ++iter2;
+         continue;
+      }
+
+      // Perform binary search
+      vector<Entry>::const_iterator left=iter2+1,right=limit2;
+      while (left!=right) {
+         vector<Entry>::const_iterator middle=left+((right-left)/2);
+         unsigned v2=(*middle).predicate;
+         if (v<v2) {
+            right=middle;
+         } else if (v>v2) {
+            left=middle+1;
+         } else {
+            left=middle;
+            break;
+         }
+      }
+      if ((left==limit2)||((*left).predicate!=v))
+         return false;
+      iter2=left+1;
+   }
+   return true;
+}
+//---------------------------------------------------------------------------
+void PredicateSetSegment::PredSet::transferTo(PredSet& target)
+   // Transfer predicates to a subset
+{
+   target.subjects+=subjects;
+   vector<Entry>::iterator writer=target.predicates.begin(),writerLimit=target.predicates.end();
+   if (writer==writerLimit) return;
+   for (unsigned index=0,limit=predicates.size();index<limit;++index) {
+      if (predicates[index].predicate==(*writer).predicate) {
+         (*writer).count+=predicates[index].count;
+         predicates.erase(predicates.begin()+index);
+         --index; --limit;
+         if ((++writer)==writerLimit)
+            break;
+      }
+   }
 }
 //---------------------------------------------------------------------------
 /// The data
@@ -80,6 +140,7 @@ void PredicateSetSegment::refreshInfo()
 {
 }
 //---------------------------------------------------------------------------
+#if 0
 static void addPredSet(set<PredicateSetSegment::PredSet>& predSets,PredicateSetSegment::PredSet& predSet)
    // Add a subject to the predicate set
 {
@@ -93,13 +154,14 @@ static void addPredSet(set<PredicateSetSegment::PredSet>& predSets,PredicateSetS
       predSets.insert(predSet);
    }
 }
+#endif
 //---------------------------------------------------------------------------
 void PredicateSetSegment::computePredicateSets()
    // Compute the predicate sets (after loading)
 {
    // Collect all predicate sets
    set<PredSet> predSets;
-#if 1
+#if 0
    {
       AggregatedFactsSegment::Scan scan;
       if (scan.first(*getPartition().lookupSegment<AggregatedFactsSegment>(DatabasePartition::Tag_SP))) {
@@ -123,7 +185,7 @@ void PredicateSetSegment::computePredicateSets()
       }
    }
    {
-      ofstream out("predsets.dump");
+      ofstream out("bin/predsets.dump");
       out << predSets.size() << endl;
       for (set<PredSet>::const_iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter) {
          out << (*iter).subjects << " " << (*iter).predicates.size();
@@ -134,7 +196,51 @@ void PredicateSetSegment::computePredicateSets()
       }
    }
 #else
+   {
+      ifstream in("bin/predsets.dump");
+      unsigned size = 0;
+      in >> size;
+      for (unsigned index=0;index<size;index++) {
+         PredSet p; unsigned count;
+         in >> p.subjects >> count;
+         p.predicates.resize(count);
+         for (unsigned index2=0;index2<count;index2++)
+            in >> p.predicates[index2].predicate >> p.predicates[index2].count;
+         predSets.insert(p);
+      }
+   }
 #endif
    cout << "Found " << predSets.size() << " predicate sets" << endl;
+
+   static const unsigned maxSize = 10000;
+   while (predSets.size()>maxSize) {
+      cout << predSets.size() << endl;
+      // Pick the smallest predset
+      const PredSet* worst=0;
+      for (set<PredSet>::iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter)
+         if ((!worst)||((*iter).predicates.size()<worst->predicates.size()))
+            worst=&(*iter);
+
+      // Split
+      PredSet remaining=*worst;
+      while (!remaining.predicates.empty()) {
+         // Find the largest subset
+         PredSet* bestMatch=0;
+         for (set<PredSet>::iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter)
+            if (((*iter).predicates.size()<remaining.predicates.size())&&
+                ((!bestMatch)||((*iter).predicates.size()>bestMatch->predicates.size()))&&
+                ((*iter).subsetOf(remaining)))
+               bestMatch=const_cast<PredSet*>(&(*iter));
+
+         // None found?
+         if (!bestMatch) break;
+
+         // Transfer
+         remaining.transferTo(*bestMatch);
+      }
+
+      // Remove the predset
+      predSets.erase(*worst);
+   }
 }
 //---------------------------------------------------------------------------
