@@ -33,6 +33,8 @@ struct PredicateSetSegment::PredSet
    unsigned subjects;
    /// The predicates (sorted by predicate)
    vector<Entry> predicates;
+   /// Filter masks
+   unsigned long long mask1,mask2;
 
    /// Compare by occuring predicates
    bool operator<(const PredSet& other) const;
@@ -279,6 +281,26 @@ void PredicateSetSegment::computePredicateSets()
       }
    }
 #endif
+
+   // Compute filters
+   maxPredicate=0;
+   for (vector<PredSet>::const_iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter)
+      if ((!(*iter).predicates.empty())&&((*iter).predicates.back().predicate>maxPredicate))
+         maxPredicate=(*iter).predicates.back().predicate;
+   for (vector<PredSet>::iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter) {
+      unsigned long long mask1=0,mask2=0;
+      for (vector<PredSet::Entry>::const_iterator iter2=(*iter).predicates.begin(),limit2=(*iter).predicates.end();iter2!=limit2;++iter2) {
+         static const unsigned bitsPerMask=sizeof(unsigned long long)*8;
+         unsigned p=(*iter2).predicate;
+         mask1=mask1|(1ul<<(p%bitsPerMask));
+         unsigned slot=(p*bitsPerMask)/maxPredicate;
+         if (slot>=bitsPerMask)
+            slot=bitsPerMask-1;
+         mask2=mask2|(1ul<<slot);
+      }
+      (*iter).mask1=mask1;
+      (*iter).mask2=mask2;
+   }
 }
 //---------------------------------------------------------------------------
 void PredicateSetSegment::getStarCardinality(const vector<unsigned>& predicates,unsigned& distinctSubjects,double& cardinality)
@@ -286,13 +308,25 @@ void PredicateSetSegment::getStarCardinality(const vector<unsigned>& predicates,
 {
    // Produce the predicate counts
    map<unsigned,unsigned> counts;
-   for (vector<unsigned>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter)
-      counts[*iter]++;
+   unsigned long long mask1=0,mask2=0;
+   for (vector<unsigned>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter) {
+      static const unsigned bitsPerMask=sizeof(unsigned long long)*8;
+      unsigned p=(*iter);
+      mask1=mask1|(1ul<<(p%bitsPerMask));
+      unsigned slot=(p*bitsPerMask)/maxPredicate;
+      if (slot>=bitsPerMask)
+         slot=bitsPerMask-1;
+      mask2=mask2|(1ul<<slot);
+
+      counts[p]++;
+   }
 
    // Find all supersets
    distinctSubjects=0;
    cardinality=0;
    for (vector<PredSet>::const_iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter) {
+      if ((((*iter).mask1&mask1)!=mask1)||(((*iter).mask2&mask2)!=mask2))
+         continue;
       unsigned subjects=(*iter).subjects;
       bool matches=true;
       double triples=subjects;

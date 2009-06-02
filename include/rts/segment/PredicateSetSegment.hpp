@@ -24,8 +24,10 @@ class PredicateSetSegment : public Segment
    /// The data
    struct Data;
 
-   /// THe data
+   /// The data
    Data* data;
+   /// The maximum predicate (for filter construction)
+   unsigned maxPredicate;
 
    /// Refresh segment info stored in the partition
    void refreshInfo();
