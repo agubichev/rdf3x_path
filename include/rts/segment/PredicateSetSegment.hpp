@@ -11,6 +11,7 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include "rts/segment/Segment.hpp"
+#include <vector>
 //---------------------------------------------------------------------------
 /// Statistics about sets of predicates occuring for a subject
 class PredicateSetSegment : public Segment
@@ -45,6 +46,9 @@ class PredicateSetSegment : public Segment
 
    /// Compute the predicate sets (after loading)
    void computePredicateSets();
+
+   /// Estimate the cardinality of a star join
+   void getStarCardinality(const std::vector<unsigned>& predicates,unsigned& distinctSubjects,double& cardinality);
 };
 //---------------------------------------------------------------------------
 #endif

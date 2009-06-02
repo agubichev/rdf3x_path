@@ -195,10 +195,65 @@ static void doAnalyze(Database& db)
    }
 }
 //---------------------------------------------------------------------------
+static double computeError(double observed,double estimated)
+   // Compute the estimation error
+{
+   if (estimated>=observed) {
+      return (estimated/observed)-1.0;
+   } else {
+      return -((observed/estimated)-1.0);
+   }
+}
+//---------------------------------------------------------------------------
 static void doSets(Database& db)
 {
+   // Precompute the predicate sets
    PredicateSetSegment ps(db.getFirstPartition());
    ps.computePredicateSets();
+
+   // Run all two-predicate queries
+   Runtime runtime(db);
+   runtime.allocateRegisters(6);
+   Register* s1=runtime.getRegister(0),*p1=runtime.getRegister(1);
+   Register* s2=runtime.getRegister(3),*p2=runtime.getRegister(4);
+   vector<Register*> et,p2t;
+   p2t.push_back(p2);
+   FullyAggregatedFactsSegment::Scan scan1;
+   if (scan1.first(db.getFullyAggregatedFacts(Database::Order_Predicate_Subject_Object))) do {
+      // Run a merge join
+      map<unsigned,unsigned> tupleCounts,subjectCounts;
+      s1->reset();
+      p1->value=scan1.getValue1();
+      s2->reset();
+      p2->reset();
+      MergeJoin join(
+         AggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,s1,false,p1,true,0,false,0),
+         s1,et,
+         AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,s2,false,p2,false,0,false,0),
+         s2,p2t,
+         1);
+      unsigned count;
+      if ((count=join.first())!=0) do {
+         tupleCounts[p2->value]+=count;
+         subjectCounts[p2->value]++;
+      } while ((count=join.next())!=0);
+
+      // Compare with predicate cardinalities
+      cerr << p1->value << endl;
+      for (map<unsigned,unsigned>::const_iterator iter=tupleCounts.begin(),limit=tupleCounts.end(),iter2=subjectCounts.begin();iter!=limit;++iter,++iter2) {
+         // Call the predicator
+         vector<unsigned> predicates;
+         predicates.push_back(p1->value);
+         predicates.push_back((*iter).first);
+         unsigned predictedSubjects; double predictedTuples;
+         ps.getStarCardinality(predicates,predictedSubjects,predictedTuples);
+
+         // Compute the errors
+         double subjectError=computeError((*iter2).second,predictedSubjects),tupleError=computeError((*iter).second,predictedTuples);
+         if ((subjectError>0.1)||(subjectError<-0.1))
+         cout << p1->value << "\t" << (*iter2).first << "\t" << predictedSubjects << "\t" << (*iter).second << "\t" << subjectError << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
+      }
+   } while (scan1.next());
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])

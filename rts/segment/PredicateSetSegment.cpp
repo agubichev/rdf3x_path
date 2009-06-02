@@ -2,6 +2,7 @@
 #include "rts/database/DatabasePartition.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include <algorithm>
+#include <map>
 #include <set>
 #include <iostream>
 #include <fstream>
@@ -141,7 +142,7 @@ void PredicateSetSegment::refreshInfo()
 {
 }
 //---------------------------------------------------------------------------
-#if 0
+#if 1
 static void addPredSet(set<PredicateSetSegment::PredSet>& predSets,PredicateSetSegment::PredSet& predSet)
    // Add a subject to the predicate set
 {
@@ -168,7 +169,7 @@ void PredicateSetSegment::computePredicateSets()
 {
    // Collect all predicate sets
    set<PredSet> predSets;
-#if 0
+#if 1
    {
       AggregatedFactsSegment::Scan scan;
       if (scan.first(*getPartition().lookupSegment<AggregatedFactsSegment>(DatabasePartition::Tag_SP))) {
@@ -191,6 +192,7 @@ void PredicateSetSegment::computePredicateSets()
             addPredSet(predSets,predSet);
       }
    }
+#if 0
    {
       ofstream out("bin/predsets.dump");
       out << predSets.size() << endl;
@@ -202,9 +204,13 @@ void PredicateSetSegment::computePredicateSets()
          out << endl;
       }
    }
+#endif
 #else
    {
-      ifstream in("bin/predsets.dump");
+      ifstream in("bin/predsets2.dump");
+      if (!in.is_open()) {
+         in.open("bin/predsets.dump");
+      }
       unsigned size = 0;
       in >> size;
       for (unsigned index=0;index<size;index++) {
@@ -250,22 +256,97 @@ void PredicateSetSegment::computePredicateSets()
       }
 
       // Keep only the common pred sets
-      set<PredSet> newPredSets;
+      data->predSets.clear();
       for (vector<PredSet*>::const_iterator iter=sets.begin(),limit=iter+maxSize;iter!=limit;++iter)
-         newPredSets.insert(**iter);
-      predSets.swap(newPredSets);
+         data->predSets.push_back(**iter);
+   } else {
+      // Remember the pred sets
+      data->predSets.clear();
+      for (set<PredSet>::const_iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter)
+         data->predSets.push_back(*iter);
    }
 
+#if 0
    {
       ofstream out("bin/predsets2.dump");
-      out << predSets.size() << endl;
-      for (set<PredSet>::const_iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter) {
+      out << data->predSets.size() << endl;
+      for (vector<PredSet>::const_iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter) {
          out << (*iter).subjects << " " << (*iter).predicates.size();
          for (vector<PredSet::Entry>::const_iterator iter2=(*iter).predicates.begin(),limit2=(*iter).predicates.end();iter2!=limit2;++iter2) {
             out << " " << (*iter2).predicate << " " << (*iter2).count;
          }
          out << endl;
       }
+   }
+#endif
+}
+//---------------------------------------------------------------------------
+void PredicateSetSegment::getStarCardinality(const vector<unsigned>& predicates,unsigned& distinctSubjects,double& cardinality)
+   // Estimate the cardinality of a star join
+{
+   // Produce the predicate counts
+   map<unsigned,unsigned> counts;
+   for (vector<unsigned>::const_iterator iter=predicates.begin(),limit=predicates.end();iter!=limit;++iter)
+      counts[*iter]++;
+
+   // Find all supersets
+   distinctSubjects=0;
+   cardinality=0;
+   for (vector<PredSet>::const_iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter) {
+      unsigned subjects=(*iter).subjects;
+      bool matches=true;
+      double triples=subjects;
+      vector<PredSet::Entry>::const_iterator iter2=(*iter).predicates.begin(),limit2=(*iter).predicates.end();
+      for (map<unsigned,unsigned>::const_iterator iter3=counts.begin(),limit3=counts.end();iter3!=limit3;++iter3) {
+         // Examine the next value
+         if (iter2==limit2) { matches=false; break; }
+         unsigned v=(*iter3).first;
+
+         // Fits directly?
+         if (v==((*iter2).predicate)) {
+            // Do nothing, iter2 is positions correctly
+         } else {
+            // Perform binary search
+            vector<PredSet::Entry>::const_iterator left=iter2+1,right=limit2;
+            while (left!=right) {
+               vector<PredSet::Entry>::const_iterator middle=left+((right-left)/2);
+               unsigned v2=(*middle).predicate;
+               if (v<v2) {
+                  right=middle;
+               } else if (v>v2) {
+                  left=middle+1;
+               } else {
+                  left=middle;
+                  break;
+               }
+            }
+            if ((left==limit2)||((*left).predicate!=v)) {
+               matches=false;
+               break;
+            }
+            iter2=left;
+         }
+
+         // Compute the expected cardinality change
+         double f=static_cast<double>((*iter2).count)/static_cast<double>(subjects);
+         for (unsigned index=(*iter3).second;index>0;--index)
+            triples*=f;
+         iter2++;
+      }
+
+      // Addjust the totals
+      if (matches) {
+         distinctSubjects+=subjects;
+         cardinality+=triples;
+      }
+   }
+
+   // No set found? Might have been pruned out, use a crude lower bound for now
+   if (!distinctSubjects) {
+      for (vector<PredSet>::const_iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter)
+         if ((!distinctSubjects)||((*iter).subjects<distinctSubjects))
+            distinctSubjects=(*iter).subjects;
+      cardinality=distinctSubjects;
    }
 }
 //---------------------------------------------------------------------------
