@@ -1,6 +1,7 @@
 #include "rts/segment/PredicateSetSegment.hpp"
 #include "rts/database/DatabasePartition.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
+#include <algorithm>
 #include <set>
 #include <iostream>
 #include <fstream>
@@ -156,6 +157,12 @@ static void addPredSet(set<PredicateSetSegment::PredSet>& predSets,PredicateSetS
 }
 #endif
 //---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+struct OrderBySubjects { bool operator()(const PredicateSetSegment::PredSet* a,const PredicateSetSegment::PredSet* b) { return a->subjects>b->subjects; } };
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
 void PredicateSetSegment::computePredicateSets()
    // Compute the predicate sets (after loading)
 {
@@ -212,35 +219,53 @@ void PredicateSetSegment::computePredicateSets()
 #endif
    cout << "Found " << predSets.size() << " predicate sets" << endl;
 
+   // Simplify if needed
    static const unsigned maxSize = 10000;
-   while (predSets.size()>maxSize) {
-      cout << predSets.size() << endl;
-      // Pick the smallest predset
-      const PredSet* worst=0;
-      for (set<PredSet>::iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter)
-         if ((!worst)||((*iter).predicates.size()<worst->predicates.size()))
-            worst=&(*iter);
+   if (predSets.size()>maxSize) {
+      // Sort all sets
+      vector<PredSet*> sets;
+      sets.reserve(predSets.size());
+      for (set<PredSet>::const_iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter)
+         sets.push_back(const_cast<PredSet*>(&(*iter)));
+      sort(sets.begin(),sets.end(),OrderBySubjects());
 
-      // Split
-      PredSet remaining=*worst;
-      while (!remaining.predicates.empty()) {
-         // Find the largest subset
-         PredSet* bestMatch=0;
-         for (set<PredSet>::iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter)
-            if (((*iter).predicates.size()<remaining.predicates.size())&&
-                ((!bestMatch)||((*iter).predicates.size()>bestMatch->predicates.size()))&&
-                ((*iter).subsetOf(remaining)))
-               bestMatch=const_cast<PredSet*>(&(*iter));
+      // And merge the small ones
+      for (unsigned index=maxSize,limit=sets.size();index<limit;++index) {
+         PredSet remaining=*sets[index];
+         while (!remaining.predicates.empty()) {
+            // Find the largest subset
+            PredSet* bestMatch=0;
+            for (vector<PredSet*>::const_iterator iter=sets.begin(),limit=iter+maxSize;iter!=limit;++iter)
+               if (((*iter)->predicates.size()<remaining.predicates.size())&&
+                   ((!bestMatch)||((*iter)->predicates.size()>bestMatch->predicates.size()))&&
+                   ((*iter)->subsetOf(remaining)))
+                  bestMatch=*iter;
 
-         // None found?
-         if (!bestMatch) break;
+            // None found?
+            if (!bestMatch) break;
 
-         // Transfer
-         remaining.transferTo(*bestMatch);
+            // Transfer
+            remaining.transferTo(*bestMatch);
+         }
       }
 
-      // Remove the predset
-      predSets.erase(*worst);
+      // Keep only the common pred sets
+      set<PredSet> newPredSets;
+      for (vector<PredSet*>::const_iterator iter=sets.begin(),limit=iter+maxSize;iter!=limit;++iter)
+         newPredSets.insert(**iter);
+      predSets.swap(newPredSets);
+   }
+
+   {
+      ofstream out("bin/predsets2.dump");
+      out << predSets.size() << endl;
+      for (set<PredSet>::const_iterator iter=predSets.begin(),limit=predSets.end();iter!=limit;++iter) {
+         out << (*iter).subjects << " " << (*iter).predicates.size();
+         for (vector<PredSet::Entry>::const_iterator iter2=(*iter).predicates.begin(),limit2=(*iter).predicates.end();iter2!=limit2;++iter2) {
+            out << " " << (*iter2).predicate << " " << (*iter2).count;
+         }
+         out << endl;
+      }
    }
 }
 //---------------------------------------------------------------------------
