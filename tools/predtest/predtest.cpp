@@ -219,6 +219,7 @@ static void doSets(Database& db)
    vector<Register*> et,p2t;
    p2t.push_back(p2);
    FullyAggregatedFactsSegment::Scan scan1;
+   map<int,unsigned> errorHistogramSubjects,errorHistogramTuples;
    if (scan1.first(db.getFullyAggregatedFacts(Database::Order_Predicate_Subject_Object))) do {
       // Run a merge join
       map<unsigned,unsigned> tupleCounts,subjectCounts;
@@ -251,9 +252,24 @@ static void doSets(Database& db)
          // Compute the errors
          double subjectError=computeError((*iter2).second,predictedSubjects),tupleError=computeError((*iter).second,predictedTuples);
          if ((subjectError>0.1)||(subjectError<-0.1))
-         cout << p1->value << "\t" << (*iter2).first << "\t" << predictedSubjects << "\t" << (*iter).second << "\t" << subjectError << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
+            cerr << p1->value << "\t" << (*iter2).first << "\t" << predictedSubjects << "\t" << (*iter).second << "\t" << subjectError << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
+
+         // Remember the errors
+         int subjectSlot=subjectError,tuplesSlot=tupleError;
+         if (subjectSlot<-100) subjectSlot=-100;
+         if (subjectSlot>100) subjectSlot=100;
+         if (tuplesSlot<-100) tuplesSlot=-100;
+         if (tuplesSlot>100) tuplesSlot=100;
+         errorHistogramSubjects[subjectSlot]++;
+         errorHistogramTuples[tuplesSlot]++;
       }
    } while (scan1.next());
+
+   // Unify the histograms and show them
+   for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
+      errorHistogramSubjects[(*iter).first];
+   for (map<int,unsigned>::const_iterator iter=errorHistogramSubjects.begin(),limit=errorHistogramSubjects.end();iter!=limit;++iter)
+      cout << (*iter).first << "\t" << (*iter).second << "\t" << errorHistogramTuples[(*iter).first] << endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
