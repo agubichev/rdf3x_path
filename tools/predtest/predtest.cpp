@@ -255,7 +255,7 @@ static void doSets(Database& db)
             cerr << p1->value << "\t" << (*iter2).first << "\t" << predictedSubjects << "\t" << (*iter).second << "\t" << subjectError << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
 
          // Remember the errors
-         int subjectSlot=subjectError,tuplesSlot=tupleError;
+         int subjectSlot=static_cast<int>(subjectError),tuplesSlot=static_cast<int>(tupleError);
          if (subjectSlot<-100) subjectSlot=-100;
          if (subjectSlot>100) subjectSlot=100;
          if (tuplesSlot<-100) tuplesSlot=-100;
