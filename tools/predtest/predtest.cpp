@@ -251,8 +251,8 @@ static void doSets(Database& db)
 
          // Compute the errors
          double subjectError=computeError((*iter2).second,predictedSubjects),tupleError=computeError((*iter).second,predictedTuples);
-         if ((subjectError>0.1)||(subjectError<-0.1))
-            cerr << p1->value << "\t" << (*iter2).first << "\t" << predictedSubjects << "\t" << (*iter).second << "\t" << subjectError << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
+         if ((tupleError>0.1)||(tupleError<-0.1))
+            cerr << p1->value << "\t" << (*iter2).first << "\t" << predictedSubjects << "\t" << (*iter2).second << "\t" << subjectError << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
 
          // Remember the errors
          int subjectSlot=static_cast<int>(subjectError),tuplesSlot=static_cast<int>(tupleError);
