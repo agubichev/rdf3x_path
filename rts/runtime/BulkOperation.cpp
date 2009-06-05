@@ -64,7 +64,7 @@ unsigned BulkOperation::mapString(const DifferentialIndex::Literal& value)
 
    // Already in db?
    unsigned id;
-   if (differentialIndex.getDatabase().getDictionary().lookup(value.value,value.type,subType,id))
+   if (differentialIndex.lookup(value.value,value.type,subType,id))
       return id;
 
    // Create a temporary id

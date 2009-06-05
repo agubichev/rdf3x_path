@@ -2,6 +2,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "cts/parser/SPARQLLexer.hpp"
 #include "cts/parser/SPARQLParser.hpp"
+#include "cts/parser/TurtleParser.hpp"
 #include "cts/plangen/PlanGen.hpp"
 #include "cts/semana/SemanticAnalysis.hpp"
 #include "infra/osdep/Timestamp.hpp"
@@ -9,6 +10,8 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/operator/ResultsPrinter.hpp"
+#include "rts/runtime/BulkOperation.hpp"
+#include "rts/runtime/DifferentialIndex.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/segment/DictionarySegment.hpp"
@@ -37,7 +40,7 @@ bool smallAddressSpace()
 namespace {
 //---------------------------------------------------------------------------
 /// Query types
-enum QueryType { RegularQuery, ExplainQuery, UnknownQueryType };
+enum QueryType { RegularQuery, ExplainQuery, InsertQuery, UnknownQueryType };
 //---------------------------------------------------------------------------
 static QueryType classifyQuery(const string& s)
    // Classify a query
@@ -49,6 +52,8 @@ static QueryType classifyQuery(const string& s)
       return RegularQuery;
    if (lexer.isKeyword("explain"))
       return ExplainQuery;
+   if (lexer.isKeyword("insert"))
+      return InsertQuery;
    return UnknownQueryType;
 }
 //---------------------------------------------------------------------------
@@ -73,7 +78,7 @@ static void writeHeader(const QueryGraph& graph,const SPARQLParser& parser)
    cout << endl;
 }
 //---------------------------------------------------------------------------
-static void runQuery(Database& db,const string& query)
+static void runQuery(DifferentialIndex& diffIndex,const string& query)
    // Evaluate a query
 {
    QueryGraph queryGraph;
@@ -89,7 +94,7 @@ static void runQuery(Database& db,const string& query)
 
    // And perform the semantic anaylsis
    try {
-      SemanticAnalysis semana(db);
+      SemanticAnalysis semana(diffIndex);
       semana.transform(parser,queryGraph);
    } catch (const SemanticAnalysis::SemanticException& e) {
       cout << "semantic error: " << e.message << endl;
@@ -105,15 +110,15 @@ static void runQuery(Database& db,const string& query)
 
    // Run the optimizer
    PlanGen plangen;
-   Plan* plan=plangen.translate(db,queryGraph);
+   Plan* plan=plangen.translate(diffIndex.getDatabase(),queryGraph);
    if (!plan) {
       cout << "internal error plan generation failed" << endl;
       return;
    }
 
    // Build a physical plan
-   TemporaryDictionary tempDict(db.getDictionary());
-   Runtime runtime(db,0,&tempDict);
+   TemporaryDictionary tempDict(diffIndex);
+   Runtime runtime(diffIndex.getDatabase(),&diffIndex,&tempDict);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,false);
    dynamic_cast<ResultsPrinter*>(operatorTree)->setOutputMode(ResultsPrinter::Embedded);
 
@@ -301,7 +306,7 @@ string ExplainPrinter::formatValue(unsigned value)
    return result.str();
 }
 //---------------------------------------------------------------------------
-static void explainQuery(Database& db,const string& query)
+static void explainQuery(DifferentialIndex& diffIndex,const string& query)
    // Explain a query
 {
    QueryGraph queryGraph;
@@ -321,7 +326,7 @@ static void explainQuery(Database& db,const string& query)
 
    // And perform the semantic anaylsis
    try {
-      SemanticAnalysis semana(db);
+      SemanticAnalysis semana(diffIndex);
       semana.transform(parser,queryGraph);
    } catch (const SemanticAnalysis::SemanticException& e) {
       cout << "semantic error: " << e.message << endl;
@@ -338,7 +343,7 @@ static void explainQuery(Database& db,const string& query)
 
    // Run the optimizer
    PlanGen plangen;
-   Plan* plan=plangen.translate(db,queryGraph);
+   Plan* plan=plangen.translate(diffIndex.getDatabase(),queryGraph);
    if (!plan) {
       cout << "internal error plan generation failed" << endl;
       return;
@@ -347,7 +352,7 @@ static void explainQuery(Database& db,const string& query)
    // Print the plan
    cout << "ok" << endl
         << "indent operator arguments expectedcardinality" << endl;
-   Runtime runtime(db);
+   Runtime runtime(diffIndex.getDatabase(),&diffIndex);
    ExplainPrinter out(runtime);
    Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,false);
    dynamic_cast<ResultsPrinter*>(operatorTree)->getInput()->print(out);
@@ -355,6 +360,63 @@ static void explainQuery(Database& db,const string& query)
    cout.flush();
 
    delete operatorTree;
+}
+//---------------------------------------------------------------------------
+static void insertQuery(DifferentialIndex& diffIndex,const string& query)
+   // Insert new triples
+{
+   // Find the boundaries of the new triples
+   string::const_iterator start,stop;
+   {
+
+      SPARQLLexer lexer(query);
+      if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("insert"))) {
+         cout << "'insert' expected" << endl;
+         return;
+      }
+      if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("data"))) {
+         cout << "'data' expected" << endl;
+         return;
+      }
+      if (lexer.getNext()!=SPARQLLexer::LCurly) {
+         cout << "'{' expected" << endl;
+         return;
+      }
+      start=lexer.getReader();
+      stop=start;
+      while (start==stop) {
+         switch (lexer.getNext()) {
+            case SPARQLLexer::Eof:
+               cout << "'}' expected" << endl;
+               return;
+            case SPARQLLexer::RCurly:
+               stop=lexer.getReader()-1;
+               break;
+            default: break;
+         }
+      }
+   }
+   istringstream in(string(start,stop));
+
+   // Parse the input
+   BulkOperation chunk(diffIndex);
+   TurtleParser parser(in);
+   while (true) {
+      // Read the next triple
+      std::string subject,predicate,object,objectSubType; Type::ID objectType;
+      try {
+         if (!parser.parse(subject,predicate,object,objectType,objectSubType))
+            break;
+      } catch (const TurtleParser::Exception& e) {
+         cout << e.message << endl;
+         return;
+      }
+      chunk.insert(subject,predicate,object,objectType,objectSubType);
+   }
+
+   // And insert it
+   chunk.commit();
+   cout << "ok" << endl << endl << "\\." << endl;
 }
 //---------------------------------------------------------------------------
 }
@@ -375,6 +437,7 @@ int main(int argc,char* argv[])
       cout << "unable to open database " << argv[1] << endl;
       return 1;
    }
+   DifferentialIndex diffIndex(db);
    cout << "RDF-3X protocol 1" << endl;
 
    // And process queries
@@ -391,11 +454,14 @@ int main(int argc,char* argv[])
       }
       switch (classifyQuery(query)) {
          case ExplainQuery:
-            explainQuery(db,query);
+            explainQuery(diffIndex,query);
+            break;
+         case InsertQuery:
+            insertQuery(diffIndex,query);
             break;
          case RegularQuery:
          default:
-            runQuery(db,query);
+            runQuery(diffIndex,query);
             break;
       }
       cout.flush();

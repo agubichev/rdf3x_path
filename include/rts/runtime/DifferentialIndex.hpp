@@ -62,6 +62,8 @@ class DifferentialIndex
    private:
    /// The underlying database
    Database& db;
+   /// The dictionary within the database
+   DictionarySegment& dict;
    /// Triples
    std::set<VersionedTriple> triples[6];
    /// Dictionary
@@ -94,6 +96,13 @@ class DifferentialIndex
    Operator* createAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality);
    /// Create a suitable scan operator scanning both the DB and the differential index
    Operator* createFullyAggregatedScan(Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality);
+
+   /// Get the next id number
+   unsigned getNextId();
+   /// Lookup an id for a given string
+   bool lookup(const std::string& text,::Type::ID type,unsigned subType,unsigned& id);
+   /// Lookup a string for a given id
+   bool lookupById(unsigned id,const char*& start,const char*& stop,::Type::ID& type,unsigned& subType);
 };
 //---------------------------------------------------------------------------
 #endif

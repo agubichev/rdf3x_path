@@ -1,5 +1,4 @@
 #include "cts/parser/TurtleParser.hpp"
-#include <iostream>
 #include <sstream>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -12,6 +11,23 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 using namespace std;
+//---------------------------------------------------------------------------
+TurtleParser::Exception::Exception(const std::string& message)
+   : message(message)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+TurtleParser::Exception::Exception(const char* message)
+   : message(message)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+TurtleParser::Exception::~Exception()
+      // Destructor
+{
+}
 //---------------------------------------------------------------------------
 TurtleParser::Lexer::Lexer(istream& in)
    : in(in),putBack(Eof),line(1),readBufferStart(0),readBufferEnd(0)
@@ -102,8 +118,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexNumber(std::string& token,cha
       }
       break;
    }
-   cerr << "lexer error in line " << line << ": invalid number " << token << c << endl;
-   throw Exception();
+   stringstream msg;
+   msg << "lexer error in line " << line << ": invalid number " << token << c;
+   throw Exception(msg.str());
 }
 //---------------------------------------------------------------------------
 unsigned TurtleParser::Lexer::lexHexCode(unsigned len)
@@ -124,8 +141,9 @@ unsigned TurtleParser::Lexer::lexHexCode(unsigned len)
       if ((c>='a')&&(c<='f')) result=(result<<4)|(c-'a'+10); else
          break;
    }
-   cerr << "lexer error in line " << line << ": invalid unicode escape" << endl;
-   throw Exception();
+   stringstream msg;
+   msg << "lexer error in line " << line << ": invalid unicode escape";
+   throw Exception(msg.str());
 }
 //---------------------------------------------------------------------------
 static string encodeUtf8(unsigned code)
@@ -174,8 +192,9 @@ void TurtleParser::Lexer::lexEscape(std::string& token)
       // Invalid escape
       break;
    }
-   cerr << "lexer error in line " << line << ": invalid escape sequence" << endl;
-   throw Exception();
+   stringstream msg;
+   msg << "lexer error in line " << line << ": invalid escape sequence";
+   throw Exception(msg.str());
 }
 //---------------------------------------------------------------------------
 TurtleParser::Lexer::Token TurtleParser::Lexer::lexLongString(std::string& token)
@@ -197,8 +216,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexLongString(std::string& token
          if (c=='\n') line++;
       }
    }
-   cerr << "lexer error in line " << line << ": invalid string" << endl;
-   throw Exception();
+   stringstream msg;
+   msg << "lexer error in line " << line << ": invalid string";
+   throw Exception(msg.str());
 }
 //---------------------------------------------------------------------------
 TurtleParser::Lexer::Token TurtleParser::Lexer::lexString(std::string& token,char c)
@@ -208,8 +228,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexString(std::string& token,cha
 
    // Check the next character
    if (!read(c)) {
-      cerr << "lexer error in line " << line << ": invalid string" << endl;
-      throw Exception();
+      stringstream msg;
+      msg << "lexer error in line " << line << ": invalid string";
+      throw Exception(msg.str());
    }
 
    // Another quote?
@@ -232,8 +253,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexString(std::string& token,cha
          if (c=='\n') line++;
       }
       if (!read(c)) {
-         cerr << "lexer error in line " << line << ": invalid string" << endl;
-         throw Exception();
+         stringstream msg;
+         msg << "lexer error in line " << line << ": invalid string";
+         throw Exception(msg.str());
       }
    }
 }
@@ -245,8 +267,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexURI(std::string& token,char c
 
    // Check the next character
    if (!read(c)) {
-      cerr << "lexer error in line " << line << ": invalid URI" << endl;
-      throw Exception();
+      stringstream msg;
+      msg << "lexer error in line " << line << ": invalid URI";
+      throw Exception(msg.str());
    }
 
    // Process normally
@@ -259,8 +282,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::lexURI(std::string& token,char c
          if (c=='\n') line++;
       }
       if (!read(c)) {
-         cerr << "lexer error in line " << line << ": invalid URI" << endl;
-         throw Exception();
+         stringstream msg;
+         msg << "lexer error in line " << line << ": invalid URI";
+         throw Exception(msg.str());
       }
    }
 }
@@ -296,8 +320,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next(std::string& token)
             return lexNumber(token,c);
          case '^':
             if ((!read(c))||(c!='^')) {
-               cerr << "lexer error in line " << line << ": '^' expected" << endl;
-               throw Exception();
+               stringstream msg;
+               msg << "lexer error in line " << line << ": '^' expected";
+               throw Exception(msg.str());
             }
             return Type;
          case '\"': return lexString(token,c);
@@ -314,8 +339,9 @@ TurtleParser::Lexer::Token TurtleParser::Lexer::next(std::string& token)
                if (token=="false") return False;
                return Name;
             } else {
-               cerr << "lexer error in line " << line << ": unexpected character " << c << endl;
-               throw Exception();
+               stringstream msg;
+               msg << "lexer error in line " << line << ": unexpected character " << c;
+               throw Exception(msg.str());
             }
       }
    }
@@ -337,8 +363,9 @@ TurtleParser::~TurtleParser()
 void TurtleParser::parseError(const string& message)
    // Report an error
 {
-   cerr << "parse error in line " << lexer.getLine() << ": " << message << endl;
-   throw Exception();
+   stringstream msg;
+   msg << "parse error in line " << lexer.getLine() << ": " << message;
+   throw Exception(msg.str());
 }
 //---------------------------------------------------------------------------
 void TurtleParser::newBlankNode(std::string& node)

@@ -16,6 +16,7 @@
 #include <map>
 //---------------------------------------------------------------------------
 class DictionarySegment;
+class DifferentialIndex;
 //---------------------------------------------------------------------------
 /// Dictionary for temporary results
 class TemporaryDictionary
@@ -36,6 +37,8 @@ class TemporaryDictionary
 
    /// The underlying dictionary
    DictionarySegment& dict;
+   /// The differential index (if any)
+   DifferentialIndex* diffIndex;
    /// The id offset
    unsigned idBase;
    /// id to string
@@ -46,6 +49,8 @@ class TemporaryDictionary
    public:
    /// Constructor
    explicit TemporaryDictionary(DictionarySegment& dict);
+   /// Constructor
+   explicit TemporaryDictionary(DifferentialIndex& diffIndex);
    /// Destructor
    ~TemporaryDictionary();
 

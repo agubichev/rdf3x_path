@@ -21,7 +21,18 @@ class TurtleParser
 {
    public:
    /// A parse error
-   class Exception {};
+   class Exception {
+      public:
+      /// The message
+      std::string message;
+
+      /// Constructor
+      Exception(const std::string& message);
+      /// Constructor
+      Exception(const char* message);
+      /// Destructor
+      ~Exception();
+   };
 
    private:
    /// A turtle lexer

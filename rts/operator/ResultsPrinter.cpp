@@ -1,6 +1,7 @@
 #include "rts/operator/ResultsPrinter.hpp"
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/runtime/DifferentialIndex.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/segment/DictionarySegment.hpp"
@@ -131,10 +132,13 @@ unsigned ResultsPrinter::first()
    // Lookup the strings
    set<unsigned> subTypes;
    TemporaryDictionary* tempDict=runtime.hasTemporaryDictionary()?(&runtime.getTemporaryDictionary()):0;
+   DifferentialIndex* diffIndex=runtime.hasDifferentialIndex()?(&runtime.getDifferentialIndex()):0;
    for (map<unsigned,CacheEntry>::iterator iter=stringCache.begin(),limit=stringCache.end();iter!=limit;++iter) {
       CacheEntry& c=(*iter).second;
       if (tempDict)
          tempDict->lookupById((*iter).first,c.start,c.stop,c.type,c.subType); else
+      if (diffIndex)
+         diffIndex->lookupById((*iter).first,c.start,c.stop,c.type,c.subType); else
          dictionary.lookupById((*iter).first,c.start,c.stop,c.type,c.subType);
       if (Type::hasSubType(c.type))
          subTypes.insert(c.subType);
@@ -143,6 +147,8 @@ unsigned ResultsPrinter::first()
       CacheEntry& c=stringCache[*iter];
       if (tempDict)
          tempDict->lookupById(*iter,c.start,c.stop,c.type,c.subType); else
+      if (diffIndex)
+         diffIndex->lookupById(*iter,c.start,c.stop,c.type,c.subType); else
          dictionary.lookupById(*iter,c.start,c.stop,c.type,c.subType);
    }
 

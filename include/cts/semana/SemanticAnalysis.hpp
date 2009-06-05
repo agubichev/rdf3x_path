@@ -13,6 +13,8 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 class Database;
+class DictionarySegment;
+class DifferentialIndex;
 class SPARQLParser;
 class QueryGraph;
 //---------------------------------------------------------------------------
@@ -34,12 +36,16 @@ class SemanticAnalysis
    };
 
    private:
-   /// The database. Used for string and IRI resolution
-   Database& db;
+   /// The dictionary. Used for string and IRI resolution
+   DictionarySegment& dict;
+   /// The differential index (if any)
+   DifferentialIndex* diffIndex;
 
    public:
    /// Constructor
    explicit SemanticAnalysis(Database& db);
+   /// Constructor
+   explicit SemanticAnalysis(DifferentialIndex& diffIndex);
 
    /// Perform the transformation
    void transform(const SPARQLParser& input,QueryGraph& output);

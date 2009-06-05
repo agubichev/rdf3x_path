@@ -44,6 +44,7 @@ static bool parse(istream& in,const char* name,StringLookup& lookup,TempFile& fa
             if (!parser.parse(subject,predicate,object,objectType,objectSubType))
 	       break;
          } catch (const TurtleParser::Exception& e) {
+            cerr << e.message << endl;
             // recover...
             while (in.get()!='\n') ;
             continue;

@@ -2,6 +2,7 @@
 #include "cts/parser/SPARQLParser.hpp"
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/database/Database.hpp"
+#include "rts/runtime/DifferentialIndex.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include <set>
@@ -38,12 +39,28 @@ SemanticAnalysis::SemanticException::~SemanticException()
 }
 //---------------------------------------------------------------------------
 SemanticAnalysis::SemanticAnalysis(Database& db)
-   : db(db)
+   : dict(db.getDictionary()),diffIndex(0)
    // Constructor
 {
 }
 //---------------------------------------------------------------------------
-static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& id,bool& constant)
+SemanticAnalysis::SemanticAnalysis(DifferentialIndex& diffIndex)
+   : dict(diffIndex.getDatabase().getDictionary()),diffIndex(&diffIndex)
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+static bool lookup(DictionarySegment& dict,DifferentialIndex* diffIndex,const std::string& text,::Type::ID type,unsigned subType,unsigned& id)
+   // Perform a dictionary lookup
+{
+   if (dict.lookup(text,type,subType,id))
+      return true;
+   if ((diffIndex)&&(diffIndex->lookup(text,type,subType,id)))
+      return true;
+   return false;
+}
+//---------------------------------------------------------------------------
+static bool encode(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::Element& element,unsigned& id,bool& constant)
    // Encode an element for the query graph
 {
    switch (element.type) {
@@ -53,15 +70,15 @@ static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& i
          return true;
       case SPARQLParser::Element::Literal:
          if (element.subType==SPARQLParser::Element::None) {
-            if (db.getDictionary().lookup(element.value,Type::Literal,0,id)) {
+            if (lookup(dict,diffIndex,element.value,Type::Literal,0,id)) {
                constant=true;
                return true;
             } else return false;
          } else if (element.subType==SPARQLParser::Element::CustomLanguage) {
             unsigned languageId;
-            if (!db.getDictionary().lookup(element.subTypeValue,Type::Literal,0,languageId))
+            if (!lookup(dict,diffIndex,element.subTypeValue,Type::Literal,0,languageId))
                return false;
-            if (db.getDictionary().lookup(element.value,Type::CustomLanguage,languageId,id)) {
+            if (lookup(dict,diffIndex,element.value,Type::CustomLanguage,languageId,id)) {
                constant=true;
                return true;
             } else return false;
@@ -78,11 +95,11 @@ static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& i
             } else if (element.subTypeValue=="http://www.w3.org/2001/XMLSchema#boolean") {
                type=Type::Boolean;
             } else {
-               if (!db.getDictionary().lookup(element.subTypeValue,Type::URI,0,subType))
+               if (!lookup(dict,diffIndex,element.subTypeValue,Type::URI,0,subType))
                   return false;
                type=Type::CustomType;
             }
-            if (db.getDictionary().lookup(element.value,type,subType,id)) {
+            if (lookup(dict,diffIndex,element.value,type,subType,id)) {
                constant=true;
                return true;
             } else return false;
@@ -90,7 +107,7 @@ static bool encode(Database& db,const SPARQLParser::Element& element,unsigned& i
             return false;
          }
       case SPARQLParser::Element::IRI:
-         if (db.getDictionary().lookup(element.value,Type::URI,0,id)) {
+         if (lookup(dict,diffIndex,element.value,Type::URI,0,id)) {
             constant=true;
             return true;
          } else return false;
@@ -116,60 +133,60 @@ static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
    return false;
 }
 //---------------------------------------------------------------------------
-static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output);
+static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output);
 //---------------------------------------------------------------------------
-static bool encodeUnaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+static bool encodeUnaryFilter(QueryGraph::Filter::Type type,DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
    // Encode a unary filter element
 {
    output.type=type;
    output.arg1=new QueryGraph::Filter();
-   return encodeFilter(db,group,*input.arg1,*output.arg1);
+   return encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1);
 }
 //---------------------------------------------------------------------------
-static bool encodeBinaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+static bool encodeBinaryFilter(QueryGraph::Filter::Type type,DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
    // Encode a binary filter element
 {
    output.type=type;
    output.arg1=new QueryGraph::Filter();
-   if (!encodeFilter(db,group,*input.arg1,*output.arg1))
+   if (!encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1))
       return false;
    if (input.arg2) {
       output.arg2=new QueryGraph::Filter();
-      if (!encodeFilter(db,group,*input.arg2,*output.arg2))
+      if (!encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2))
          return false;
    }
    return true;
 }
 //---------------------------------------------------------------------------
-static bool encodeTernaryFilter(QueryGraph::Filter::Type type,Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+static bool encodeTernaryFilter(QueryGraph::Filter::Type type,DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
    // Encode a ternary filter element
 {
    output.type=type;
    output.arg1=new QueryGraph::Filter();
    output.arg2=new QueryGraph::Filter();
    output.arg3=new QueryGraph::Filter();
-   return encodeFilter(db,group,*input.arg1,*output.arg1)&&encodeFilter(db,group,*input.arg2,*output.arg2)&&encodeFilter(db,group,*input.arg3,*output.arg3);
+   return encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1)&&encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3);
 }
 //---------------------------------------------------------------------------
-static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
+static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
    // Encode an element for the query graph
 {
    switch (input.type) {
-      case SPARQLParser::Filter::Or: return encodeBinaryFilter(QueryGraph::Filter::Or,db,group,input,output);
-      case SPARQLParser::Filter::And: return encodeBinaryFilter(QueryGraph::Filter::And,db,group,input,output);
-      case SPARQLParser::Filter::Equal: return encodeBinaryFilter(QueryGraph::Filter::Equal,db,group,input,output);
-      case SPARQLParser::Filter::NotEqual: return encodeBinaryFilter(QueryGraph::Filter::NotEqual,db,group,input,output);
-      case SPARQLParser::Filter::Less: return encodeBinaryFilter(QueryGraph::Filter::Less,db,group,input,output);
-      case SPARQLParser::Filter::LessOrEqual: return encodeBinaryFilter(QueryGraph::Filter::LessOrEqual,db,group,input,output);
-      case SPARQLParser::Filter::Greater: return encodeBinaryFilter(QueryGraph::Filter::Greater,db,group,input,output);
-      case SPARQLParser::Filter::GreaterOrEqual: return encodeBinaryFilter(QueryGraph::Filter::GreaterOrEqual,db,group,input,output);
-      case SPARQLParser::Filter::Plus: return encodeBinaryFilter(QueryGraph::Filter::Plus,db,group,input,output);
-      case SPARQLParser::Filter::Minus: return encodeBinaryFilter(QueryGraph::Filter::Minus,db,group,input,output);
-      case SPARQLParser::Filter::Mul: return encodeBinaryFilter(QueryGraph::Filter::Mul,db,group,input,output);
-      case SPARQLParser::Filter::Div: return encodeBinaryFilter(QueryGraph::Filter::Div,db,group,input,output);
-      case SPARQLParser::Filter::Not: return encodeUnaryFilter(QueryGraph::Filter::Not,db,group,input,output);
-      case SPARQLParser::Filter::UnaryPlus: return encodeUnaryFilter(QueryGraph::Filter::UnaryPlus,db,group,input,output);
-      case SPARQLParser::Filter::UnaryMinus: return encodeUnaryFilter(QueryGraph::Filter::UnaryMinus,db,group,input,output);
+      case SPARQLParser::Filter::Or: return encodeBinaryFilter(QueryGraph::Filter::Or,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::And: return encodeBinaryFilter(QueryGraph::Filter::And,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Equal: return encodeBinaryFilter(QueryGraph::Filter::Equal,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::NotEqual: return encodeBinaryFilter(QueryGraph::Filter::NotEqual,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Less: return encodeBinaryFilter(QueryGraph::Filter::Less,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::LessOrEqual: return encodeBinaryFilter(QueryGraph::Filter::LessOrEqual,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Greater: return encodeBinaryFilter(QueryGraph::Filter::Greater,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::GreaterOrEqual: return encodeBinaryFilter(QueryGraph::Filter::GreaterOrEqual,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Plus: return encodeBinaryFilter(QueryGraph::Filter::Plus,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Minus: return encodeBinaryFilter(QueryGraph::Filter::Minus,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Mul: return encodeBinaryFilter(QueryGraph::Filter::Mul,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Div: return encodeBinaryFilter(QueryGraph::Filter::Div,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Not: return encodeUnaryFilter(QueryGraph::Filter::Not,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::UnaryPlus: return encodeUnaryFilter(QueryGraph::Filter::UnaryPlus,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::UnaryMinus: return encodeUnaryFilter(QueryGraph::Filter::UnaryMinus,dict,diffIndex,group,input,output);
       case SPARQLParser::Filter::Literal: {
          SPARQLParser::Element e;
          e.type=SPARQLParser::Element::Literal;
@@ -177,7 +194,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
          e.subTypeValue=input.valueType;
          e.value=input.value;
          unsigned id; bool constant;
-         if (encode(db,e,id,constant)) {
+         if (encode(dict,diffIndex,e,id,constant)) {
             output.type=QueryGraph::Filter::Literal;
             output.id=id;
             output.value=input.value;
@@ -202,7 +219,7 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
          e.subTypeValue=input.valueType;
          e.value=input.value;
          unsigned id; bool constant;
-         if (encode(db,e,id,constant)) {
+         if (encode(dict,diffIndex,e,id,constant)) {
             output.type=QueryGraph::Filter::IRI;
             output.id=id;
             output.value=input.value;
@@ -215,41 +232,41 @@ static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,co
       case SPARQLParser::Filter::Function:
          if (input.arg1->value==tableFunctionId)
             throw SemanticAnalysis::SemanticException(std::string("<")+tableFunctionId+"> calls must be placed in seperate filter clauses");
-         return encodeBinaryFilter(QueryGraph::Filter::Function,db,group,input,output);
-      case SPARQLParser::Filter::ArgumentList: return encodeBinaryFilter(QueryGraph::Filter::ArgumentList,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_str: return encodeUnaryFilter(QueryGraph::Filter::Builtin_str,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_lang: return encodeUnaryFilter(QueryGraph::Filter::Builtin_lang,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_langmatches: return encodeBinaryFilter(QueryGraph::Filter::Builtin_langmatches,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_datatype: return encodeUnaryFilter(QueryGraph::Filter::Builtin_datatype,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_bound: return encodeUnaryFilter(QueryGraph::Filter::Builtin_bound,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_sameterm: return encodeBinaryFilter(QueryGraph::Filter::Builtin_sameterm,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_isiri: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isiri,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_isblank: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isblank,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_isliteral: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isliteral,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_regex: return encodeTernaryFilter(QueryGraph::Filter::Builtin_regex,db,group,input,output);
-      case SPARQLParser::Filter::Builtin_in: return encodeBinaryFilter(QueryGraph::Filter::Builtin_in,db,group,input,output);
+         return encodeBinaryFilter(QueryGraph::Filter::Function,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::ArgumentList: return encodeBinaryFilter(QueryGraph::Filter::ArgumentList,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_str: return encodeUnaryFilter(QueryGraph::Filter::Builtin_str,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_lang: return encodeUnaryFilter(QueryGraph::Filter::Builtin_lang,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_langmatches: return encodeBinaryFilter(QueryGraph::Filter::Builtin_langmatches,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_datatype: return encodeUnaryFilter(QueryGraph::Filter::Builtin_datatype,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_bound: return encodeUnaryFilter(QueryGraph::Filter::Builtin_bound,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_sameterm: return encodeBinaryFilter(QueryGraph::Filter::Builtin_sameterm,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_isiri: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isiri,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_isblank: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isblank,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_isliteral: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isliteral,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_regex: return encodeTernaryFilter(QueryGraph::Filter::Builtin_regex,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_in: return encodeBinaryFilter(QueryGraph::Filter::Builtin_in,dict,diffIndex,group,input,output);
    }
    return false; // XXX cannot happen
 }
 //---------------------------------------------------------------------------
-static bool encodeFilter(Database& db,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
+static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
    // Encode an element for the query graph
 {
    // Handle and separately to be more flexible
    if (input.type==SPARQLParser::Filter::And) {
-      if (!encodeFilter(db,group,*input.arg1,output))
+      if (!encodeFilter(dict,diffIndex,group,*input.arg1,output))
          return false;
-      if (!encodeFilter(db,group,*input.arg2,output))
+      if (!encodeFilter(dict,diffIndex,group,*input.arg2,output))
          return false;
       return true;
    }
 
    // Encode recursively
    output.filters.push_back(QueryGraph::Filter());
-   return encodeFilter(db,group,input,output.filters.back());
+   return encodeFilter(dict,diffIndex,group,input,output.filters.back());
 }
 //---------------------------------------------------------------------------
-static void encodeTableFunction(Database& /*db*/,const SPARQLParser::PatternGroup& /*group*/,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
+static void encodeTableFunction(const SPARQLParser::PatternGroup& /*group*/,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
    // Produce a table function call
 {
    // Collect all arguments
@@ -290,16 +307,16 @@ static void encodeTableFunction(Database& /*db*/,const SPARQLParser::PatternGrou
       func.output[index-2-inputArgs]=args[index]->valueArg;
 }
 //---------------------------------------------------------------------------
-static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& group,QueryGraph::SubQuery& output)
+static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,QueryGraph::SubQuery& output)
    // Transform a subquery
 {
    // Encode all patterns
    for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter) {
       // Encode the entries
       QueryGraph::Node node;
-      if ((!encode(db,(*iter).subject,node.subject,node.constSubject))||
-          (!encode(db,(*iter).predicate,node.predicate,node.constPredicate))||
-          (!encode(db,(*iter).object,node.object,node.constObject))) {
+      if ((!encode(dict,diffIndex,(*iter).subject,node.subject,node.constSubject))||
+          (!encode(dict,diffIndex,(*iter).predicate,node.predicate,node.constPredicate))||
+          (!encode(dict,diffIndex,(*iter).object,node.object,node.constObject))) {
          // A constant could not be resolved. This will produce an empty result
          return false;
       }
@@ -309,10 +326,10 @@ static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& gro
    // Encode the filter conditions
    for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.filters.begin(),limit=group.filters.end();iter!=limit;++iter) {
       if (((*iter).type==SPARQLParser::Filter::Function)&&((*iter).arg1->value==tableFunctionId)) {
-         encodeTableFunction(db,group,*iter,output);
+         encodeTableFunction(group,*iter,output);
          continue;
       }
-      if (!encodeFilter(db,group,*iter,output)) {
+      if (!encodeFilter(dict,diffIndex,group,*iter,output)) {
          // The filter variable is not bound. This will produce an empty result
          return false;
       }
@@ -321,7 +338,7 @@ static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& gro
    // Encode all optional parts
    for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter=group.optional.begin(),limit=group.optional.end();iter!=limit;++iter) {
       QueryGraph::SubQuery subQuery;
-      if (!transformSubquery(db,*iter,subQuery)) {
+      if (!transformSubquery(dict,diffIndex,*iter,subQuery)) {
          // Known to produce an empty result, skip it
          continue;
       }
@@ -333,7 +350,7 @@ static bool transformSubquery(Database& db,const SPARQLParser::PatternGroup& gro
       std::vector<QueryGraph::SubQuery> unionParts;
       for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2) {
          QueryGraph::SubQuery subQuery;
-         if (!transformSubquery(db,*iter2,subQuery)) {
+         if (!transformSubquery(dict,diffIndex,*iter2,subQuery)) {
             // Known to produce an empty result, skip it
             continue;
          }
@@ -353,7 +370,7 @@ void SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
 {
    output.clear();
 
-   if (!transformSubquery(db,input.getPatterns(),output.getQuery())) {
+   if (!transformSubquery(dict,diffIndex,input.getPatterns(),output.getQuery())) {
       // A constant could not be resolved. This will produce an empty result
       output.markAsKnownEmpty();
       return;

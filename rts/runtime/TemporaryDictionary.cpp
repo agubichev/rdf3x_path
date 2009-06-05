@@ -1,4 +1,5 @@
 #include "rts/runtime/TemporaryDictionary.hpp"
+#include "rts/runtime/DifferentialIndex.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -11,7 +12,13 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 TemporaryDictionary::TemporaryDictionary(DictionarySegment& dict)
-   : dict(dict),idBase(dict.getNextId())
+   : dict(dict),diffIndex(0),idBase(dict.getNextId())
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+TemporaryDictionary::TemporaryDictionary(DifferentialIndex& diffIndex)
+   : dict(diffIndex.getDatabase().getDictionary()),diffIndex(&diffIndex),idBase(diffIndex.getNextId())
    // Constructor
 {
 }
@@ -56,6 +63,8 @@ bool TemporaryDictionary::lookupById(unsigned id,const char*& start,const char*&
       type=l.type;
       subType=l.subType;
       return true;
+   } else if (diffIndex) {
+      return diffIndex->lookupById(id,start,stop,type,subType);
    } else {
       return dict.lookupById(id,start,stop,type,subType);
    }

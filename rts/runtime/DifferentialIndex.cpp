@@ -7,6 +7,7 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/runtime/Runtime.hpp"
+#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -842,7 +843,7 @@ void FullyAggregatedDifferentialIndexScan::getAsyncInputCandidates(Scheduler& sc
 }
 //---------------------------------------------------------------------------
 DifferentialIndex::DifferentialIndex(Database& db)
-   : db(db)
+   : db(db),dict(db.getDictionary())
    // Constructor
 {
 }
@@ -867,25 +868,25 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples)
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,~0u));
    latches[1].unlock();
-   // PSO
+   // OSP
    latches[2].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[2].insert(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,created,~0u));
+      triples[2].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,~0u));
    latches[2].unlock();
-   // POS
+   // OPS
    latches[3].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[3].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,~0u));
+      triples[3].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,~0u));
    latches[3].unlock();
-   // OSP
+   // PSO
    latches[4].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[4].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,~0u));
+      triples[4].insert(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,created,~0u));
    latches[4].unlock();
-   // OPS
+   // POS
    latches[5].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[5].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,~0u));
+      triples[5].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,~0u));
    latches[5].unlock();
 }
 //---------------------------------------------------------------------------
@@ -909,7 +910,7 @@ void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::ve
             subType=string2id[l];
          } else {
             // Allocate a new id for the sub-type
-            unsigned id=db.getDictionary().getNextId()+string2id.size();
+            unsigned id=dict.getNextId()+string2id.size();
             string2id[l]=subType=id;
             id2string.push_back(l);
          }
@@ -922,7 +923,7 @@ void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::ve
       if (string2id.count(l)) {
          ids[index]=string2id[l];
       } else {
-         unsigned id=db.getDictionary().getNextId()+string2id.size();
+         unsigned id=dict.getNextId()+string2id.size();
          string2id[l]=ids[index]=id;
          id2string.push_back(l);
       }
@@ -1075,7 +1076,7 @@ void DifferentialIndex::sync()
 
    // Load the new strings
    if (!id2string.empty())
-      db.getDictionary().appendLiterals(id2string);
+      dict.appendLiterals(id2string);
    id2string.clear();
    string2id.clear();
 
@@ -1282,5 +1283,66 @@ Operator* DifferentialIndex::createFullyAggregatedScan(Database::DataOrder order
    // Produce a new scan
    const unsigned timestamp = 0;
    return new FullyAggregatedDifferentialIndexScan(dbScan,latches[order],timestamp,triples[order],value1,lowerBound,upperBound);
+}
+//---------------------------------------------------------------------------
+unsigned DifferentialIndex::getNextId()
+   // Get the next id number
+{
+   unsigned result;
+   latches[6].lockShared();
+   result=dict.getNextId()+id2string.size();
+   latches[6].unlock();
+   return result;
+}
+//---------------------------------------------------------------------------
+bool DifferentialIndex::lookup(const std::string& text,::Type::ID type,unsigned subType,unsigned& id)
+   // Lookup an id for a given string
+{
+   // Try the regular dictionary first
+   if (dict.lookup(text,type,subType,id))
+      return true;
+
+   // In the local dictionary?
+   DictionarySegment::Literal l;
+   l.str=text;
+   l.type=type;
+   l.subType=subType;
+   latches[6].lockShared();
+   bool result;
+   if (string2id.count(l)) {
+      id=string2id[l];
+      result=true;
+   } else {
+      result=false;
+   }
+   latches[6].unlock();
+
+   return result;
+}
+//---------------------------------------------------------------------------
+bool DifferentialIndex::lookupById(unsigned id,const char*& start,const char*& stop,::Type::ID& type,unsigned& subType)
+   // Lookup a string for a given id
+{
+   // A local string?
+   if (id>=dict.getNextId()) {
+      id-=dict.getNextId();
+      latches[6].lockShared();
+      bool result;
+      if (id>=id2string.size()) {
+         result=false;
+      } else {
+         DictionarySegment::Literal& l=id2string[id];
+         start=&(l.str[0]);
+         stop=start+l.str.size();
+         type=l.type;
+         subType=l.subType;
+         result=true;
+      }
+      latches[6].unlock();
+      return result;
+   }
+
+   // Lookup in the main dictionary
+   return dict.lookupById(id,start,stop,type,subType);
 }
 //---------------------------------------------------------------------------
