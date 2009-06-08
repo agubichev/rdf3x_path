@@ -153,6 +153,10 @@ void TableFunction::requestTable()
             if (!cin.get(c)) break;
             if ((c=='.')&&(line.empty())&&(current.length()==0)) {
                done=true;
+               if (cin.get(c)) {
+                  if (c!='\n')
+                     cin.unget();
+               }
                break;
             }
             current+=c;
