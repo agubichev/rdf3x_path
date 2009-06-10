@@ -222,30 +222,6 @@ const BufferFrame* BufferManager::readPageExclusive(Partition& partition,unsigne
    return frame;
 }
 //---------------------------------------------------------------------------
-BufferFrame* BufferManager::writePageExclusive(Partition& partition,unsigned pageNo)
-   // Read a page. Page is exclusive and modified
-{
-   mutex.lock();
-   BufferFrame* frame=findBufferFrame(&partition,pageNo,true);
-   mutex.unlock();
-   bool inc=true;
-   switch (frame->state) {
-      case BufferFrame::Empty: frame->data=partition.writePage(pageNo,frame->pageInfo); frame->state=BufferFrame::WriteDirty; break;
-      case BufferFrame::Read: frame->data=partition.writeReadPage(frame->pageInfo); frame->state=BufferFrame::WriteDirty; break;
-      case BufferFrame::Write: frame->state=BufferFrame::WriteDirty; break;
-      case BufferFrame::WriteDirty: inc=false; break;
-   }
-   if (inc) {
-      mutex.lock();
-      // Trigger the writer if we have too many dirty pages
-      if (++dirtCounter>dirtLimit) {
-         flusherNotify.notify(mutex);
-      }
-      mutex.unlock();
-   }
-   return frame;
-}
-//---------------------------------------------------------------------------
 void BufferManager::unfixPage(const BufferFrame* cframe)
    // Release an (unmodified) page
 {

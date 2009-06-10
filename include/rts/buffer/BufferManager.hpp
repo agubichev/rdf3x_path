@@ -153,8 +153,6 @@ class BufferManager
    const BufferFrame* readPageShared(Partition& partition,unsigned pageNo);
    /// Read a page. Page is exclusive and not modifed
    const BufferFrame* readPageExclusive(Partition& partition,unsigned pageNo);
-   /// Read a page. Page is exclusive and modified
-   BufferFrame* writePageExclusive(Partition& partition,unsigned pageNo);
    // Release an (unmodified) page
    void unfixPage(const BufferFrame* cframe);
    /// Release a dirty page without recovery information. Recovery is handled by Transaction::unfixDirtyPage
