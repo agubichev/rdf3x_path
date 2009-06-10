@@ -199,6 +199,11 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
 void PlanGen::buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C)
    // Build an aggregated index scan
 {
+   // Refuse placing constants at the end
+   // They should be pruned out anyway, but sometimes are not due to misestimations
+   if ((!~value2)&&(~value1))
+      return;
+
    // Initialize a new plan
    Plan* plan=plans.alloc();
    plan->op=Plan::AggregatedIndexScan;
