@@ -367,36 +367,34 @@ static void insertQuery(DifferentialIndex& diffIndex,const string& query)
 {
    // Find the boundaries of the new triples
    string::const_iterator start,stop;
-   {
-
-      SPARQLLexer lexer(query);
-      if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("insert"))) {
-         cout << "'insert' expected" << endl;
-         return;
-      }
-      if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("data"))) {
-         cout << "'data' expected" << endl;
-         return;
-      }
-      if (lexer.getNext()!=SPARQLLexer::LCurly) {
-         cout << "'{' expected" << endl;
-         return;
-      }
-      start=lexer.getReader();
-      stop=start;
-      while (start==stop) {
-         switch (lexer.getNext()) {
-            case SPARQLLexer::Eof:
-               cout << "'}' expected" << endl;
-               return;
-            case SPARQLLexer::RCurly:
-               stop=lexer.getReader()-1;
-               break;
-            default: break;
-         }
+   SPARQLLexer lexer(query);
+   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("insert"))) {
+      cout << "'insert' expected" << endl;
+      return;
+   }
+   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("data"))) {
+      cout << "'data' expected" << endl;
+      return;
+   }
+   if (lexer.getNext()!=SPARQLLexer::LCurly) {
+      cout << "'{' expected" << endl;
+      return;
+   }
+   start=lexer.getReader();
+   stop=start;
+   while (start==stop) {
+      switch (lexer.getNext()) {
+         case SPARQLLexer::Eof:
+            cout << "'}' expected" << endl;
+            return;
+         case SPARQLLexer::RCurly:
+            stop=lexer.getReader()-1;
+            break;
+         default: break;
       }
    }
-   istringstream in(string(start,stop));
+   string turtle(start,stop);
+   istringstream in(turtle);
 
    // Parse the input
    BulkOperation chunk(diffIndex);
