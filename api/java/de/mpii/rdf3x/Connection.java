@@ -316,8 +316,11 @@ final class Connection implements java.sql.Connection
             }
             if (b1=='\\') {
                b1=in.read();
-               if (b1=='.') // End marker
+               if (b1=='.') { // End marker
+                  if (in.read()!='\n')
+                     throw new SQLException("invalid data");
                   return null;
+               }
             }
             char c;
             if (b1<128) {
