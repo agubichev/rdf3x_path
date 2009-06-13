@@ -41,8 +41,13 @@ bool TemporaryDictionary::lookup(const std::string& text,Type::ID type,unsigned 
       return true;
    }
 
-   if (dict.lookup(text,type,subType,id))
-      return true;
+   if (diffIndex) {
+      if (diffIndex->lookup(text,type,subType,id))
+         return true;
+   } else {
+      if (dict.lookup(text,type,subType,id))
+         return true;
+   }
 
    id=idBase+id2string.size();
    id2string.push_back(l);
