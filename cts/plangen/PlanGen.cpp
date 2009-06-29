@@ -734,6 +734,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                            p->opArg=0;
                            p->left=leftPlan;
                            p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::TableFunction*>((*iter3).tableFunction));
+			   p->next=0;
                            p->cardinality=leftPlan->cardinality;
                            p->costs=leftPlan->costs+Costs::tableFunction(leftPlan->cardinality);
                            p->ordering=leftPlan->ordering;
@@ -767,6 +768,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                               p->opArg=*iter;
                               p->left=leftPlan;
                               p->right=rightPlan;
+			      p->next=0;
                               if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                               p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
                               p->ordering=leftPlan->ordering;
@@ -782,6 +784,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
+			p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
@@ -792,6 +795,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=rightPlan;
                         p->right=leftPlan;
+			p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(rightPlan->cardinality,leftPlan->cardinality);
                         p->ordering=~0u;
@@ -803,6 +807,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
+			p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
                         p->ordering=leftPlan->ordering;
@@ -831,6 +836,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
          p->opArg=0;
          p->left=plan;
          p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+	 p->next=0;
          p->cardinality=plan->cardinality; // XXX real computation
          p->costs=plan->costs;
          p->ordering=plan->ordering;
@@ -868,6 +874,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       p->opArg=0;
       p->left=best;
       p->right=0;
+      p->next=0;
       p->cardinality=best->cardinality; // not correct, be we do not use this value anyway
       p->costs=best->costs; // the same here
       p->ordering=~0u;
