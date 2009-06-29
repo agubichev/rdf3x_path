@@ -689,13 +689,21 @@ string Selection::BuiltinIsLiteral::print(PlanPrinter& out)
    return "isLiteral("+input->print(out)+")";
 }
 //---------------------------------------------------------------------------
+Selection::BuiltinRegEx::~BuiltinRegEx()
+   // Destructor
+{
+   delete arg1;
+   delete arg2;
+   delete arg3;
+}
+//---------------------------------------------------------------------------
 void Selection::BuiltinRegEx::setSelection(Selection* s)
    // Set the selection
 {
    Predicate::setSelection(s);
    arg1->setSelection(s);
    arg2->setSelection(s);
-   arg3->setSelection(s);
+   if (arg3) arg3->setSelection(s);
 }
 //---------------------------------------------------------------------------
 void Selection::BuiltinRegEx::eval(Result& result)

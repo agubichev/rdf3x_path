@@ -473,6 +473,8 @@ class Selection : public Operator
       public:
       /// Constructor
       BuiltinRegEx(Predicate* arg1,Predicate* arg2,Predicate* arg3) : arg1(arg1),arg2(arg2),arg3(arg3) {}
+      /// Destructor
+      ~BuiltinRegEx();
 
       /// Register the selection
       void setSelection(Selection* selection);

@@ -164,8 +164,8 @@ static bool encodeTernaryFilter(QueryGraph::Filter::Type type,DictionarySegment&
    output.type=type;
    output.arg1=new QueryGraph::Filter();
    output.arg2=new QueryGraph::Filter();
-   output.arg3=new QueryGraph::Filter();
-   return encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1)&&encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3);
+   output.arg3=(input.arg3)?(new QueryGraph::Filter()):0;
+   return encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1)&&encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&((!input.arg3)||encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3));
 }
 //---------------------------------------------------------------------------
 static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)

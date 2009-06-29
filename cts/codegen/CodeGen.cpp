@@ -409,7 +409,7 @@ static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindi
       case QueryGraph::Filter::Builtin_isiri: return new Selection::BuiltinIsIRI(buildSelection(bindings,*filter.arg1));
       case QueryGraph::Filter::Builtin_isblank: return new Selection::BuiltinIsBlank(buildSelection(bindings,*filter.arg1));
       case QueryGraph::Filter::Builtin_isliteral: return new Selection::BuiltinIsLiteral(buildSelection(bindings,*filter.arg1));
-      case QueryGraph::Filter::Builtin_regex: return new Selection::BuiltinRegEx(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2),buildSelection(bindings,*filter.arg3));
+      case QueryGraph::Filter::Builtin_regex: return new Selection::BuiltinRegEx(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2),filter.arg3?buildSelection(bindings,*filter.arg3):0);
       case QueryGraph::Filter::Builtin_in: {
          vector<Selection::Predicate*> args;
          collectSelectionArgs(bindings,args,filter.arg2);
