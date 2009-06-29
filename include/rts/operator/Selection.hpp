@@ -101,6 +101,8 @@ class Selection : public Operator
       public:
       /// Constructor
       BinaryPredicate(Predicate* left,Predicate* right) : left(left),right(right) {}
+      /// Destructor
+      ~BinaryPredicate();
 
       /// Register the selection
       void setSelection(Selection* selection);
@@ -114,6 +116,8 @@ class Selection : public Operator
       public:
       /// Constructor
       UnaryPredicate(Predicate* input) : input(input) {}
+      /// Destructor
+      ~UnaryPredicate();
 
       /// Register the selection
       void setSelection(Selection* selection);

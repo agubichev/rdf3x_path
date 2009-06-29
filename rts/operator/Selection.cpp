@@ -161,12 +161,25 @@ bool Selection::Predicate::check()
    return r.boolean;
 }
 //---------------------------------------------------------------------------
+Selection::BinaryPredicate::~BinaryPredicate()
+   // Destructor
+{
+   delete left;
+   delete right;
+}
+//---------------------------------------------------------------------------
 void Selection::BinaryPredicate::setSelection(Selection* s)
    // Set the selection
 {
    Predicate::setSelection(s);
    left->setSelection(s);
    right->setSelection(s);
+}
+//---------------------------------------------------------------------------
+Selection::UnaryPredicate::~UnaryPredicate()
+   // Destructor
+{
+   delete input;
 }
 //---------------------------------------------------------------------------
 void Selection::UnaryPredicate::setSelection(Selection* s)
