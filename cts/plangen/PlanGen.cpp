@@ -267,11 +267,22 @@ void PlanGen::buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Da
    addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
+static bool isUnused(const QueryGraph::Filter* filter,unsigned val)
+   // Check if a variable is unused
+{
+   if (!filter)
+      return true;
+   if (filter->type==QueryGraph::Filter::Variable)
+      if (filter->id==val)
+         return false;
+   return isUnused(filter->arg1,val)&&isUnused(filter->arg2,val)&&isUnused(filter->arg3,val);
+}
+//---------------------------------------------------------------------------
 static bool isUnused(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned val)
    // Check if a variable is unused outside its primary pattern
 {
    for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
-      if ((*iter).id==val)
+      if (!isUnused(&(*iter),val))
          return false;
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
       const QueryGraph::Node& n=*iter;
