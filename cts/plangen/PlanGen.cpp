@@ -403,12 +403,23 @@ PlanGen::Problem* PlanGen::buildOptional(const QueryGraph::SubQuery& query,unsig
    return result;
 }
 //---------------------------------------------------------------------------
+static void collectVariables(const QueryGraph::Filter* filter,set<unsigned>& vars,const void* except)
+   // Collect all variables used in a filter
+{
+   if ((!filter)||(filter==except))
+      return;
+   if (filter->type==QueryGraph::Filter::Variable)
+      vars.insert(filter->id);
+   collectVariables(filter->arg1,vars,except);
+   collectVariables(filter->arg2,vars,except);
+   collectVariables(filter->arg3,vars,except);
+}
+//---------------------------------------------------------------------------
 static void collectVariables(const QueryGraph::SubQuery& query,set<unsigned>& vars,const void* except)
    // Collect all variables used in a subquery
 {
    for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
-      if (except!=(&(*iter)))
-         vars.insert((*iter).id);
+      collectVariables(&(*iter),vars,except);
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
       const QueryGraph::Node& n=*iter;
       if (except==(&n))
