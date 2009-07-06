@@ -28,7 +28,10 @@ endif
 
 ifeq ($(CXX),g++)
 CXXFLAGS:=-W -Wall -Werror -g -O0
+CXXFLAGS-gtest:=-Wno-error -DGTEST_OS_WINDOWS
 IFLAGS:=-Iinclude
+IFLAGS-gtest:=-Igtest/include -Igtest
+IFLAGS-test:=-Igtest/include
 OBJEXT:=.o
 EXEEXT:=.exe
 TARGET:=-o 
