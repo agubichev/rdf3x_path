@@ -65,6 +65,7 @@ class Segment
    /// Read a specific page
    BufferRequestModified modifyExclusive(unsigned page);
 
+   public:
    /// Allocate a new page
    bool allocPage(BufferReferenceModified& page);
    /// Allocate a range of pages. Relatively expensive, and might allocate more than strictly required!
