@@ -127,16 +127,18 @@ bool Latch::unlock()
    bool result=false;
    if (state<0) {
       ++state;
-      if (!state)
+      if (!state) {
          if ((exclusiveWaitCounter)||(sharedWaitCounter))
             SetEvent(event); else
             result=true;
+      }
    } else {
       --state;
-      if (!state)
+      if (!state) {
          if ((exclusiveWaitCounter)||(sharedWaitCounter))
             SetEvent(event); else
             result=true;
+      }
    }
    LeaveCriticalSection(&lock);
    return result;
