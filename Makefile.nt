@@ -27,7 +27,10 @@ LIBS:=wsock32.lib
 endif
 
 ifeq ($(CXX),g++)
-CXXFLAGS:=-W -Wall -Werror -g -O0
+CXXFLAGS:=-g -O0 -W -Wall
+ifeq ($(USER),neumann)
+CXXFLAGS:=$(CXXFLAGS) -Werror
+endif
 CXXFLAGS-gtest:=-Wno-error -DGTEST_OS_WINDOWS
 IFLAGS:=-Iinclude
 IFLAGS-gtest:=-Igtest/include -Igtest

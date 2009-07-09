@@ -1,7 +1,10 @@
 SYS:=$(shell uname)
 
 CXX:=g++
-CXXFLAGS:=-W -Wall -Werror -g -O3
+CXXFLAGS:=-g -O3 -Wall -Wextra
+ifeq ($(USER),neumann)
+CXXFLAGS:=$(CXXFLAGS) -Werror
+endif
 CXXFLAGS-gtest:=-Wno-missing-field-initializers
 IFLAGS:=-Iinclude
 IFLAGS-gtest:=-Igtest/include -Igtest
