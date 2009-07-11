@@ -21,12 +21,17 @@ class Timestamp
 
    friend class AvgTime;
 
+   /// Get the raw storage space
+   void* ptr() { return data; }
+   /// Get the raw storage space
+   const void* ptr() const { return data; }
+
    public:
    /// Constructor
    Timestamp();
 
    /// Hash
-   unsigned long long getHash() const { return *reinterpret_cast<const unsigned long long*>(data); }
+   unsigned long long getHash() const { return *static_cast<const unsigned long long*>(ptr()); }
 
    /// Difference in ms
    unsigned operator-(const Timestamp& other) const;
@@ -39,6 +44,11 @@ class AvgTime {
    char data[64];
    /// Count
    unsigned count;
+
+   /// Get the raw storage space
+   void* ptr() { return data; }
+   /// Get the raw storage space
+   const void* ptr() const { return data; }
 
    public:
    /// Constructor
