@@ -1,7 +1,7 @@
 #ifndef H_rts_database_Database
 #define H_rts_database_Database
 //---------------------------------------------------------------------------
-#include <stdint.h>
+#include "infra/Config.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x

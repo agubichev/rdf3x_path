@@ -1,7 +1,7 @@
 #ifndef H_rts_transaction_LogAction
 #define H_rts_transaction_LogAction
 //---------------------------------------------------------------------------
-#include <stdint.h>
+#include "infra/Config.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x

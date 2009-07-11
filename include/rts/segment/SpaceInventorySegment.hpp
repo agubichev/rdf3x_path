@@ -4,7 +4,6 @@
 #include "rts/segment/Segment.hpp"
 #include "infra/osdep/Mutex.hpp"
 #include <vector>
-#include <stdint.h>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
