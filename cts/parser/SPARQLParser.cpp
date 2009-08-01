@@ -858,7 +858,8 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
             group.optional.insert(group.optional.end(),newGroup.optional.begin(),newGroup.optional.end());
             group.unions.insert(group.unions.end(),newGroup.unions.begin(),newGroup.unions.end());
          }
-         lexer.unget(token);
+         if (token!=SPARQLLexer::Dot)
+            lexer.unget(token);
       } else if ((token==SPARQLLexer::IRI)||(token==SPARQLLexer::Variable)||(token==SPARQLLexer::Identifier)||(token==SPARQLLexer::String)||(token==SPARQLLexer::Underscore)||(token==SPARQLLexer::Colon)||(token==SPARQLLexer::LBracket)||(token==SPARQLLexer::Anon)) {
          // Distinguish filter conditions
          if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("filter"))) {
