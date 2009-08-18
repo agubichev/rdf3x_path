@@ -932,6 +932,22 @@ void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::ve
    latches[6].unlock();
 }
 //---------------------------------------------------------------------------
+void DifferentialIndex::clear()
+   // Clear the index, discarding all entries
+{
+   for (unsigned index=0;index<7;index++)
+      latches[index].lockExclusive();
+
+   id2string.clear();
+   string2id.clear();
+   for (unsigned index=0;index<6;index++) {
+      triples[index].clear();
+   }
+
+   for (unsigned index=0;index<7;index++)
+      latches[index].unlock();
+}
+//---------------------------------------------------------------------------
 namespace {
 //---------------------------------------------------------------------------
 /// Loads triples for consumption

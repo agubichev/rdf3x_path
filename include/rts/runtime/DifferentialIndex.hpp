@@ -87,6 +87,8 @@ class DifferentialIndex
    /// Map literals to ids
    void mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids);
 
+   /// Clear the index, discarding all entries
+   void clear();
    /// Synchronize with the underlying database
    void sync();
 

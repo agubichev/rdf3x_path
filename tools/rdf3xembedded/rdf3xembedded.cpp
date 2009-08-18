@@ -40,7 +40,7 @@ bool smallAddressSpace()
 namespace {
 //---------------------------------------------------------------------------
 /// Query types
-enum QueryType { RegularQuery, ExplainQuery, InsertQuery, UnknownQueryType };
+enum QueryType { RegularQuery, ExplainQuery, InsertQuery, RollbackQuery, UnknownQueryType };
 //---------------------------------------------------------------------------
 static QueryType classifyQuery(const string& s)
    // Classify a query
@@ -54,6 +54,8 @@ static QueryType classifyQuery(const string& s)
       return ExplainQuery;
    if (lexer.isKeyword("insert"))
       return InsertQuery;
+   if (lexer.isKeyword("rollback"))
+      return RollbackQuery;
    return UnknownQueryType;
 }
 //---------------------------------------------------------------------------
@@ -456,6 +458,10 @@ int main(int argc,char* argv[])
             break;
          case InsertQuery:
             insertQuery(diffIndex,query);
+            break;
+         case RollbackQuery:
+            diffIndex.clear();
+            cout << "ok" << endl << endl << "\\." << endl;
             break;
          case RegularQuery:
          default:
