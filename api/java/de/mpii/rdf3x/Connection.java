@@ -121,6 +121,7 @@ final class Connection implements java.sql.Connection
    // Rollback
    public void rollback() throws SQLException {
       assertOpen();
+      (new Statement(this)).executeQuery("rollback");
    }
    // Rollback to a savepoint
    public void rollback(Savepoint savepoint) throws SQLException { throw new SQLFeatureNotSupportedException(); }
