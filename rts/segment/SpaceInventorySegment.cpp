@@ -620,13 +620,13 @@ void SpaceInventorySegment::insertInterval(unsigned segmentId,unsigned from,unsi
       unsigned pos=leaf->find(segmentId,from,to);
 
       // After the current entry?
-      if ((pos<leaf->getCount())&&(leaf->getSegment(pos)==segmentId)&&(from<=leaf->getTo(pos))) {
+      if ((pos<leaf->getCount())&&(leaf->getSegment(pos)==segmentId)&&(from<=leaf->getTo(pos))&&(to>leaf->getTo(pos))) {
          UpdateLeafInterval(pos,leaf->getFrom(pos),leaf->getTo(pos),leaf->getFrom(pos),to).apply(leafPage);
          return;
       }
 
       // Before the next interval?
-      if ((pos<leaf->getCount())&&(leaf->getSegment(pos)==segmentId)&&(to>=leaf->getFrom(pos))) {
+      if ((pos<leaf->getCount())&&(leaf->getSegment(pos)==segmentId)&&(from<=leaf->getFrom(pos))&&(to>=leaf->getFrom(pos))) {
          UpdateLeafInterval(pos,leaf->getFrom(pos),leaf->getTo(pos),from,leaf->getTo(pos)).apply(leafPage);
          return;
       }
@@ -687,15 +687,15 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
 
    // Collect the extent
    auto_lock lock(mutex);
-   vector<pair<unsigned,unsigned> > extent;
+   vector<ExtentEntry> extent;
    if (!getExtentLocked(segmentId,extent))
       return false;
 
    // And drop it
-   for (vector<pair<unsigned,unsigned> >::const_iterator iter=extent.begin(),limit=extent.end();iter!=limit;++iter)
-      deleteInterval(segmentId,(*iter).first,(*iter).second);
+   for (vector<ExtentEntry>::const_iterator iter=extent.begin(),limit=extent.end();iter!=limit;++iter)
+      deleteInterval(segmentId,(*iter).from,(*iter).to);
 
-   // Rlease the free space
+   // Release the free space
    if (!extent.empty()) {
       BufferReferenceExclusive rootPage;
       rootPage=readExclusive(root);
@@ -705,15 +705,15 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
 	 // Update the root
 	 BufferReferenceModified root;
 	 root.modify(rootPage);
-	 UpdateInnerNext(0,extent[0].first).apply(root);
+	 UpdateInnerNext(0,extent[0].from).apply(root);
 
          // Set the links
 	 for (unsigned slot=0;slot<extent.size();slot++) {
 	    BufferReferenceModified current;
-	    current=modifyExclusive(extent[slot].first);
+	    current=modifyExclusive(extent[slot].from);
 	    FreePage* freePage=FreePage::interpret(current.getPage());
-	    unsigned next=((slot+1)<extent.size())?extent[slot+1].first:0;
-	    UpdateFreePage(freePage->getNext(),freePage->getRange(),next,extent[slot].second).apply(current);
+	    unsigned next=((slot+1)<extent.size())?extent[slot+1].from:0;
+	    UpdateFreePage(freePage->getNext(),freePage->getRange(),next,extent[slot].getLength()).apply(current);
 	 }
 	 // And we are done
 	 return true;
@@ -721,24 +721,24 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
 
       // In front of the free list?
       unsigned slot=0,freeIterator=InnerNode::interpret(rootPage.getPage())->getNext();
-      if (InnerNode::interpret(rootPage.getPage())->getNext()>extent[slot].first) {
+      if (freeIterator>extent[slot].from) {
 	 // Update the root
 	 BufferReferenceModified root;
 	 root.modify(rootPage);
-	 UpdateInnerNext(freeIterator,extent[slot].first).apply(root);
+	 UpdateInnerNext(freeIterator,extent[slot].from).apply(root);
 
          // Set the links
-	 while (((slot+1)<extent.size())&&(extent[slot+1].first<freeIterator)) {
+	 while (((slot+1)<extent.size())&&(extent[slot+1].from<freeIterator)) {
 	    BufferReferenceModified current;
-	    current=modifyExclusive(extent[slot].first);
+	    current=modifyExclusive(extent[slot].from);
 	    FreePage* freePage=FreePage::interpret(current.getPage());
-	    UpdateFreePage(freePage->getNext(),freePage->getRange(),extent[slot+1].first,extent[slot].second).apply(current);
+	    UpdateFreePage(freePage->getNext(),freePage->getRange(),extent[slot+1].from,extent[slot].getLength()).apply(current);
 	    ++slot;
 	 }
 	 BufferReferenceModified current;
-	 current=modifyExclusive(extent[slot].first);
+	 current=modifyExclusive(extent[slot].from);
 	 FreePage* freePage=FreePage::interpret(current.getPage());
-	 UpdateFreePage(freePage->getNext(),freePage->getRange(),freeIterator,extent[slot].second).apply(current);
+	 UpdateFreePage(freePage->getNext(),freePage->getRange(),freeIterator,extent[slot].getLength()).apply(current);
 	 ++slot;
       }
 
@@ -754,38 +754,41 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
 	 if (!freeIterator) {
 	    BufferReferenceModified list;
 	    list.modify(listPage);
-	    UpdateFreePage(0,listRange,extent[slot].first,listRange).apply(list);
+	    UpdateFreePage(0,listRange,extent[slot].from,listRange).apply(list);
 
 	    // Set the links
 	    for (;slot<extent.size();slot++) {
 	       BufferReferenceModified current;
-	       current=modifyExclusive(extent[slot].first);
+	       current=modifyExclusive(extent[slot].from);
 	       FreePage* freePage=FreePage::interpret(current.getPage());
-	       unsigned next=((slot+1)<extent.size())?extent[slot+1].first:0;
-	       UpdateFreePage(freePage->getNext(),freePage->getRange(),next,extent[slot].second).apply(current);
+	       unsigned next=((slot+1)<extent.size())?extent[slot+1].from:0;
+	       UpdateFreePage(freePage->getNext(),freePage->getRange(),next,extent[slot].getLength()).apply(current);
 	    }
 	    continue;
 	 }
 
 	 // Merge
-	 if (extent[slot].first<freeIterator) {
+	 if (extent[slot].from<freeIterator) {
 	    BufferReferenceModified list;
 	    list.modify(listPage);
-	    UpdateFreePage(freeIterator,listRange,extent[slot].first,listRange).apply(list);
+	    UpdateFreePage(freeIterator,listRange,extent[slot].from,listRange).apply(list);
 
   	    // Set the links
 	    for (;slot<extent.size();slot++) {
 	       BufferReferenceModified current;
-	       current=modifyExclusive(extent[slot].first);
+	       current=modifyExclusive(extent[slot].from);
 	       FreePage* freePage=FreePage::interpret(current.getPage());
 	       unsigned next;
 	       if ((slot+1)<extent.size()) {
-		  if (extent[slot+1].first<freeIterator)
-		     next=extent[slot+1].first; else
+		  if (extent[slot+1].from<freeIterator)
+		     next=extent[slot+1].from; else
 		     next=freeIterator;
 	       } else next=freeIterator;
-	       UpdateFreePage(freePage->getNext(),freePage->getRange(),next,extent[slot].second).apply(current);
-	       if (next==freeIterator) break;
+	       UpdateFreePage(freePage->getNext(),freePage->getRange(),next,extent[slot].getLength()).apply(current);
+	       if (next==freeIterator) {
+                  ++slot;
+                  break;
+               }
 	    }
 	 }
       }
@@ -794,7 +797,7 @@ bool SpaceInventorySegment::dropSegment(unsigned segmentId)
    return true;
 }
 //---------------------------------------------------------------------------
-bool SpaceInventorySegment::getExtentLocked(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent)
+bool SpaceInventorySegment::getExtentLocked(unsigned segmentId,std::vector<ExtentEntry>& extent)
    // Get the extend of a segment. The mutex must be held!
 {
    // Access the root
@@ -840,7 +843,7 @@ bool SpaceInventorySegment::getExtentLocked(unsigned segmentId,std::vector<std::
 	       break;
 
 	    // Store the entry
-	    extent.push_back(pair<unsigned,unsigned>(node->getFrom(pos),node->getTo(pos)));
+	    extent.push_back(ExtentEntry(node->getFrom(pos),node->getTo(pos)));
 	    ++pos;
 	 }
          return true;
@@ -848,7 +851,7 @@ bool SpaceInventorySegment::getExtentLocked(unsigned segmentId,std::vector<std::
    }
 }
 //---------------------------------------------------------------------------
-bool SpaceInventorySegment::getExtent(unsigned segmentId,vector<pair<unsigned,unsigned> >& extent)
+bool SpaceInventorySegment::getExtent(unsigned segmentId,vector<ExtentEntry>& extent)
    // Get the extend of a segment
 {
    auto_lock lock(mutex);
@@ -863,10 +866,10 @@ bool SpaceInventorySegment::growSegment(unsigned segmentId,unsigned minIncrease,
    // Compute the current size
    unsigned currentLen=0;
    {
-      vector<pair<unsigned,unsigned> > extent;
+      vector<ExtentEntry> extent;
       getExtentLocked(segmentId,extent);
-      for (vector<pair<unsigned,unsigned> >::const_iterator iter=extent.begin(),limit=extent.end();iter!=limit;++iter)
-         currentLen+=(*iter).second;
+      for (vector<ExtentEntry>::const_iterator iter=extent.begin(),limit=extent.end();iter!=limit;++iter)
+         currentLen+=(*iter).getLength();
    }
 
    // Sanity check to avoid performance degradation
@@ -962,7 +965,7 @@ bool SpaceInventorySegment::growSegment(unsigned segmentId,unsigned minIncrease,
    }
 
    // And remember the new chunk
-   insertInterval(segmentId,chunkStart,size);
+   insertInterval(segmentId,chunkStart,chunkStart+size);
 
    return true;
 }

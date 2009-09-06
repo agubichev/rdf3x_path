@@ -29,6 +29,17 @@ class SpaceInventorySegment : public Segment
       Action_BuildLeafNode,Action_ShrinkLeafNode,Action_InsertLeafInterval,Action_DeleteLeafInterval,Action_UpdateLeafInterval,
       Action_UpdateFreePage
    };
+   /// An extent entry
+   struct ExtentEntry {
+      /// The range [from,to[
+      unsigned from,to;
+
+      /// Constructor
+      ExtentEntry(unsigned from,unsigned to) : from(from),to(to) {}
+
+      /// The length
+      unsigned getLength() const { return to-from; }
+   };
 
    /// Helper to allow test access to private members
    class TestInterface;
@@ -55,7 +66,7 @@ class SpaceInventorySegment : public Segment
    /// Delete an interval. Low level primitive.
    void deleteInterval(unsigned segmentId,unsigned from,unsigned to);
    /// Get the extend of a segment
-   bool getExtentLocked(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent);
+   bool getExtentLocked(unsigned segmentId,std::vector<ExtentEntry>& extent);
 
    /// Format the root when creating a new partition
    void formatRoot();
@@ -75,7 +86,7 @@ class SpaceInventorySegment : public Segment
    /// Completely drop a segment
    bool dropSegment(unsigned segmentId);
    /// Get the extend of a segment
-   bool getExtent(unsigned segmentId,std::vector<std::pair<unsigned,unsigned> >& extent);
+   bool getExtent(unsigned segmentId,std::vector<ExtentEntry>& extent);
    /// Grow a segment
    bool growSegment(unsigned id,unsigned minIncrease,unsigned& start,unsigned& len);
 };
