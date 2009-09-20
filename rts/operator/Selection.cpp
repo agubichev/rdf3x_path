@@ -7,7 +7,7 @@
 #include <cassert>
 #include <cstdlib>
 #ifdef __GNUC__
-#if (__GNUC__>4)||((__GNUC__==4)&&(__GNUC_MINOR__>=3))
+#if (__GNUC__>4)||((__GNUC__==4)&&(__GNUC_MINOR__>=5))
 #define CONFIG_TR1
 #endif
 #endif
