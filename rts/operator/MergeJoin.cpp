@@ -88,10 +88,10 @@ void MergeJoin::handleNM()
    // Reset the buffer
    buffer.clear();
    bool hasCurrent=true;
+   swapRight();
 
-   // Swap the left side such that the second tuple is the copy
+   // The second tuple is the copy
    leftInCopy=true;
-   swapLeft();
 
    // Spool the right hande side into the buffer
    while (true) {
@@ -176,9 +176,9 @@ unsigned MergeJoin::next()
                observedOutputCardinality+=count;
                return count;
             }
+            swapLeft();
             copyRight();
             if ((rightCount=right->next())==0) {
-               swapLeft();
                swapRight();
                scanState=loopEmptyRightHasData;
 
@@ -186,14 +186,13 @@ unsigned MergeJoin::next()
                observedOutputCardinality+=count;
                return count;
             }
+            swapRight();
             // Match. Is this a 1:n or n:m join?
             if (leftValue->value==leftShadow[1]) {
                if (rightValue->value==rightShadow[1]) {
                   handleNM();
                   continue;
                } else {
-                  swapLeft();
-                  swapRight();
                   scanState=loopEqualLeftHasData;
 
                   unsigned count=leftCount*rightCount;
@@ -201,8 +200,6 @@ unsigned MergeJoin::next()
                   return count;
                }
             } else if (rightValue->value==rightShadow[1]) {
-               swapLeft();
-               swapRight();
                scanState=loopEqualRightHasData;
 
                unsigned count=leftCount*rightCount;
@@ -210,8 +207,6 @@ unsigned MergeJoin::next()
                return count;
             }
             // No, just a single match
-            swapLeft();
-            swapRight();
             scanState=scanHasBothSwapped;
             { unsigned count=leftCount*rightCount;
             observedOutputCardinality+=count;
