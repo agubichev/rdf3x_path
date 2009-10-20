@@ -228,7 +228,8 @@ bool GrowableMappedFile::growPhysically(ofs_t increment)
    if (ftruncate(data->file, stat.st_size + increment)!=0) // NOT fst.fst_bytesAllocated!
       return false;
 #else
-   if (posix_fallocate64(data->file,data->size,increment)!=0) {
+   // if (posix_fallocate64(data->file,data->size,increment)!=0) { // XXX disabled for now due to an XFS bug
+   if (ftruncate64(data->file,data->size+increment)!=0) {
       return false;
    }
 #endif
