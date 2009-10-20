@@ -89,7 +89,7 @@ class DictionarySegment::HashIndexImplementation
    static InnerKey deriveInnerKey(const LeafEntry& e) { return InnerKey(e.hash); }
    /// Read the first leaf entry
    static void readFirstLeafEntryKey(InnerKey& key,const unsigned char* ptr) {
-      key.hash=Segment::readUint32Aligned(ptr);
+      key.hash=Segment::readUint32Aligned(ptr+4);
    }
 
    private:

@@ -627,8 +627,8 @@ template <class T> template <class S> void BTree<T>::performUpdate(S& source)
          assert(stored);
 
          // Make sure we did not chop a run into parts
-         if ((stored<mergedEntries.size())&&(T::deriveInnerKey(mergedEntries[stored-1])==T::deriveInnerKey(mergedEntries[stored-1]))) {
-            while (stored&&(T::deriveInnerKey(mergedEntries[stored-1])==T::deriveInnerKey(mergedEntries[stored-1])))
+         if ((stored<mergedEntries.size())&&(T::deriveInnerKey(mergedEntries[stored-1])==T::deriveInnerKey(mergedEntries[stored]))) {
+            while (stored&&(T::deriveInnerKey(mergedEntries[stored-1])==T::deriveInnerKey(mergedEntries[stored])))
                --stored;
             assert(stored);
             unsigned s=T::packLeafEntries(buffer+leafHeaderSize,buffer+sizeof(buffer),mergedEntries.begin(),mergedEntries.begin()+stored);
