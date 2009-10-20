@@ -1,0 +1,3 @@
+$(PREFIX)transactiontest-rdf3x$(EXEEXT): $(addprefix $(PREFIX),tools/transactiontests/transactiontest-rdf3x$(OBJEXT) $(src_cts:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+
