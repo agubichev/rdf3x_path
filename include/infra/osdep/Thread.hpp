@@ -18,6 +18,8 @@ class Thread
    static long threadID();
    /// Activate the next thread
    static void yield();
+   /// Get the current time in milliseconds
+   static uint64_t getTicks();
 };
 //---------------------------------------------------------------------------
 #endif

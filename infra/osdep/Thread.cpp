@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
+#include <sys/time.h>
 #endif
 //---------------------------------------------------------------------------
 namespace std {}
@@ -107,6 +108,18 @@ void Thread::yield()
 #else
    sched_yield();
 #endif
+#endif
+}
+//---------------------------------------------------------------------------
+uint64_t Thread::getTicks()
+   // Get the current time in ms
+{
+#ifdef CONFIG_WINDOWS
+   return GetTickCount();
+#else
+   timeval t;
+   gettimeofday(&t,0);
+   return static_cast<uint64_t>(t.tv_sec)*1000+(t.tv_usec/1000);
 #endif
 }
 //---------------------------------------------------------------------------
