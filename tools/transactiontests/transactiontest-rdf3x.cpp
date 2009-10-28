@@ -44,7 +44,7 @@ struct ThreadInfo {
    /// The synchronization mutex
    Mutex mutex;
    /// The event
-   Event event;
+   Event eventReader,eventWriter;
    /// The differential index
    DifferentialIndex& diff;
    /// The locks
@@ -67,7 +67,7 @@ struct ThreadInfo {
    /// Empty?
    bool empty() const { return reader==writer; }
    /// Full?
-   bool full() const { return ((reader+1)%maxTransactions)==writer; }
+   bool full() const { return ((writer+1)%maxTransactions)==reader; }
 };
 //---------------------------------------------------------------------------
 }
@@ -104,6 +104,8 @@ static void writeURI(ofstream& out,const string& value)
    out << ">";
 }
 //---------------------------------------------------------------------------
+static unsigned sleeping,working;
+//---------------------------------------------------------------------------
 static void transactionWorker(void* i)
 {
    ThreadInfo& info=*static_cast<ThreadInfo*>(i);
@@ -112,17 +114,19 @@ static void transactionWorker(void* i)
    info.mutex.lock();
    info.activeThreads++;
    if (info.activeThreads==1)
-      info.event.notifyAll(info.mutex);
+      info.eventWriter.notifyAll(info.mutex);
 
    // Work
    const string empty;
    while ((!info.empty())||(!info.done)) {
       if (info.empty())
-         info.event.wait(info.mutex);
+         info.eventReader.wait(info.mutex);
+
       if (!info.empty()) {
+         ++working;
          // Take a new transaction
          if (info.full())
-            info.event.notifyAll(info.mutex);
+            info.eventWriter.notifyAll(info.mutex);
          const Transaction& transaction=*info.tasks[info.reader];
          info.reader=(info.reader+1)%ThreadInfo::maxTransactions;
          info.mutex.unlock();
@@ -145,7 +149,9 @@ static void transactionWorker(void* i)
          delete op;
 
          // Wait
+         sleeping++;
          Thread::sleep(transaction.delay);
+         sleeping--;
 
          // Insert new tags
          BulkOperation bulk(info.diff);
@@ -160,14 +166,24 @@ static void transactionWorker(void* i)
 
          // Latch again and check for new tasks
          info.mutex.lock();
+         --working;
       }
    }
 
    // Deregister the thread
    info.activeThreads--;
    if (info.activeThreads==0)
-      info.event.notifyAll(info.mutex);
+      info.eventWriter.notifyAll(info.mutex);
    info.mutex.unlock();
+}
+//---------------------------------------------------------------------------
+static unsigned drawExp(double lambda)
+   // Draw an exponentially distributed random variable
+{
+   unsigned result=-(lambda*log(1.0-drand48()));
+   if (result>10*lambda)
+      result=10*lambda;
+   return result;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
@@ -292,18 +308,21 @@ int main(int argc,char* argv[])
       cout << "triples per second: " << (static_cast<double>(total)/(static_cast<double>(stop-start)/1000.0)) << endl;
    } else {
       // Prepare transactions
-      static const double lambda = 100;
-      static const double lambda2 = 2000;
+      static const double lambda = 80;
+      static const double lambda2 = 1000;
+
+      if ((transactionCounts-initialTransactions)>1000)
+         transactionCounts=initialTransactions+1000;
 
       unsigned total=0;
       vector<Transaction> transactions;
       transactions.resize(transactionCounts-initialTransactions);
       unsigned nextEvent = 0;
       for (unsigned index=initialTransactions;index<transactionCounts;index++) {
-         nextEvent+=-lambda*log(1.0-drand48());
+         nextEvent+=drawExp(lambda);
          transactions[index-initialTransactions].id=index-initialTransactions;
          transactions[index-initialTransactions].arrival=nextEvent;
-         transactions[index-initialTransactions].delay=-lambda2*log(1.0-drand48());
+         transactions[index-initialTransactions].delay=drawExp(lambda2);
 
          unsigned tagCount;
          in >> tagCount;
@@ -311,8 +330,8 @@ int main(int argc,char* argv[])
          string ss,ps,os;
          readEntry(in,s,ss);
          readEntry(in,o,os);
-         transactions[index].subject=ss;
-         transactions[index].object=os;
+         transactions[index-initialTransactions].subject=ss;
+         transactions[index-initialTransactions].object=os;
          for (unsigned index2=0;index2<tagCount;index2++) {
             readEntry(in,p,ps);
             transactions[index-initialTransactions].predicates.push_back(ps);
@@ -325,37 +344,46 @@ int main(int argc,char* argv[])
       DifferentialIndex diff(db);
       PredicateLockManager locks;
       ThreadInfo threads(diff,locks);
-      static const unsigned threadCount = 100;
+      static const unsigned threadCount = 20;
       for (unsigned index=0;index<threadCount;index++)
          Thread::start(transactionWorker,&threads);
       threads.mutex.lock();
       while (!threads.activeThreads)
-         threads.event.wait(threads.mutex);
+         threads.eventWriter.wait(threads.mutex);
 
       // Process the transactions
-      uint64_t base=Thread::getTicks();
-      for (unsigned index=0,limit=transactions.size();index<limit;++index) {
+      uint64_t base=Thread::getTicks(),lastShow=0;
+      for (unsigned index=0,limit=transactions.size();index<limit;) {
          uint64_t now=Thread::getTicks()-base;
-         while ((!threads.full())&&(now<=transactions[index].arrival)) {
+         while ((!threads.full())&&(now>=transactions[index].arrival)) {
             threads.tasks[threads.writer]=&(transactions[index]);
             threads.writer=(threads.writer+1)%ThreadInfo::maxTransactions;
+            threads.eventReader.notify(threads.mutex);
+            if ((++index)>=limit)
+               break;
+         }
+         if (index>=limit)
+            break;
+         if (now>(lastShow+2000)) {
+            cout << threads.reader << " " << threads.writer << " " << threads.activeThreads << " " << sleeping << " " << working << endl;
+            lastShow=now;
          }
          if (now<transactions[index].arrival)
-            threads.event.timedWait(threads.mutex,transactions[index].arrival-now); else
-            threads.event.wait(threads.mutex);
+            threads.eventWriter.timedWait(threads.mutex,transactions[index].arrival-now); else
+            threads.eventWriter.wait(threads.mutex);
       }
 
       // Shutdown
       threads.done=true;
-      threads.event.notifyAll(threads.mutex);
+      threads.eventReader.notifyAll(threads.mutex);
       while (threads.activeThreads)
-         threads.event.wait(threads.mutex);
+         threads.eventWriter.wait(threads.mutex);
       threads.mutex.unlock();
 
       diff.sync();
       Timestamp stop;
-      cout << "transactional load: " << (stop-start) << "ms for " << (transactionCounts-initialTransactions) << " transactions, " << total << " triples" << endl;
-      cout << "transactions per second: " << (static_cast<double>(transactionCounts-initialTransactions)/(static_cast<double>(stop-start)/1000.0)) << endl;
+      cout << "transactional load: " << (stop-start) << "ms for " << transactions.size() << " transactions, " << total << " triples" << endl;
+      cout << "transactions per second: " << (static_cast<double>(transactions.size())/(static_cast<double>(stop-start)/1000.0)) << endl;
       cout << "triples per second: " << (static_cast<double>(total)/(static_cast<double>(stop-start)/1000.0)) << endl;
    }
 }

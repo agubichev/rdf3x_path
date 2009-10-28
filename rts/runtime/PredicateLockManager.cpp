@@ -105,13 +105,21 @@ void PredicateLockManager::finished(unsigned transaction)
    // Oldest active transaction?
    if (transaction==(*active.begin())) {
       active.erase(transaction);
+      unsigned oldestActive=0;
+      if (!active.empty())
+         oldestActive=*active.begin();
       while (!committed.empty()) {
          unsigned first=*committed.begin();
-         if (first>transaction) break;
+         if (first>oldestActive) break;
          committed.erase(first);
+         active.erase(first);
+         if (!active.empty())
+            oldestActive=*active.begin();
       }
+      if (active.empty())
+         locks.clear();
       for (vector<Lock>::iterator iter=locks.begin(),limit=locks.end();iter!=limit;)
-         if ((*iter).transaction<=transaction) {
+         if ((*iter).transaction<oldestActive) {
             iter=locks.erase(iter);
             limit=locks.end();
          } else {

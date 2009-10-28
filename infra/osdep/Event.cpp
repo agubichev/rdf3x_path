@@ -103,9 +103,10 @@ bool Event::timedWait(Mutex& mutex,unsigned timeoutMilli)
    return !timeout;
 #else
    struct timeval now; gettimeofday(&now,0);
+   uint64_t nowT=(static_cast<uint64_t>(now.tv_sec)*1000)+(now.tv_usec/10000);
+   uint64_t future=nowT+timeoutMilli;
    struct timespec abstime;
-   abstime.tv_sec=now.tv_sec+(now.tv_usec+(10*timeoutMilli))/10000;
-   abstime.tv_nsec=((now.tv_usec+(10*timeoutMilli))%10000)*10;
+   abstime.tv_sec=future/1000; abstime.tv_nsec=(future%1000)*1000000;
    return pthread_cond_timedwait(&condVar,&(mutex.mutex),&abstime)!=ETIMEDOUT;
 #endif
 }
