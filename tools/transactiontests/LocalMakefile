@@ -7,3 +7,7 @@ $(PREFIX)transactiontest-postgresql$(EXEEXT): $(addprefix $(PREFIX),tools/transa
 LIBS-transactiontest-postgresql:=pqxx
 LIBFILE-pqxx:=-lpqxx
 
+space:=
+space+=
+$(PREFIX)tools/transactiontests/transactiontestjena.class: tools/transactiontests/transactiontestjena.java
+	javac -cp $(subst $(space),:,$(wildcard $(SDBROOT)/lib/*.jar)) -d $(PREFIX)tools/transactiontests tools/transactiontests/transactiontestjena.java
