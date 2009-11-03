@@ -292,7 +292,7 @@ public class transactiontestjena
 
          // Vary the arrival rates
          final double lambda2 = 2000;
-         final int[] lambdaSteps=new int[]{1000,800,600,400,200,100,80,60,40,20,10,5,0,-1};
+         final int[] lambdaSteps=new int[]{300,200,100,80,60,40,20,10,5,0,-1};
          for (int chunk=0;lambdaSteps[chunk]>=0;++chunk) {
             int lambda=lambdaSteps[chunk];
             final int chunkSize = 10000;

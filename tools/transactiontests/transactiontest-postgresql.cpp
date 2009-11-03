@@ -331,6 +331,8 @@ int main(int argc,char* argv[])
          execV(trans,"copy transactiontest.strings from '/tmp/strings.tmp';");
          remove("/tmp/strings.tmp");
          execV(trans,"analyze;");
+         // simulate dictionary construction
+         execV(trans,"with idmap as (select s1.id as oldid,s2.id as newid from transactiontest.strings s1,(select value,min(id) as id from transactiontest.strings group by value) s2 where s1.value=s2.value) select s1.newid,s2.newid,s3.newid from transactiontest.facts f,idmap s1,idmap s2,idmap s3 where f.subject=s1.oldid and f.predicate=s2.oldid and f.predicate=s3.oldid;");
       }
       sync();
       Timestamp stop;
@@ -376,7 +378,7 @@ int main(int argc,char* argv[])
 
       // Vary the arrival rates
       static const double lambda2 = 2000;
-      static const int lambdaSteps[]={100,80,60,40,20,10,5,0,-1};
+      static const int lambdaSteps[]={300,200,100,80,60,40,20,10,5,0,-1};
       for (unsigned chunk=0;lambdaSteps[chunk]>=0;++chunk) {
          unsigned lambda=lambdaSteps[chunk];
          static const unsigned chunkSize = 10000;

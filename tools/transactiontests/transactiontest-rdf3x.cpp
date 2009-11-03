@@ -321,7 +321,7 @@ int main(int argc,char* argv[])
 
       // Vary the arrival rates
       static const double lambda2 = 2000;
-      static const int lambdaSteps[]={100,80,60,40,20,10,5,0,-1};
+      static const int lambdaSteps[]={300,200,100,80,60,40,20,10,5,0,-1};
       for (unsigned chunk=0;lambdaSteps[chunk]>=0;++chunk) {
          unsigned lambda=lambdaSteps[chunk];
          static const unsigned chunkSize = 10000;
