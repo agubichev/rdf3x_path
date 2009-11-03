@@ -141,11 +141,11 @@ const char* TempFile::skipString(const char* reader)
    return reader+len;
 }
 //---------------------------------------------------------------------------
-const char* TempFile::readId(const char* reader,uint64_t& id)
+const char* TempFile::readId(const char* reader,uint64_t& result)
    // Read an id
 {
    unsigned shift=0;
-   id=0;
+   uint64_t id=0;
    while (true) {
       unsigned char c=*reinterpret_cast<const unsigned char*>(reader++);
       if (c&128) {
@@ -156,6 +156,7 @@ const char* TempFile::readId(const char* reader,uint64_t& id)
          break;
       }
    }
+   result=id;
    return reader;
 }
 //---------------------------------------------------------------------------
