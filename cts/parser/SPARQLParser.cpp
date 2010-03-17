@@ -944,7 +944,7 @@ void SPARQLParser::parseLimit()
    SPARQLLexer::Token token=lexer.getNext();
 
    if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("limit"))) {
-      if (lexer.getNext()!=SPARQLLexer::Identifier)
+      if (lexer.getNext()!=SPARQLLexer::Integer)
          throw ParserException("number expected after 'limit'");
       limit=atoi(lexer.getTokenValue().c_str());
       if (limit==0)
