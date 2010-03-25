@@ -29,7 +29,7 @@ final class ResultSet implements java.sql.ResultSet
    ResultSet(String[] header,String[][] data) {
       this.header=header;
       this.data=data;
-      row=0;
+      row=-1;
    }
 
    // Move absolutely
