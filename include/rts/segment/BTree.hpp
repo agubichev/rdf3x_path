@@ -465,8 +465,8 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
          memcpy(leftPage+innerHeaderSize,static_cast<const unsigned char*>(pages[level].getPage())+innerHeaderSize,innerEntrySize*(maxInnerCount/2));
          memset(rightPage,0,BufferReference::pageSize);
          Segment::writeUint32Aligned(rightPage+8,~0u);
-         Segment::writeUint32Aligned(leftPage+12,Segment::readUint32Aligned(static_cast<const unsigned char*>(pages[level].getPage())+12));
-         Segment::writeUint32Aligned(leftPage+16,maxInnerCount-(maxInnerCount/2));
+         Segment::writeUint32Aligned(rightPage+12,Segment::readUint32Aligned(static_cast<const unsigned char*>(pages[level].getPage())+12));
+         Segment::writeUint32Aligned(rightPage+16,maxInnerCount-(maxInnerCount/2));
          memcpy(rightPage+innerHeaderSize,static_cast<const unsigned char*>(pages[level].getPage())+innerHeaderSize+innerEntrySize*((maxInnerCount/2)),innerEntrySize*(maxInnerCount-(maxInnerCount/2)));
          typename T::InnerKey leftMax;
          T::readInnerKey(leftMax,leftPage+innerHeaderSize+innerEntrySize*((maxInnerCount/2)-1));

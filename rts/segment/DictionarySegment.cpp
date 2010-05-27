@@ -742,7 +742,7 @@ void DictionarySegment::appendLiterals(const std::vector<Literal>& literals)
 
       // Write the pages
       unsigned slot=1;
-      for (unsigned index=oldNextId-mappingIds,limit=nextId-oldNextId,page=start;index<limit;++page) {
+      for (unsigned index=mappingIds-oldNextId,limit=nextId-oldNextId,page=start;index<limit;++page) {
          BufferReferenceModified ref(modifyExclusive(page));
          unsigned char newEntries[BufferReference::pageSize];
          unsigned chunk=min(entriesPerMappingPage-slot,limit-index);

@@ -380,6 +380,7 @@ unsigned AggregatedDifferentialIndexScan::incIter()
       if (((*iter).value1!=v1)||((*iter).value2!=v2))
          break;
       ++count;
+      ++iter;
    }
    return count;
 }
@@ -654,6 +655,7 @@ unsigned FullyAggregatedDifferentialIndexScan::incIter()
       if ((*iter).value1!=v1)
          break;
       ++count;
+      ++iter;
    }
    return count;
 }
