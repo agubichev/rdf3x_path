@@ -142,6 +142,7 @@ Segment::Type PredicateSetSegment::getType() const
 void PredicateSetSegment::refreshInfo()
    // Refresh segment info stored in the partition
 {
+   Segment::refreshInfo();
 }
 //---------------------------------------------------------------------------
 #if 1

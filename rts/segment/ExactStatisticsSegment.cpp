@@ -41,6 +41,8 @@ Segment::Type ExactStatisticsSegment::getType() const
 void ExactStatisticsSegment::refreshInfo()
    // Refresh segment info stored in the partition
 {
+   Segment::refreshInfo();
+
    directoryPage=getSegmentData(slotDirectoryPage);
    BufferReference page(readShared(directoryPage));
    const unsigned char* directory=static_cast<const unsigned char*>(page.getPage());

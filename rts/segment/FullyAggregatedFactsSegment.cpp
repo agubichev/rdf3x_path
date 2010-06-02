@@ -307,6 +307,8 @@ Segment::Type FullyAggregatedFactsSegment::getType() const
 void FullyAggregatedFactsSegment::refreshInfo()
    // Refresh segment info stored in the partition
 {
+   refreshInfo();
+
    tableStart=getSegmentData(slotTableStart);
    indexRoot=getSegmentData(slotIndexRoot);
    pages=getSegmentData(slotPages);

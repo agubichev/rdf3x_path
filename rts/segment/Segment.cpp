@@ -40,7 +40,7 @@ void Segment::refreshInfo()
    // Refresh the stored info
 {
    partition.getSegmentInventory()->getFreeBlock(id,freeBlockStart,freeBlockLen);
-   partition.getSegmentInventory()->getFreeList(id);
+   freeList=partition.getSegmentInventory()->getFreeList(id);
 }
 //---------------------------------------------------------------------------
 unsigned Segment::getSegmentData(unsigned slot)

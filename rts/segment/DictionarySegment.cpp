@@ -226,6 +226,8 @@ Segment::Type DictionarySegment::getType() const
 void DictionarySegment::refreshInfo()
    // Refresh segment info stored in the partition
 {
+   Segment::refreshInfo();
+
    tableStart=getSegmentData(slotTableStart);
    nextId=getSegmentData(slotNextId);
    mappings.push_back(pair<unsigned,unsigned>(getSegmentData(slotMappingStart),0));

@@ -418,6 +418,8 @@ Segment::Type AggregatedFactsSegment::getType() const
 void AggregatedFactsSegment::refreshInfo()
    // Refresh segment info stored in the partition
 {
+   Segment::refreshInfo();
+
    tableStart=getSegmentData(slotTableStart);
    indexRoot=getSegmentData(slotIndexRoot);
    pages=getSegmentData(slotPages);

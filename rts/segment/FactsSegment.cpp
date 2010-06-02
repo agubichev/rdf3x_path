@@ -504,6 +504,8 @@ Segment::Type FactsSegment::getType() const
 void FactsSegment::refreshInfo()
    // Refresh segment info stored in the partition
 {
+   Segment::refreshInfo();
+
    tableStart=getSegmentData(slotTableStart);
    indexRoot=getSegmentData(slotIndexRoot);
    pages=getSegmentData(slotPages);
