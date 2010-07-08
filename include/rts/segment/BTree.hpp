@@ -394,7 +394,7 @@ template <class T> void BTree<T>::Updater::updateKey(unsigned level,typename T::
    // Update further up if necessary
    for (;level>0;--level) {
       // Not the maximum?
-      if (positions[level]!=getInnerCount(static_cast<const unsigned char*>(pages[level-1].getPage())))
+      if (positions[level]+1<getInnerCount(static_cast<const unsigned char*>(pages[level-1].getPage())))
          break;
       // Modify the parent
       parent.modify(pages[level-1]);
