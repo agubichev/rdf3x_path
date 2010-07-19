@@ -358,27 +358,39 @@ static void doStocker(Database& db)
 //---------------------------------------------------------------------------
 static void doMaduko(Database& db,int,char**)
 {
-   map<uint64_t,uint64_t> counts;
-   static const uint64_t M = 1000000;
+   // Pre-compute counts
+   map<unsigned,uint64_t> counts1;
    {
-      AggregatedFactsSegment::Scan scan;
-      vector<pair<unsigned,unsigned> > entries;
-      unsigned current=~0u;
-      if (scan.first(db.getAggregatedFacts(Database::Order_Subject_Predicate_Object))) do {
-         if (scan.getValue1()!=current) {
-            for (vector<pair<unsigned,unsigned> >::const_iterator iter=entries.begin(),limit=entries.end();iter!=limit;++iter) {
-               counts[(*iter).first]+=(*iter).second;
-               for (vector<pair<unsigned,unsigned> >::const_iterator iter2=entries.begin(),limit2=entries.end();iter2!=limit2;++iter2) {
-                  counts[(*iter).first+(M*(*iter2).first)]+=(*iter).second*(*iter2).second;
-               }
-            }
-            entries.clear();
-         }
-         entries.push_back(make_pair(scan.getValue2(),scan.getCount()));
+      FullyAggregatedFactsSegment::Scan scan;
+      if (scan.first(db.getFullyAggregatedFacts(Database::Order_Predicate_Subject_Object))) do {
+         counts1[scan.getValue1()]=scan.getCount();
       } while (scan.next());
    }
-   cout << counts.size() << " entries" << endl;
-   counts.clear();
+   map<pair<unsigned,unsigned>,uint64_t> counts2SS,counts2SO,counts2OS,counts2OO;
+   {
+      Register p1,s1,p2,s2; s1.reset(); p1.reset(); s2.reset(); p2.reset();
+      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
+      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s1,false,&p1,false,0,false,0),
+                     &s1,t1,
+                     AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s2,false,&p2,false,0,false,0),
+                     &s2,t2,1);
+      unsigned count;
+      if ((count=join.first())!=0) do {
+         counts2OS[make_pair(p1.value,p2.value)]+=count;
+      } while ((count=join.next())!=0);
+   }
+   {
+      Register p1,s1,p2,o2; s1.reset(); p1.reset(); o2.reset(); p2.reset();
+      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
+      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s1,false,&p1,false,0,false,0),
+                     &s1,t1,
+                     AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p2,false,&o2,false,0),
+                     &o2,t2,1);
+      unsigned count;
+      if ((count=join.first())!=0) do {
+         counts2SO[make_pair(p1.value,p2.value)]+=count;
+      } while ((count=join.next())!=0);
+   }
    {
       Register p1,o1,p2,s2; o1.reset(); p1.reset(); s2.reset(); p2.reset();
       vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
@@ -388,85 +400,22 @@ static void doMaduko(Database& db,int,char**)
                      &s2,t2,1);
       unsigned count;
       if ((count=join.first())!=0) do {
-         counts[o1.value+(M*s2.value)]+=count;
+         counts2OS[make_pair(p1.value,p2.value)]+=count;
       } while ((count=join.next())!=0);
    }
-   cout << counts.size() << " entries" << endl;
-
-   ExactStatisticsSegment& es=db.getExactStatistics();
-   unsigned total=es.getCardinality(~0u,~0u,~0u);
-
-   // Run all two-predicate queries
-   Runtime runtime(db);
-   runtime.allocateRegisters(6);
-   Register* s1=runtime.getRegister(0),*p1=runtime.getRegister(1);
-   Register* s2=runtime.getRegister(3),*p2=runtime.getRegister(4);
-   vector<Register*> et,p2t;
-   p2t.push_back(p2);
-   FullyAggregatedFactsSegment::Scan scan1;
-   map<int,unsigned> errorHistogramTuples;
-   unsigned summary[6]={0,0,0,0,0,0}; double maxQError=0;
-   if (scan1.first(db.getFullyAggregatedFacts(Database::Order_Predicate_Subject_Object))) do {
-      // Run a merge join
-      map<unsigned,unsigned> tupleCounts,subjectCounts;
-      s1->reset();
-      p1->value=scan1.getValue1();
-      s2->reset();
-      p2->reset();
-      MergeJoin join(
-         AggregatedIndexScan::create(db,Database::Order_Predicate_Subject_Object,s1,false,p1,true,0,false,0),
-         s1,et,
-         AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,s2,false,p2,false,0,false,0),
-         s2,p2t,
-         1);
+   {
+      Register p1,o1,p2,o2; o1.reset(); p1.reset(); o2.reset(); p2.reset();
+      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
+      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p1,false,&o1,false,0),
+                     &o1,t1,
+                     AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p2,false,&o2,false,0),
+                     &o2,t2,1);
       unsigned count;
       if ((count=join.first())!=0) do {
-         tupleCounts[p2->value]+=count;
-         subjectCounts[p2->value]++;
+         counts2OO[make_pair(p1.value,p2.value)]+=count;
       } while ((count=join.next())!=0);
-
-      // Compare with predicate cardinalities
-      cerr << p1->value << endl;
-      unsigned card1=es.getCardinality(~0u,p1->value,~0u);
-      for (map<unsigned,unsigned>::const_iterator iter=tupleCounts.begin(),limit=tupleCounts.end(),iter2=subjectCounts.begin();iter!=limit;++iter,++iter2) {
-         // Derive estimates
-         unsigned card2=es.getCardinality(~0u,(*iter).first,~0u);
-         double joinSel=static_cast<double>((*iter).second)/(static_cast<double>(total)*static_cast<double>(total));
-         double predictedTuples=joinSel*card1*card2;
-
-         // Compute the errors
-         double tupleError=computeError((*iter).second,predictedTuples);
-#if 0
-         if ((tupleError>0.1)||(tupleError<-0.1))
-            cerr << p1->value << "\t" << (*iter2).first << "\t" << (*iter2).second << "\t" << predictedTuples << "\t" << (*iter).second << "\t" << tupleError << endl;
-#endif
-
-         // Remember the errors
-         int tuplesSlot=static_cast<int>(tupleError);
-         if (tuplesSlot<-100) tuplesSlot=-100;
-         if (tuplesSlot>100) tuplesSlot=100;
-         errorHistogramTuples[tuplesSlot]++;
-
-         double qError=(tupleError<0)?(1.0-tupleError):(1.0+tupleError);
-         if (qError<=2.0) summary[0]++; else
-         if (qError<=5.0) summary[1]++; else
-         if (qError<=10.0) summary[2]++; else
-         if (qError<=100.0) summary[3]++; else
-         if (qError<=1000.0) summary[4]++; else
-            summary[5]++;
-         if (qError>maxQError) {
-            maxQError=qError;
-            cerr << maxQError << endl;
-         }
-      }
-   } while (scan1.next());
-
-   // Show the hisstogram
-   for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
-      cout << (*iter).first << "\t" << (*iter).second << endl;
-   for (unsigned index=0;index<6;index++)
-      cout << summary[index] << " ";
-   cout << maxQError << endl;
+   }
+   cout << counts1.size() << " " << counts2SS.size() << " " << counts2SO.size() << " " << counts2OS.size() << " " << counts2OO.size() << " entries" << endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
