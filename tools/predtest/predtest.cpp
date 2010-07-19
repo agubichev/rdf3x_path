@@ -211,6 +211,7 @@ static void doSets(Database& db)
    // Precompute the predicate sets
    PredicateSetSegment ps(db.getFirstPartition());
    ps.computePredicateSets();
+   { unsigned count,entries,size; ps.getStatistics(count,entries,size); cerr << count << " " << entries << " " << size << endl; }
 
    // Run all two-predicate queries
    Runtime runtime(db);
@@ -355,7 +356,7 @@ static void doStocker(Database& db)
    cout << maxQError << endl;
 }
 //---------------------------------------------------------------------------
-static void doMaduko(Database& db)
+static void doMaduko(Database& db,int,char**)
 {
    map<uint64_t,uint64_t> counts;
    static const uint64_t M = 1000000;
@@ -496,7 +497,7 @@ int main(int argc,char* argv[])
       doStocker(db);
       return 0;
    } else if (string(argv[2])=="--maduko") {
-      doMaduko(db);
+      doMaduko(db,argc-3,argv+3);
       return 0;
    }
 

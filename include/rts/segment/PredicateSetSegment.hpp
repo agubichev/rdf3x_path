@@ -51,6 +51,9 @@ class PredicateSetSegment : public Segment
 
    /// Estimate the cardinality of a star join
    void getStarCardinality(const std::vector<unsigned>& predicates,unsigned& distinctSubjects,double& cardinality);
+
+   /// Get size statistics
+   void getStatistics(unsigned& count,unsigned& entries,unsigned& size) const;
 };
 //---------------------------------------------------------------------------
 #endif

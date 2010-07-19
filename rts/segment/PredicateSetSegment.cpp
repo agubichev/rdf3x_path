@@ -385,3 +385,14 @@ void PredicateSetSegment::getStarCardinality(const vector<unsigned>& predicates,
    }
 }
 //---------------------------------------------------------------------------
+void PredicateSetSegment::getStatistics(unsigned& count,unsigned& entries,unsigned& size) const
+   // Get size statistics
+{
+   count=data->predSets.size();
+   entries=0;
+   for (vector<PredSet>::const_iterator iter=data->predSets.begin(),limit=data->predSets.end();iter!=limit;++iter) {
+      entries+=(*iter).predicates.size();
+   }
+   size=1+count+(2*entries);
+}
+//---------------------------------------------------------------------------
