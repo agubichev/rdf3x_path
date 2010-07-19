@@ -376,7 +376,7 @@ static void doMaduko(Database& db,int,char**)
                      &s2,t2,1);
       unsigned count;
       if ((count=join.first())!=0) do {
-         counts2OS[make_pair(p1.value,p2.value)]+=count;
+         counts2SS[make_pair(p1.value,p2.value)]+=count;
       } while ((count=join.next())!=0);
    }
    {
