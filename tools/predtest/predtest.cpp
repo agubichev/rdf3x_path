@@ -356,8 +356,57 @@ static void doStocker(Database& db)
    cout << maxQError << endl;
 }
 //---------------------------------------------------------------------------
-static void doMaduko(Database& db,int,char**)
+static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector<pair<unsigned,unsigned> > >& lookup,const char* name,double threshold)
+   // Construct a subgraph of size 2
 {
+   AggregatedFactsSegment::Scan scan;
+   uint64_t count=0,inScope=0;
+   if (scan.first(db.getAggregatedFacts(order))) {
+      map<unsigned,unsigned> matches;
+      uint64_t fanoutSum=0;
+      unsigned current=scan.getValue1();
+      while (true) {
+         map<unsigned,vector<pair<unsigned,unsigned> > >::const_iterator iter=lookup.find(scan.getValue2());
+         if (iter!=lookup.end()) {
+            for (vector<pair<unsigned,unsigned> >::const_iterator iter2=(*iter).second.begin(),limit2=(*iter).second.end();iter2!=limit2;++iter2) {
+               unsigned c=(*iter2).second,c2=scan.getCount()*c;
+               matches[(*iter2).first]+=c2;
+               fanoutSum+=c2;
+            }
+         }
+
+         if (!scan.next()) {
+            count+=matches.size();
+            break;
+         } else if (scan.getValue1()!=current) {
+            count+=matches.size();
+
+            double expected=static_cast<double>(fanoutSum)/static_cast<double>(matches.size());
+            for (map<unsigned,unsigned>::const_iterator iter=matches.begin(),limit=matches.end();iter!=limit;++iter)
+               if (qError((*iter).second,expected)>threshold)
+                  inScope++;
+
+            matches.clear(); fanoutSum=0;
+            current=scan.getValue1();
+         }
+      }
+      double expected=static_cast<double>(fanoutSum)/static_cast<double>(matches.size());
+      for (map<unsigned,unsigned>::const_iterator iter=matches.begin(),limit=matches.end();iter!=limit;++iter)
+         if (qError((*iter).second,expected)>threshold)
+            inScope++;
+   }
+   cout << count << " " << name << " matches" << endl;
+   cout << inScope << " above error threshold" << endl;
+}
+//---------------------------------------------------------------------------
+static void doMaduko(Database& db,int argc,char** argv)
+{
+   if (argc<1) {
+      cerr << "threshold required" << endl;
+      return;
+   }
+   double threshold=atof(argv[0]);
+
    // Pre-compute counts
    map<unsigned,uint64_t> counts1;
    {
@@ -366,56 +415,27 @@ static void doMaduko(Database& db,int,char**)
          counts1[scan.getValue1()]=scan.getCount();
       } while (scan.next());
    }
-   map<pair<unsigned,unsigned>,uint64_t> counts2SS,counts2SO,counts2OS,counts2OO;
+   map<unsigned,vector<pair<unsigned,unsigned> > > subjectLookup;
    {
-      Register p1,s1,p2,s2; s1.reset(); p1.reset(); s2.reset(); p2.reset();
-      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
-      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s1,false,&p1,false,0,false,0),
-                     &s1,t1,
-                     AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s2,false,&p2,false,0,false,0),
-                     &s2,t2,1);
-      unsigned count;
-      if ((count=join.first())!=0) do {
-         counts2SS[make_pair(p1.value,p2.value)]+=count;
-      } while ((count=join.next())!=0);
+      AggregatedFactsSegment::Scan scan;
+      if (scan.first(db.getAggregatedFacts(Database::Order_Subject_Predicate_Object))) do {
+         subjectLookup[scan.getValue1()].push_back(make_pair(scan.getValue2(),scan.getCount()));
+      } while (scan.next());
    }
+   cout << subjectLookup.size() << " subjects" << endl;
+   map<unsigned,vector<pair<unsigned,unsigned> > > objectLookup;
    {
-      Register p1,s1,p2,o2; s1.reset(); p1.reset(); o2.reset(); p2.reset();
-      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
-      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s1,false,&p1,false,0,false,0),
-                     &s1,t1,
-                     AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p2,false,&o2,false,0),
-                     &o2,t2,1);
-      unsigned count;
-      if ((count=join.first())!=0) do {
-         counts2SO[make_pair(p1.value,p2.value)]+=count;
-      } while ((count=join.next())!=0);
+      AggregatedFactsSegment::Scan scan;
+      if (scan.first(db.getAggregatedFacts(Database::Order_Object_Predicate_Subject))) do {
+         objectLookup[scan.getValue1()].push_back(make_pair(scan.getValue2(),scan.getCount()));
+      } while (scan.next());
    }
-   {
-      Register p1,o1,p2,s2; o1.reset(); p1.reset(); s2.reset(); p2.reset();
-      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
-      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p1,false,&o1,false,0),
-                     &o1,t1,
-                     AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&s2,false,&p2,false,0,false,0),
-                     &s2,t2,1);
-      unsigned count;
-      if ((count=join.first())!=0) do {
-         counts2OS[make_pair(p1.value,p2.value)]+=count;
-      } while ((count=join.next())!=0);
-   }
-   {
-      Register p1,o1,p2,o2; o1.reset(); p1.reset(); o2.reset(); p2.reset();
-      vector<Register*> t1,t2; t1.push_back(&p1); t2.push_back(&p2);
-      MergeJoin join(AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p1,false,&o1,false,0),
-                     &o1,t1,
-                     AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&p2,false,&o2,false,0),
-                     &o2,t2,1);
-      unsigned count;
-      if ((count=join.first())!=0) do {
-         counts2OO[make_pair(p1.value,p2.value)]+=count;
-      } while ((count=join.next())!=0);
-   }
-   cout << counts1.size() << " " << counts2SS.size() << " " << counts2SO.size() << " " << counts2OS.size() << " " << counts2OO.size() << " entries" << endl;
+   cout << objectLookup.size() << " objects" << endl;
+
+   doMaduko2(db,Database::Order_Predicate_Subject_Object,subjectLookup,"SS",threshold);
+   doMaduko2(db,Database::Order_Predicate_Object_Subject,subjectLookup,"SO",threshold);
+   doMaduko2(db,Database::Order_Predicate_Subject_Object,objectLookup,"OS",threshold);
+   doMaduko2(db,Database::Order_Predicate_Object_Subject,objectLookup,"OO",threshold);
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
