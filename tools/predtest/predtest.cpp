@@ -356,11 +356,13 @@ static void doStocker(Database& db)
    cout << maxQError << endl;
 }
 //---------------------------------------------------------------------------
-static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector<pair<unsigned,unsigned> > >& lookup,const char* name,double threshold)
+static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector<pair<unsigned,unsigned> > >& lookup,const char* name,double threshold,map<unsigned,double>& baseSize,map<pair<unsigned,unsigned>,unsigned>& result)
    // Construct a subgraph of size 2
 {
+   result.clear();
+
    AggregatedFactsSegment::Scan scan;
-   uint64_t count=0,inScope=0;
+   uint64_t count=0;
    if (scan.first(db.getAggregatedFacts(order))) {
       map<unsigned,unsigned> matches;
       uint64_t fanoutSum=0;
@@ -382,21 +384,25 @@ static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector
             count+=matches.size();
 
             double expected=static_cast<double>(fanoutSum)/static_cast<double>(matches.size());
+            baseSize[current]=expected;
             for (map<unsigned,unsigned>::const_iterator iter=matches.begin(),limit=matches.end();iter!=limit;++iter)
-               if (qError((*iter).second,expected)>threshold)
-                  inScope++;
+               if (qError((*iter).second,expected)>threshold) {
+                  result[make_pair(current,(*iter).first)]=(*iter).second;
+               }
 
             matches.clear(); fanoutSum=0;
             current=scan.getValue1();
          }
       }
       double expected=static_cast<double>(fanoutSum)/static_cast<double>(matches.size());
+      baseSize[current]=expected;
       for (map<unsigned,unsigned>::const_iterator iter=matches.begin(),limit=matches.end();iter!=limit;++iter)
-         if (qError((*iter).second,expected)>threshold)
-            inScope++;
+         if (qError((*iter).second,expected)>threshold) {
+            result[make_pair(current,(*iter).first)]=(*iter).second;
+         }
    }
    cout << count << " " << name << " matches" << endl;
-   cout << inScope << " above error threshold" << endl;
+   cout << result.size() << " above error threshold" << endl;
 }
 //---------------------------------------------------------------------------
 static void doMaduko(Database& db,int argc,char** argv)
@@ -409,11 +415,29 @@ static void doMaduko(Database& db,int argc,char** argv)
 
    // Pre-compute counts
    map<unsigned,uint64_t> counts1;
+   map<pair<unsigned,unsigned>,uint64_t> counts2;
    {
-      FullyAggregatedFactsSegment::Scan scan;
-      if (scan.first(db.getFullyAggregatedFacts(Database::Order_Predicate_Subject_Object))) do {
-         counts1[scan.getValue1()]=scan.getCount();
+      AggregatedFactsSegment::Scan scan;
+      vector<pair<unsigned,unsigned> > entries;
+      unsigned current=~0u;
+      if (scan.first(db.getAggregatedFacts(Database::Order_Subject_Predicate_Object))) do {
+         if (scan.getValue1()!=current) {
+            for (vector<pair<unsigned,unsigned> >::const_iterator iter=entries.begin(),limit=entries.end();iter!=limit;++iter) {
+               counts1[(*iter).first]+=(*iter).second;
+               for (vector<pair<unsigned,unsigned> >::const_iterator iter2=entries.begin(),limit2=entries.end();iter2!=limit2;++iter2) {
+                  counts2[make_pair((*iter).first,(*iter2).first)]+=(*iter).second*(*iter2).second;
+               }
+            }
+            entries.clear();
+         }
+         entries.push_back(make_pair(scan.getValue2(),scan.getCount()));
       } while (scan.next());
+      for (vector<pair<unsigned,unsigned> >::const_iterator iter=entries.begin(),limit=entries.end();iter!=limit;++iter) {
+         counts1[(*iter).first]+=(*iter).second;
+         for (vector<pair<unsigned,unsigned> >::const_iterator iter2=entries.begin(),limit2=entries.end();iter2!=limit2;++iter2) {
+            counts2[make_pair((*iter).first,(*iter2).first)]+=(*iter).second*(*iter2).second;
+         }
+      }
    }
    map<unsigned,vector<pair<unsigned,unsigned> > > subjectLookup;
    {
@@ -431,11 +455,64 @@ static void doMaduko(Database& db,int argc,char** argv)
       } while (scan.next());
    }
    cout << objectLookup.size() << " objects" << endl;
+   map<unsigned,double> baseSizeSS,baseSizeSO,baseSizeOS,baseSizeOO;
+   map<pair<unsigned,unsigned>,unsigned> exactSS,exactSO,exactOS,exactOO;
+   doMaduko2(db,Database::Order_Predicate_Subject_Object,subjectLookup,"SS",threshold,baseSizeSS,exactSS);
+   doMaduko2(db,Database::Order_Predicate_Object_Subject,subjectLookup,"SO",threshold,baseSizeSO,exactSO);
+   doMaduko2(db,Database::Order_Predicate_Subject_Object,objectLookup,"OS",threshold,baseSizeOS,exactOS);
+   doMaduko2(db,Database::Order_Predicate_Object_Subject,objectLookup,"OO",threshold,baseSizeOO,exactOO);
+   cout << "total size " << (((baseSizeSS.size()+baseSizeSO.size()+baseSizeOS.size()+baseSizeOO.size())*4)+((exactSS.size()+exactSO.size()+exactOS.size()+exactOO.size())*6)) << " words" << endl;
 
-   doMaduko2(db,Database::Order_Predicate_Subject_Object,subjectLookup,"SS",threshold);
-   doMaduko2(db,Database::Order_Predicate_Object_Subject,subjectLookup,"SO",threshold);
-   doMaduko2(db,Database::Order_Predicate_Subject_Object,objectLookup,"OS",threshold);
-   doMaduko2(db,Database::Order_Predicate_Object_Subject,objectLookup,"OO",threshold);
+
+   // Run all two-predicate queries
+   map<int,unsigned> errorHistogramTuples;
+   unsigned summary[6]={0,0,0,0,0,0}; double maxQError=0;
+   for (map<pair<unsigned,unsigned>,uint64_t>::const_iterator iter=counts2.begin(),limit=counts2.end();iter!=limit;++iter) {
+      // Split the query
+      unsigned a=(*iter).first.first;
+      unsigned b=(*iter).first.second;
+
+      // Analyze
+      double predictedTuples;
+      if (exactSS.count(make_pair(a,b)))
+         predictedTuples=exactSS[make_pair(a,b)]; else
+         predictedTuples=min(baseSizeSS[a],baseSizeSS[b]);
+
+      // Compute the errors
+      double tupleError=computeError((*iter).second,predictedTuples);
+
+      // Remember the errors
+      int tuplesSlot=static_cast<int>(tupleError);
+      if (tuplesSlot<-100) tuplesSlot=-100;
+      if (tuplesSlot>100) tuplesSlot=100;
+      errorHistogramTuples[tuplesSlot]++;
+
+      double qError=(tupleError<0)?(1.0-tupleError):(1.0+tupleError);
+      if (qError<=2.0) summary[0]++; else
+      if (qError<=5.0) summary[1]++; else
+      if (qError<=10.0) summary[2]++; else
+      if (qError<=100.0) summary[3]++; else
+      if (qError<=1000.0) summary[4]++; else
+         summary[5]++;
+      if (qError>maxQError) {
+         maxQError=qError;
+         cerr << maxQError << endl;
+      }
+   }
+
+   // Show the histogram
+   for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
+      cout << (*iter).first << "\t" << (*iter).second << endl;
+   unsigned totalSum=0;
+   for (unsigned index=0;index<6;index++) {
+      cout << summary[index] << " ";
+      totalSum+=summary[index];
+   }
+   cout << maxQError << endl;
+   if (!totalSum) totalSum=1;
+   for (unsigned index=0;index<6;index++)
+      cout << ((static_cast<double>(summary[index])*100.0)/static_cast<double>(totalSum)) << " ";
+   cout << maxQError << endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
