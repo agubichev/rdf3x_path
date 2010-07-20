@@ -370,7 +370,7 @@ static double estimateStocker(ExactStatisticsSegment& es,map<pair<unsigned,unsig
 
    // Join selectivites
    for (vector<QueryGraph::Edge>::const_iterator iter=q.edges.begin(),limit=q.edges.end();iter!=limit;++iter) {
-      if (q.nodes[(*iter).from].constPredicate&&q.nodes[(*iter).to].constPredicate)
+      if (q.nodes[(*iter).from].constPredicate&&q.nodes[(*iter).to].constPredicate&&(!q.nodes[(*iter).from].constSubject)&&(!q.nodes[(*iter).to].constSubject)&&(q.nodes[(*iter).from].subject==q.nodes[(*iter).to].subject))
          card*=static_cast<double>(counts2[make_pair((*iter).from,(*iter).to)])/(total*total);
    }
 
@@ -534,6 +534,28 @@ static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector
    cout << result.size() << " above error threshold" << endl;
 }
 //---------------------------------------------------------------------------
+static double estimateMaduko(ExactStatisticsSegment& es,QueryGraph& qg)
+{
+   QueryGraph::SubQuery& q=qg.getQuery();
+   double total=es.getCardinality(~0u,~0u,~0u);
+
+   // Base patterns
+   double card=1;
+   for (vector<QueryGraph::Node>::const_iterator iter=q.nodes.begin(),limit=q.nodes.end();iter!=limit;++iter) {
+      double pattern=total;
+      if ((*iter).constSubject)
+         pattern*=static_cast<double>(es.getCardinality((*iter).subject,~0u,~0u))/total;
+      if ((*iter).constPredicate)
+         pattern*=static_cast<double>(es.getCardinality(~0u,(*iter).predicate,~0u))/total;
+      if ((*iter).constObject)
+         pattern*=static_cast<double>(es.getCardinality(~0u,~0u,(*iter).object))/total;
+      card*=pattern;
+   }
+
+   if (card<1) card=1;
+   return card;
+}
+//---------------------------------------------------------------------------
 static void doMaduko(Database& db,int argc,char** argv)
 {
    if (argc<1) {
@@ -541,6 +563,7 @@ static void doMaduko(Database& db,int argc,char** argv)
       return;
    }
    double threshold=atof(argv[0]);
+   ExactStatisticsSegment& es=db.getExactStatistics();
 
    // Pre-compute counts
    map<unsigned,uint64_t> counts1;
@@ -593,55 +616,80 @@ static void doMaduko(Database& db,int argc,char** argv)
    cout << "total size " << (((baseSizeSS.size()+baseSizeSO.size()+baseSizeOS.size()+baseSizeOO.size())*4)+((exactSS.size()+exactSO.size()+exactOS.size()+exactOO.size())*6)) << " words" << endl;
 
 
-   // Run all two-predicate queries
-   map<int,unsigned> errorHistogramTuples;
-   unsigned summary[6]={0,0,0,0,0,0}; double maxQError=0;
-   for (map<pair<unsigned,unsigned>,uint64_t>::const_iterator iter=counts2.begin(),limit=counts2.end();iter!=limit;++iter) {
-      // Split the query
-      unsigned a=(*iter).first.first;
-      unsigned b=(*iter).first.second;
-
-      // Analyze
-      double predictedTuples;
-      if (exactSS.count(make_pair(a,b)))
-         predictedTuples=exactSS[make_pair(a,b)]; else
-         predictedTuples=min(baseSizeSS[a],baseSizeSS[b]);
-
-      // Compute the errors
-      double tupleError=computeError((*iter).second,predictedTuples);
-
-      // Remember the errors
-      int tuplesSlot=static_cast<int>(tupleError);
-      if (tuplesSlot<-100) tuplesSlot=-100;
-      if (tuplesSlot>100) tuplesSlot=100;
-      errorHistogramTuples[tuplesSlot]++;
-
-      double qError=(tupleError<0)?(1.0-tupleError):(1.0+tupleError);
-      if (qError<=2.0) summary[0]++; else
-      if (qError<=5.0) summary[1]++; else
-      if (qError<=10.0) summary[2]++; else
-      if (qError<=100.0) summary[3]++; else
-      if (qError<=1000.0) summary[4]++; else
-         summary[5]++;
-      if (qError>maxQError) {
-         maxQError=qError;
-         cerr << maxQError << endl;
+   if (argc>1) {
+      vector<double> errors;
+      double prod=1;
+      for (int index=1;index<argc;index++) {
+         QueryGraph qg;
+         readQuery(db,argv[index],qg);
+         if (qg.knownEmpty()) {
+            cerr << argv[index] << " has an empty result!" << endl;
+            continue;
+         }
+         double estimate=estimateMaduko(es,qg);
+         double real=getRealCardinality(db,qg);
+         double error=qError(estimate,real);
+         prod*=estimate;
+         cout << argv[index] << " " << estimate << " " << error << endl;
+         errors.push_back(error);
       }
-   }
+      sort(errors.begin(),errors.end());
+      double sum=0;
+      for (vector<double>::const_iterator iter=errors.begin(),limit=errors.end();iter!=limit;++iter) {
+         sum+=(*iter);
+      }
+      cout << (pow(prod,1.0/static_cast<double>(errors.size()))) << " " << (errors[errors.size()/2]) << " " << (errors.back()) << " " << (sum/static_cast<double>(errors.size())) << endl;
+   } else {
+      // Run all two-predicate queries
+      map<int,unsigned> errorHistogramTuples;
+      unsigned summary[6]={0,0,0,0,0,0}; double maxQError=0;
+      for (map<pair<unsigned,unsigned>,uint64_t>::const_iterator iter=counts2.begin(),limit=counts2.end();iter!=limit;++iter) {
+         // Split the query
+         unsigned a=(*iter).first.first;
+         unsigned b=(*iter).first.second;
 
-   // Show the histogram
-   for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
-      cout << (*iter).first << "\t" << (*iter).second << endl;
-   unsigned totalSum=0;
-   for (unsigned index=0;index<6;index++) {
-      cout << summary[index] << " ";
-      totalSum+=summary[index];
+         // Analyze
+         double predictedTuples;
+         if (exactSS.count(make_pair(a,b)))
+            predictedTuples=exactSS[make_pair(a,b)]; else
+            predictedTuples=min(baseSizeSS[a],baseSizeSS[b]);
+
+         // Compute the errors
+         double tupleError=computeError((*iter).second,predictedTuples);
+
+         // Remember the errors
+         int tuplesSlot=static_cast<int>(tupleError);
+         if (tuplesSlot<-100) tuplesSlot=-100;
+         if (tuplesSlot>100) tuplesSlot=100;
+         errorHistogramTuples[tuplesSlot]++;
+
+         double qError=(tupleError<0)?(1.0-tupleError):(1.0+tupleError);
+         if (qError<=2.0) summary[0]++; else
+         if (qError<=5.0) summary[1]++; else
+         if (qError<=10.0) summary[2]++; else
+         if (qError<=100.0) summary[3]++; else
+         if (qError<=1000.0) summary[4]++; else
+            summary[5]++;
+         if (qError>maxQError) {
+            maxQError=qError;
+            cerr << maxQError << endl;
+         }
+      }
+
+      // Show the histogram
+      for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
+         cout << (*iter).first << "\t" << (*iter).second << endl;
+      unsigned totalSum=0;
+      for (unsigned index=0;index<6;index++) {
+         cout << summary[index] << " ";
+         totalSum+=summary[index];
+      }
+      cout << maxQError << endl;
+      if (!totalSum) totalSum=1;
+      for (unsigned index=0;index<6;index++)
+         cout << ((static_cast<double>(summary[index])*100.0)/static_cast<double>(totalSum)) << " ";
+      cout << maxQError << endl;
    }
-   cout << maxQError << endl;
-   if (!totalSum) totalSum=1;
-   for (unsigned index=0;index<6;index++)
-      cout << ((static_cast<double>(summary[index])*100.0)/static_cast<double>(totalSum)) << " ";
-   cout << maxQError << endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
