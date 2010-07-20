@@ -277,7 +277,7 @@ static void doSets(Database& db)
       cout << (*iter).first << "\t" << (*iter).second << "\t" << errorHistogramTuples[(*iter).first] << endl;
 }
 //---------------------------------------------------------------------------
-static unsigned getRealCardinality(Database& db,const QueryGraph& qg)
+static double getRealCardinality(Database& db,const QueryGraph& qg)
    // Get the real output cardinality
 {
    // Run the optimizer
@@ -299,7 +299,7 @@ static unsigned getRealCardinality(Database& db,const QueryGraph& qg)
    scheduler.execute(realRoot);
 
    // Output the counts
-   unsigned trueCard=realRoot->getObservedOutputCardinality();
+   double trueCard=realRoot->getObservedOutputCardinality();
    delete operatorTree;
 
    return trueCard;
