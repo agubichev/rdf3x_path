@@ -350,6 +350,51 @@ static void readQuery(Database& db,const char* file,QueryGraph& queryGraph)
    }
 }
 //---------------------------------------------------------------------------
+class CycleChecker
+{
+   private:
+   /// Edges
+   set<pair<unsigned,unsigned> > edges;
+
+   /// Can we reach a node
+   bool canReach(unsigned from,unsigned to,set<unsigned>& visited);
+
+   public:
+   /// Should we add an edge?
+   bool doEdge(unsigned from,unsigned to);
+};
+//---------------------------------------------------------------------------
+bool CycleChecker::canReach(unsigned from,unsigned to,set<unsigned>& visited)
+   // Can we reach a node
+{
+   if (from==to)
+      return true;
+
+   if (visited.count(from))
+      return false;
+   visited.insert(from);
+
+   for (set<pair<unsigned,unsigned> >::const_iterator iter=edges.begin(),limit=edges.end();iter!=limit;++iter)
+      if (((*iter).first==from)&&canReach((*iter).second,to,visited))
+         return true;
+
+   return false;
+}
+//---------------------------------------------------------------------------
+bool CycleChecker::doEdge(unsigned from,unsigned to)
+{
+   if (from==to)
+      return false;
+
+   set<unsigned> visited;
+   if (canReach(from,to,visited))
+      return false;
+
+   edges.insert(make_pair(from,to));
+   edges.insert(make_pair(to,from));
+   return true;
+}
+//---------------------------------------------------------------------------
 static double estimateStocker(ExactStatisticsSegment& es,map<pair<unsigned,unsigned>,uint64_t>& counts2,QueryGraph& qg)
 {
    QueryGraph::SubQuery& q=qg.getQuery();
@@ -369,9 +414,11 @@ static double estimateStocker(ExactStatisticsSegment& es,map<pair<unsigned,unsig
    }
 
    // Join selectivites
+   CycleChecker checker;
    for (vector<QueryGraph::Edge>::const_iterator iter=q.edges.begin(),limit=q.edges.end();iter!=limit;++iter) {
       if (q.nodes[(*iter).from].constPredicate&&q.nodes[(*iter).to].constPredicate&&(!q.nodes[(*iter).from].constSubject)&&(!q.nodes[(*iter).to].constSubject)&&(q.nodes[(*iter).from].subject==q.nodes[(*iter).to].subject))
-         card*=static_cast<double>(counts2[make_pair((*iter).from,(*iter).to)])/(total*total);
+         if (checker.doEdge((*iter).from,(*iter).to))
+            card*=static_cast<double>(counts2[make_pair((*iter).from,(*iter).to)])/(total*total);
    }
 
    if (card<1) card=1;
@@ -534,7 +581,7 @@ static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector
    cout << result.size() << " above error threshold" << endl;
 }
 //---------------------------------------------------------------------------
-static double estimateMaduko(ExactStatisticsSegment& es,QueryGraph& qg)
+static double estimateMaduko(ExactStatisticsSegment& es,map<unsigned,double>& baseSizeSS,map<pair<unsigned,unsigned>,unsigned>& exactSS,QueryGraph& qg)
 {
    QueryGraph::SubQuery& q=qg.getQuery();
    double total=es.getCardinality(~0u,~0u,~0u);
@@ -550,6 +597,37 @@ static double estimateMaduko(ExactStatisticsSegment& es,QueryGraph& qg)
       if ((*iter).constObject)
          pattern*=static_cast<double>(es.getCardinality(~0u,~0u,(*iter).object))/total;
       card*=pattern;
+   }
+
+   // Join selectivites
+   CycleChecker checker;
+   for (vector<QueryGraph::Edge>::const_iterator iter=q.edges.begin(),limit=q.edges.end();iter!=limit;++iter) {
+      if (q.nodes[(*iter).from].constPredicate&&q.nodes[(*iter).to].constPredicate)
+         if (checker.doEdge((*iter).from,(*iter).to)) {
+            unsigned a=q.nodes[(*iter).from].predicate,b=q.nodes[(*iter).to].predicate;
+            double patterna=total;
+            if (q.nodes[(*iter).from].constSubject)
+               patterna*=static_cast<double>(es.getCardinality(q.nodes[(*iter).from].subject,~0u,~0u))/total;
+            if (q.nodes[(*iter).from].constPredicate)
+               patterna*=static_cast<double>(es.getCardinality(~0u,q.nodes[(*iter).from].predicate,~0u))/total;
+            if (q.nodes[(*iter).from].constObject)
+               patterna*=static_cast<double>(es.getCardinality(~0u,~0u,q.nodes[(*iter).from].object))/total;
+            double patternb=total;
+            if (q.nodes[(*iter).to].constSubject)
+               patternb*=static_cast<double>(es.getCardinality(q.nodes[(*iter).to].subject,~0u,~0u))/total;
+            if (q.nodes[(*iter).to].constPredicate)
+               patternb*=static_cast<double>(es.getCardinality(~0u,q.nodes[(*iter).to].predicate,~0u))/total;
+            if (q.nodes[(*iter).to].constObject)
+               patternb*=static_cast<double>(es.getCardinality(~0u,~0u,q.nodes[(*iter).to].object))/total;
+
+            if ((q.nodes[(*iter).from].subject==q.nodes[(*iter).to].subject)&&(!q.nodes[(*iter).from].constSubject)&&(!q.nodes[(*iter).to].constSubject)) {
+               double sel;
+               if (exactSS.count(make_pair(a,b)))
+                  sel=exactSS[make_pair(a,b)]/(patterna*patternb); else
+                  sel=min(baseSizeSS[a],baseSizeSS[b])/(patterna*patternb);
+               card*=sel;
+            }
+         }
    }
 
    if (card<1) card=1;
@@ -626,7 +704,7 @@ static void doMaduko(Database& db,int argc,char** argv)
             cerr << argv[index] << " has an empty result!" << endl;
             continue;
          }
-         double estimate=estimateMaduko(es,qg);
+         double estimate=estimateMaduko(es,baseSizeSS,exactSS,qg);
          double real=getRealCardinality(db,qg);
          double error=qError(estimate,real);
          prod*=estimate;
