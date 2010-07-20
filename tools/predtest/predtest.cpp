@@ -1,5 +1,7 @@
 #include "cts/codegen/CodeGen.hpp"
 #include "cts/infra/QueryGraph.hpp"
+#include "cts/parser/SPARQLLexer.hpp"
+#include "cts/parser/SPARQLParser.hpp"
 #include "cts/plangen/PlanGen.hpp"
 #include "cts/semana/SemanticAnalysis.hpp"
 #include "rts/database/Database.hpp"
@@ -18,6 +20,7 @@
 #include <fstream>
 #include <map>
 #include <algorithm>
+#include <cmath>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -274,7 +277,108 @@ static void doSets(Database& db)
       cout << (*iter).first << "\t" << (*iter).second << "\t" << errorHistogramTuples[(*iter).first] << endl;
 }
 //---------------------------------------------------------------------------
-static void doStocker(Database& db)
+static unsigned getRealCardinality(Database& db,const QueryGraph& qg)
+   // Get the real output cardinality
+{
+   // Run the optimizer
+   PlanGen plangen;
+   Plan* plan=plangen.translate(db,qg);
+   if (!plan) {
+      cerr << "plan generation failed" << endl;
+      throw;
+   }
+   Operator::disableSkipping=true;
+
+   // Build a physical plan
+   Runtime runtime(db);
+   Operator* operatorTree=CodeGen().translate(runtime,qg,plan,true);
+   Operator* realRoot=dynamic_cast<ResultsPrinter*>(operatorTree)->getInput();
+
+   // And execute it
+   Scheduler scheduler;
+   scheduler.execute(realRoot);
+
+   // Output the counts
+   unsigned trueCard=realRoot->getObservedOutputCardinality();
+   delete operatorTree;
+
+   return trueCard;
+}
+//---------------------------------------------------------------------------
+static string readFile(const char* name)
+   // Read the input query
+{
+   ifstream in(name);
+   if (!in.is_open()) {
+      cerr << "unable to open " << name << endl;
+      throw;
+   }
+   string result;
+   while (true) {
+      string s;
+      getline(in,s);
+      if (!in.good())
+         break;
+      result+=s;
+      result+='\n';
+   }
+   return result;
+}
+//---------------------------------------------------------------------------
+static void readQuery(Database& db,const char* file,QueryGraph& queryGraph)
+   // Evaluate a query
+{
+   string query=readFile(file);
+
+   // Parse the query
+   SPARQLLexer lexer(query);
+   SPARQLParser parser(lexer);
+   try {
+      parser.parse();
+   } catch (const SPARQLParser::ParserException& e) {
+      cout << "parse error: " << e.message << endl;
+      throw;
+   }
+
+   // And perform the semantic anaylsis
+   try {
+      SemanticAnalysis semana(db);
+      semana.transform(parser,queryGraph);
+   } catch (const SemanticAnalysis::SemanticException& e) {
+      cout << "semantic error: " << e.message << endl;
+      throw;
+   }
+}
+//---------------------------------------------------------------------------
+static double estimateStocker(ExactStatisticsSegment& es,map<pair<unsigned,unsigned>,uint64_t>& counts2,QueryGraph& qg)
+{
+   QueryGraph::SubQuery& q=qg.getQuery();
+   double total=es.getCardinality(~0u,~0u,~0u);
+
+   // Base patterns
+   double card=1;
+   for (vector<QueryGraph::Node>::const_iterator iter=q.nodes.begin(),limit=q.nodes.end();iter!=limit;++iter) {
+      double pattern=total;
+      if ((*iter).constSubject)
+         pattern*=static_cast<double>(es.getCardinality((*iter).subject,~0u,~0u))/total;
+      if ((*iter).constPredicate)
+         pattern*=static_cast<double>(es.getCardinality(~0u,(*iter).predicate,~0u))/total;
+      if ((*iter).constObject)
+         pattern*=static_cast<double>(es.getCardinality(~0u,~0u,(*iter).object))/total;
+      card*=pattern;
+   }
+
+   // Join selectivites
+   for (vector<QueryGraph::Edge>::const_iterator iter=q.edges.begin(),limit=q.edges.end();iter!=limit;++iter) {
+      if (q.nodes[(*iter).from].constPredicate&&q.nodes[(*iter).to].constPredicate)
+         card*=static_cast<double>(counts2[make_pair((*iter).from,(*iter).to)])/(total*total);
+   }
+
+   if (card<1) card=1;
+   return card;
+}
+//---------------------------------------------------------------------------
+static void doStocker(Database& db,int argc,char** argv)
 {
    ExactStatisticsSegment& es=db.getExactStatistics();
    unsigned total=es.getCardinality(~0u,~0u,~0u);
@@ -306,54 +410,79 @@ static void doStocker(Database& db)
       }
    }
 
-   // Run all two-predicate queries
-   map<int,unsigned> errorHistogramTuples;
-   unsigned summary[6]={0,0,0,0,0,0}; double maxQError=0;
-   for (map<pair<unsigned,unsigned>,uint64_t>::const_iterator iter=counts2.begin(),limit=counts2.end();iter!=limit;++iter) {
-      // Split the query
-      unsigned a=(*iter).first.first;
-      unsigned b=(*iter).first.second;
-
-      // Analyze
-      unsigned c1=counts1[a],c2=counts1[b];
-      double joinSel=static_cast<double>((*iter).second)/(static_cast<double>(total)*static_cast<double>(total));
-      double predictedTuples=joinSel*c1*c2;
-
-      // Compute the errors
-      double tupleError=computeError((*iter).second,predictedTuples);
-
-      // Remember the errors
-      int tuplesSlot=static_cast<int>(tupleError);
-      if (tuplesSlot<-100) tuplesSlot=-100;
-      if (tuplesSlot>100) tuplesSlot=100;
-      errorHistogramTuples[tuplesSlot]++;
-
-      double qError=(tupleError<0)?(1.0-tupleError):(1.0+tupleError);
-      if (qError<=2.0) summary[0]++; else
-      if (qError<=5.0) summary[1]++; else
-      if (qError<=10.0) summary[2]++; else
-      if (qError<=100.0) summary[3]++; else
-      if (qError<=1000.0) summary[4]++; else
-         summary[5]++;
-      if (qError>maxQError) {
-         maxQError=qError;
-         cerr << maxQError << endl;
+   if (argc>0) {
+      vector<double> errors;
+      double prod=1;
+      for (int index=0;index<argc;index++) {
+         QueryGraph qg;
+         readQuery(db,argv[index],qg);
+         if (qg.knownEmpty()) {
+            cerr << argv[index] << " has an empty result!" << endl;
+            continue;
+         }
+         double estimate=estimateStocker(es,counts2,qg);
+         double real=getRealCardinality(db,qg);
+         double error=qError(estimate,real);
+         prod*=estimate;
+         cout << argv[index] << " " << estimate << " " << error << endl;
+         errors.push_back(error);
       }
-   }
+      sort(errors.begin(),errors.end());
+      double sum=0;
+      for (vector<double>::const_iterator iter=errors.begin(),limit=errors.end();iter!=limit;++iter) {
+         sum+=(*iter);
+      }
+      cout << (pow(prod,1.0/static_cast<double>(errors.size()))) << " " << (errors[errors.size()/2]) << " " << (errors.back()) << " " << (sum/static_cast<double>(errors.size())) << endl;
+   } else {
+      // Run all two-predicate queries
+      map<int,unsigned> errorHistogramTuples;
+      unsigned summary[6]={0,0,0,0,0,0}; double maxQError=0;
+      for (map<pair<unsigned,unsigned>,uint64_t>::const_iterator iter=counts2.begin(),limit=counts2.end();iter!=limit;++iter) {
+         // Split the query
+         unsigned a=(*iter).first.first;
+         unsigned b=(*iter).first.second;
 
-   // Show the histogram
-   for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
-      cout << (*iter).first << "\t" << (*iter).second << endl;
-   unsigned totalSum=0;
-   for (unsigned index=0;index<6;index++) {
-      cout << summary[index] << " ";
-      totalSum+=summary[index];
+         // Analyze
+         unsigned c1=counts1[a],c2=counts1[b];
+         double joinSel=static_cast<double>((*iter).second)/(static_cast<double>(total)*static_cast<double>(total));
+         double predictedTuples=joinSel*c1*c2;
+
+         // Compute the errors
+         double tupleError=computeError((*iter).second,predictedTuples);
+
+         // Remember the errors
+         int tuplesSlot=static_cast<int>(tupleError);
+         if (tuplesSlot<-100) tuplesSlot=-100;
+         if (tuplesSlot>100) tuplesSlot=100;
+         errorHistogramTuples[tuplesSlot]++;
+
+         double qError=(tupleError<0)?(1.0-tupleError):(1.0+tupleError);
+         if (qError<=2.0) summary[0]++; else
+         if (qError<=5.0) summary[1]++; else
+         if (qError<=10.0) summary[2]++; else
+         if (qError<=100.0) summary[3]++; else
+         if (qError<=1000.0) summary[4]++; else
+            summary[5]++;
+         if (qError>maxQError) {
+            maxQError=qError;
+            cerr << maxQError << endl;
+         }
+      }
+
+      // Show the histogram
+      for (map<int,unsigned>::const_iterator iter=errorHistogramTuples.begin(),limit=errorHistogramTuples.end();iter!=limit;++iter)
+         cout << (*iter).first << "\t" << (*iter).second << endl;
+      unsigned totalSum=0;
+      for (unsigned index=0;index<6;index++) {
+         cout << summary[index] << " ";
+         totalSum+=summary[index];
+      }
+      cout << maxQError << endl;
+      if (!totalSum) totalSum=1;
+      for (unsigned index=0;index<6;index++)
+         cout << ((static_cast<double>(summary[index])*100.0)/static_cast<double>(totalSum)) << " ";
+      cout << maxQError << endl;
    }
-   cout << maxQError << endl;
-   if (!totalSum) totalSum=1;
-   for (unsigned index=0;index<6;index++)
-      cout << ((static_cast<double>(summary[index])*100.0)/static_cast<double>(totalSum)) << " ";
-   cout << maxQError << endl;
 }
 //---------------------------------------------------------------------------
 static void doMaduko2(Database& db,Database::DataOrder order,map<unsigned,vector<pair<unsigned,unsigned> > >& lookup,const char* name,double threshold,map<unsigned,double>& baseSize,map<pair<unsigned,unsigned>,unsigned>& result)
@@ -540,7 +669,7 @@ int main(int argc,char* argv[])
       doSets(db);
       return 0;
    } else if (string(argv[2])=="--stocker") {
-      doStocker(db);
+      doStocker(db,argc-3,argv+3);
       return 0;
    } else if (string(argv[2])=="--maduko") {
       doMaduko(db,argc-3,argv+3);
