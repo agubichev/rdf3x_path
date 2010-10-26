@@ -73,7 +73,7 @@ class RDF3XDriver : public Driver
    /// The database
    Database db;
    /// The differential index
-   DifferentialIndex diff;
+   DifferentialIndex* diff;
    /// The predicate locks
    PredicateLockManager locks;
    /// The next transaction id (for locks)
@@ -106,7 +106,7 @@ class RDF3XDriver : public Driver
 };
 //---------------------------------------------------------------------------
 RDF3XDriver::RDF3XDriver()
-   : diff(db),nextLockTransaction(0)
+   : diff(0),nextLockTransaction(0)
    // Constructor
 {
 }
@@ -115,6 +115,7 @@ RDF3XDriver::~RDF3XDriver()
    // Destructor
 {
    remove("updatetest.2.tmp");
+   delete diff;
 }
 //---------------------------------------------------------------------------
 static void writeURI(ostream& out,const string& str)
@@ -205,6 +206,7 @@ bool RDF3XDriver::buildDatabase(TurtleParser& input,unsigned initialSize)
       cerr << "unable to open updatetest.2.tmp" << endl;
       return false;
    }
+   diff=new DifferentialIndex(db);
 
    return true;
 }
@@ -289,7 +291,7 @@ unsigned RDF3XDriver::processChunk(const string& chunkFile,unsigned delay)
 {
    unsigned processed=0;
 
-   BulkOperation bulk(diff);
+   BulkOperation bulk(*diff);
    ifstream in(chunkFile.c_str());
    TurtleParser parser(in);
    string subject,predicate,object; Type::ID objectType; string objectSubType;
@@ -334,7 +336,7 @@ unsigned RDF3XDriver::processQueryAndChunk(const string& query,const string& chu
 
    // Read the triples
    unsigned processed=0;
-   BulkOperation bulk(diff);
+   BulkOperation bulk(*diff);
    ifstream in(chunkFile.c_str());
    TurtleParser parser(in);
    string subject,predicate,object; Type::ID objectType; string objectSubType;
@@ -422,7 +424,7 @@ unsigned RDF3XDriver::processQueryAndChunk(const string& query,const string& chu
 void RDF3XDriver::sync()
    // Synchronize to disk
 {
-   diff.sync();
+   diff->sync();
 }
 //---------------------------------------------------------------------------
 /// A PostgreSQL driver
