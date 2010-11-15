@@ -793,6 +793,7 @@ int main(int argc,char* argv[])
     for (vector<string>::const_iterator iter=chunkFiles.begin(),limit=chunkFiles.end();iter!=limit;++iter)
         remove((*iter).c_str());
 
+    remove("updatetest.3.tmp");
     cerr << "Done." << endl;
 }
 //---------------------------------------------------------------------------
