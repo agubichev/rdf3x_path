@@ -23,6 +23,7 @@ include tools/runbenchmark/LocalMakefile
 include tools/transactiontests/LocalMakefile
 include tools/translatesparql/LocalMakefile
 include tools/updatetest/LocalMakefile
+include tools/checkupdates/LocalMakefile
 
 src_tools:=				\
 	$(src_tools_buildmonetdb)	\
@@ -44,5 +45,6 @@ src_tools:=				\
 	$(src_tools_rdf3xquery)		\
 	$(src_tools_resolvestrings)	\
 	$(src_tools_translatesparql)	\
-	$(src_tools_updatetest)
+	$(src_tools_updatetest)     \
+	§(src_tools_checkupdates)
 

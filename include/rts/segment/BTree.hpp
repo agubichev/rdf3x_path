@@ -282,7 +282,7 @@ namespace BTreeLogActions {
 template <class T> class BTree<T>::Updater {
    private:
    /// Maximum tree depth
-   static const unsigned maxDepth = 10;
+   static const unsigned maxDepth = 1000;
 
    /// The tree
    BTree<T>& tree;
@@ -378,7 +378,9 @@ template <class T> void BTree<T>::Updater::lookup(const typename T::InnerKey& ke
       }
    }
 }
+
 //---------------------------------------------------------------------------
+
 template <class T> void BTree<T>::Updater::updateKey(unsigned level,typename T::InnerKey maxKey)
    // Update a parent entry
 {
@@ -403,20 +405,29 @@ template <class T> void BTree<T>::Updater::updateKey(unsigned level,typename T::
       BTreeLogActions::UpdateInner(positions[level],LogData(getInnerPtr(parentData,positions[level]),innerEntrySize),LogData(newEntry,innerEntrySize)).applyButKeep(parent,pages[level-1]);
    }
 }
+
 //---------------------------------------------------------------------------
 template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const typename T::InnerKey& maxKey)
    // Store a new or updated leaf page
 {
+//	printf("#############we insert the key: \n");
+//	typename T::InnerKey test = maxKey;
+//
+//	test.print();
+
    if (firstPage) {
       // Update the page itself
       BufferReferenceModified leaf;
       leaf.modify(pages[depth-1]);
       unsigned char* leafData=static_cast<unsigned char*>(leaf.getPage());
       std::memcpy(data+8,leafData+8,4); // copy the next pointer
+//      printf("that's the first page, printing the leaf\n");
+//      printLeafPage(leafData);
       BTreeLogActions::UpdateLeaf(LogData(leafData+8,BufferReference::pageSize-8),LogData(data+8,BufferReference::pageSize-8)).applyButKeep(leaf,pages[depth-1]);
 
       // Update the parent
       updateKey(depth-2,maxKey);
+      firstPage = false;
    } else {
       // Allocate a new page
       BufferReferenceModified newLeaf;
@@ -434,28 +445,265 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
 
       // And write the new page
       BTreeLogActions::UpdateLeaf(LogData(static_cast<unsigned char*>(newLeaf.getPage())+8,BufferReference::pageSize-8),LogData(data+8,BufferReference::pageSize-8)).applyButKeep(newLeaf,pages[depth-1]);
+//      printf("printing the leaf\n");
+//      printLeafPage(static_cast<const unsigned char*>(pages[depth-1].getPage()));
 
-      // Insert in parent
       typename T::InnerKey insertKey=maxKey;
+      // Insert in parent
       unsigned insertPage=pages[depth-1].getPageNo();
       bool insertRight=true;
+      bool hasToKeepPage = false;
       for (unsigned level=depth-2;;--level) {
+//    	  printf("###insert KEY: \n");
+//    	  insertKey.print();
+//    	  printf("### current Page: \n");
+//    	  printf("### current level: %d\n", level);
+
+//    	  printPage(static_cast<const unsigned char*>(pages[level].getPage()));
          // Fits?
-         if (getInnerCount(static_cast<const unsigned char*>(pages[level].getPage()))<maxInnerCount) {
+          unsigned count = getInnerCount(static_cast<const unsigned char*>(pages[level].getPage()));
+      	  insertPage = pages[level+1].getPageNo(); //???
+
+         if (count<maxInnerCount) {
             BufferReferenceModified inner;
             inner.modify(pages[level]);
+//            printf("it fits\n");
             unsigned char newEntry[innerEntrySize];
             T::writeInnerKey(newEntry,insertKey);
             Segment::writeUint32Aligned(newEntry+T::innerKeySize,insertPage);
-            BTreeLogActions::InsertInner(positions[level+1]+1,LogData(newEntry,innerEntrySize));
-            if ((positions[level+1]+1==getInnerCount(static_cast<const unsigned char*>(pages[level].getPage())))&&(level>0))
+
+//            printf ("we insert the key: \n");
+//            insertKey.print();
+//            printf("   with the link to the page: %u\n", insertPage);
+           // printf("positions: %d, inner count: %d \n", positions[level+1]+1,getInnerCount(static_cast<const unsigned char*>(pages[level].getPage())));
+
+	        BTreeLogActions::InsertInner(positions[level+1]+1,LogData(newEntry,innerEntrySize)).applyButKeep(inner, pages[level]);
+
+//	        printf("updated entry: \n");
+//	        printPage(static_cast<const unsigned char*>(pages[level].getPage()));
+//	        if (hasToKeepPage){
+//		         printf("WE HAVE TO UPDATE RIGHT CHILD! %d\n", pages[level+1].getPageNo());
+//		         printPage(static_cast<const unsigned char*>(pages[level+1].getPage()));
+//	            // Segment::writeUint32(static_cast<const unsigned char*>(pages[level].getPage())+innerHeaderSize+innerEntrySize*(count-1)+T::innerKeySize,pages[level+1].getPageNo());
+//
+//		    	 hasToKeepPage = false;
+//
+//		    	 printf("    children of the root: ");
+//		    	 for (unsigned i=0; i < count; i++){
+//		    		 unsigned childno = Segment::readUint32Aligned(static_cast<const unsigned char*>(pages[level].getPage()) + innerHeaderSize + innerEntrySize*i + T::innerKeySize);
+//		    		 printf("%d : ", childno);
+//
+//		    		 BufferReference ref(tree.readShared(getInnerChildPage(static_cast<const unsigned char*>(pages[level].getPage()), i)));
+//		    		 printPage(static_cast<const unsigned char*>(ref.getPage()));
+//		    		 printf("\n");
+//
+//		    	 }
+//		    	 printf("\n");
+//		    }
+            if ((positions[level+1]+1==count)&&(level>0)){
+//            	printf("that was the max!! \n");
                updateKey(level-1,insertKey);
+            }
             if (insertRight)
                positions[level+1]++;
             break;
          }
          // No, we have to split
-         BufferReferenceModified newInner;
+//         printf("we have to split!\n");
+         BufferReferenceModified right;
+         tree.allocPage(right);
+
+         const unsigned char* pageData = static_cast<const unsigned char*>(pages[level].getPage());
+
+         const unsigned  left_pageno = pages[level].getPageNo();
+         const unsigned  right_pageno = right.getPageNo();
+         const unsigned  next_pageno = Segment::readUint32Aligned(pageData+12);
+
+         unsigned left_count = maxInnerCount/ 2;
+         unsigned right_count = maxInnerCount - left_count;
+         unsigned page_count = getInnerCount(pageData);
+
+         typename T::InnerKey right_max, right_min, left_max;
+
+         unsigned char leftPage[BufferReference::pageSize], rightPage[BufferReference::pageSize];
+         memset(leftPage,0,BufferReference::pageSize);
+         Segment::writeUint32Aligned(leftPage+8,~0u);
+         Segment::writeUint32Aligned(leftPage+12,right_pageno);
+         Segment::writeUint32Aligned(leftPage+16,left_count);
+         memcpy(leftPage+innerHeaderSize,pageData+innerHeaderSize,innerEntrySize*left_count);
+
+         memset(rightPage,0,BufferReference::pageSize);
+         Segment::writeUint32Aligned(rightPage+8,~0u);
+         Segment::writeUint32Aligned(rightPage+12,next_pageno);
+         Segment::writeUint32Aligned(rightPage+16,maxInnerCount-(maxInnerCount/2));
+         memcpy(rightPage+innerHeaderSize,pageData+innerHeaderSize+innerEntrySize*(left_count),innerEntrySize*right_count);
+
+//         printf("left and right pages: \n");
+//         printPage(leftPage);
+//         printPage(rightPage);
+
+         T::readInnerKey(left_max,leftPage+innerHeaderSize+innerEntrySize*(left_count-1));
+         T::readInnerKey(right_min,rightPage+innerHeaderSize);
+         T::readInnerKey(right_max,rightPage+innerHeaderSize+innerEntrySize*(right_count -1));
+
+//         printf("left_max,  right_max: \n");
+//         left_max.print();
+//         right_max.print();
+
+//         printf("we insert at the position: %d \n", positions[level+1]);
+
+
+         unsigned char* target_page;
+         if (positions[level+1] < left_count) {
+          //   assert ((insertKey < left_max) || (insertKey == left_max));
+             target_page = leftPage;
+             if (!((insertKey<left_max) || (insertKey == left_max))){
+//            	 printf("updating left max!");
+            	 left_max =insertKey;
+             }
+//             printf("insert to the left page \n");
+         }
+         else {
+             assert(!((insertKey < left_max) || (insertKey == left_max)));
+             positions[level+1] -= left_count;
+             assert(positions[level+1] < right_count);
+             target_page = rightPage;
+//             printf("insert to the right page \n");
+
+             if (!((insertKey < right_max) || (insertKey == right_max))) {
+                assert(positions[level+1] + 1 == right_count);
+                right_max = insertKey;  // e is the rightmost entry and its key the right_max
+             }
+         }
+//         printf("target page: \n");
+//         printPage(target_page);
+//         printf("left_max,  right_max after target_page computation: \n");
+//         left_max.print();
+//         right_max.print();
+
+         {
+             assert(getInnerCount(target_page) < maxInnerCount);
+  		     unsigned entrySizeInner=innerEntrySize;
+  		     unsigned oldCount=Segment::readUint32Aligned(static_cast<unsigned char*>(target_page)+16);
+//  		     printf("old count on the target page: %u\n", oldCount);
+  		     unsigned slot = positions[level+1]+1;
+  		   //  printf("slot for insertion: %d \n", slot);
+             unsigned char newEntry[innerEntrySize];
+             T::writeInnerKey(newEntry,insertKey);
+             Segment::writeUint32Aligned(newEntry+T::innerKeySize,insertPage);
+//             printf("we insert the link to the leaf page: \n");
+//             printLeafPage(static_cast<const unsigned char*>(pages[depth-1].getPage()));
+
+  		     memmove(static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*(slot+1)),
+  				   static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*slot),
+  				   entrySizeInner*(oldCount-slot));
+
+  		     memcpy(static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*slot),newEntry,innerEntrySize);
+  		     Segment::writeUint32Aligned(static_cast<unsigned char*>(target_page)+16,oldCount+1);
+  		     unsigned newCount=Segment::readUint32Aligned(static_cast<unsigned char*>(target_page)+16);
+  	   	   //  printf("new count on the target page: %d \n", newCount);
+//  		     printf("target page after insertion: \n");
+//  		     printPage(target_page);
+
+  		     if (hasToKeepPage){
+//  		         printf("WE HAVE TO UPDATE RIGHT CHILD!");
+  	             Segment::writeUint32(target_page+innerHeaderSize+innerEntrySize*(newCount-1)+T::innerKeySize,pages[level+1].getPageNo());
+
+  		    	 hasToKeepPage = false;
+  		     }
+
+  	         if (insertRight)
+  	            ++positions[level+1];
+         }
+
+         if (level > 0) {
+//        	 printf("updating the LOOKUP path with the level and key: %d\n", level-1);
+//        	 left_max.print();
+             // K k = tree.determineInnerKey(left_max, &right_min);
+             updateKey(level - 1, left_max);
+//             printf("after update the parent page looks like: \n");
+//             printPage(static_cast<const unsigned char*>(pages[level-1].getPage()));
+//             printf("and the whole tree looks like: \n");
+//             printRecursive();
+         }
+
+
+//         printf("level: %d\n", level);
+         {
+            BufferReferenceModified left;
+            left.modify(pages[level]);
+            BTreeLogActions::UpdateInnerPage update_left(
+                  LogData(static_cast<unsigned char*> (left.getPage()) + 8, BufferReference::pageSize - 8),
+                  LogData(leftPage + 8, BufferReference::pageSize - 8));
+            BTreeLogActions::UpdateInnerPage update_right(
+                  LogData(static_cast<unsigned char*> (right.getPage()) + 8, BufferReference::pageSize - 8),
+                  LogData(rightPage + 8, BufferReference::pageSize - 8));
+
+            if (target_page == leftPage) { // The key is on the left page
+               update_left.applyButKeep(left, pages[level]);
+               update_right.apply(right);
+               insertRight = false;
+            } else { // The key is on the right page
+               update_left.apply(left);
+               update_right.applyButKeep(right, pages[level]);
+//               printf("WE KEEP THE RIGHT PAGE!\n");
+//               printf("right page now: at level %d \n", level);
+//               printPage(static_cast<const unsigned char*>(pages[level].getPage()));
+               insertRight = true; // We will have to increment positions[level]
+               hasToKeepPage = true;
+            }
+         }
+
+//         printf("level: %d\n", level);
+//
+//         if (level > 0){
+//        	 printf("after update the parent page is: \n");
+//        	 printPage(static_cast<const unsigned char*>(pages[level-1].getPage()));
+//         }
+
+//         printf("target page: \n");
+//         printPage(target_page);
+
+     //    printf("after update operation the tree is \n");
+     //    printRecursive();
+
+         if (level == 0) {
+//        	 printf("we need a new root!\n");
+             ++depth;
+
+             for (unsigned i = depth-1; i > 0; i--) {
+                pages[i].swap(pages[i - 1]);
+                positions[i] = positions[i - 1];
+             }
+             // Allocate the new root page
+             BufferReferenceModified newRoot; tree.allocPage(newRoot);
+
+             unsigned char newPage[BufferReference::pageSize];
+             memset(newPage, 0, BufferReference::pageSize);
+             Segment::writeUint32(newPage+8,~0u);
+             Segment::writeUint32(newPage+12,0);
+             Segment::writeUint32(newPage+16,2);
+             Segment::writeUint32(newPage+20,0);
+             T::writeInnerKey(newPage+innerHeaderSize,left_max);
+             Segment::writeUint32(newPage+innerHeaderSize+T::innerKeySize,left_pageno);
+             T::writeInnerKey(newPage+innerHeaderSize+innerEntrySize,right_max);
+             Segment::writeUint32(newPage+innerHeaderSize+innerEntrySize+T::innerKeySize,right_pageno);
+
+             BTreeLogActions::UpdateInnerPage(LogData(static_cast<unsigned char*>(newRoot.getPage())+8,BufferReference::pageSize-8),LogData(newPage+8,BufferReference::pageSize-8)).applyButKeep(newRoot,pages[0]);
+             tree.setRootPage(pages[0].getPageNo());
+//             printf("new root:\n");
+//             printPage(static_cast<const unsigned char*>(pages[0].getPage()));
+             positions[1] = 0;
+             if (insertRight) {
+            	 ++positions[1];
+//            	 printf("increasing pos[1]\n");
+             }
+             break;
+
+      }
+         insertKey = right_max;
+
+   /*      BufferReferenceModified newInner;
          tree.allocPage(newInner);
          unsigned char leftPage[BufferReference::pageSize],rightPage[BufferReference::pageSize];
          memset(leftPage,0,BufferReference::pageSize);
@@ -471,7 +719,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
          typename T::InnerKey leftMax;
          T::readInnerKey(leftMax,leftPage+innerHeaderSize+innerEntrySize*((maxInnerCount/2)-1));
          typename T::InnerKey rightMax;
-         T::readInnerKey(rightMax,leftPage+innerHeaderSize+innerEntrySize*(maxInnerCount-(maxInnerCount/2)-1));
+         T::readInnerKey(rightMax,rightPage+innerHeaderSize+innerEntrySize*(maxInnerCount-(maxInnerCount/2)-1));
          if (level>0)
             updateKey(level-1,leftMax);
 
@@ -512,9 +760,13 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
             BTreeLogActions::UpdateInnerPage(LogData(static_cast<unsigned char*>(newRoot.getPage())+8,BufferReference::pageSize-8),LogData(newPage+8,BufferReference::pageSize-8)).applyButKeep(newRoot,pages[0]);
             tree.setRootPage(pages[0].getPageNo());
             break;
-         }
+         }*/
+     }
       }
-   }
+//   printf("tree after update:\n");
+//   printRecursive();
+//   printf("CHECKING THE LEAF\n");
+//   check();
 }
 //---------------------------------------------------------------------------
 template <class T> bool BTree<T>::Updater::hasNextLeaf()
