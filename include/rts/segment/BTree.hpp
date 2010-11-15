@@ -282,7 +282,7 @@ namespace BTreeLogActions {
 template <class T> class BTree<T>::Updater {
    private:
    /// Maximum tree depth
-   static const unsigned maxDepth = 1000;
+   static const unsigned maxDepth = 10;
 
    /// The tree
    BTree<T>& tree;
@@ -378,9 +378,7 @@ template <class T> void BTree<T>::Updater::lookup(const typename T::InnerKey& ke
       }
    }
 }
-
 //---------------------------------------------------------------------------
-
 template <class T> void BTree<T>::Updater::updateKey(unsigned level,typename T::InnerKey maxKey)
    // Update a parent entry
 {
@@ -405,12 +403,10 @@ template <class T> void BTree<T>::Updater::updateKey(unsigned level,typename T::
       BTreeLogActions::UpdateInner(positions[level],LogData(getInnerPtr(parentData,positions[level]),innerEntrySize),LogData(newEntry,innerEntrySize)).applyButKeep(parent,pages[level-1]);
    }
 }
-
 //---------------------------------------------------------------------------
 template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const typename T::InnerKey& maxKey)
    // Store a new or updated leaf page
 {
-
    if (firstPage) {
       // Update the page itself
       BufferReferenceModified leaf;
@@ -440,130 +436,133 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
       // And write the new page
       BTreeLogActions::UpdateLeaf(LogData(static_cast<unsigned char*>(newLeaf.getPage())+8,BufferReference::pageSize-8),LogData(data+8,BufferReference::pageSize-8)).applyButKeep(newLeaf,pages[depth-1]);
 
-      typename T::InnerKey insertKey=maxKey;
       // Insert in parent
+      typename T::InnerKey insertKey=maxKey;
       unsigned insertPage=pages[depth-1].getPageNo();
       bool insertRight=true;
       bool hasToKeepPage = false;
       for (unsigned level=depth-2;;--level) {
          // Fits?
           unsigned count = getInnerCount(static_cast<const unsigned char*>(pages[level].getPage()));
-      	  insertPage = pages[level+1].getPageNo(); //???
-
-         if (count<maxInnerCount) {
-            BufferReferenceModified inner;
-            inner.modify(pages[level]);
-            unsigned char newEntry[innerEntrySize];
-            T::writeInnerKey(newEntry,insertKey);
-            Segment::writeUint32Aligned(newEntry+T::innerKeySize,insertPage);
-
-	        BTreeLogActions::InsertInner(positions[level+1]+1,LogData(newEntry,innerEntrySize)).applyButKeep(inner, pages[level]);
-
-            if ((positions[level+1]+1==count)&&(level>0)){
-               updateKey(level-1,insertKey);
-            }
-            if (insertRight)
-               positions[level+1]++;
-            break;
-         }
-         // No, we have to split
-         BufferReferenceModified right;
-         tree.allocPage(right);
-
-         const unsigned char* pageData = static_cast<const unsigned char*>(pages[level].getPage());
-
-         const unsigned  left_pageno = pages[level].getPageNo();
-         const unsigned  right_pageno = right.getPageNo();
-         const unsigned  next_pageno = Segment::readUint32Aligned(pageData+12);
-
-         unsigned left_count = maxInnerCount/ 2;
-         unsigned right_count = maxInnerCount - left_count;
-         unsigned page_count = getInnerCount(pageData);
-
-         typename T::InnerKey right_max, right_min, left_max;
-
-         unsigned char leftPage[BufferReference::pageSize], rightPage[BufferReference::pageSize];
-         memset(leftPage,0,BufferReference::pageSize);
-         Segment::writeUint32Aligned(leftPage+8,~0u);
-         Segment::writeUint32Aligned(leftPage+12,right_pageno);
-         Segment::writeUint32Aligned(leftPage+16,left_count);
-         memcpy(leftPage+innerHeaderSize,pageData+innerHeaderSize,innerEntrySize*left_count);
-
-         memset(rightPage,0,BufferReference::pageSize);
-         Segment::writeUint32Aligned(rightPage+8,~0u);
-         Segment::writeUint32Aligned(rightPage+12,next_pageno);
-         Segment::writeUint32Aligned(rightPage+16,maxInnerCount-(maxInnerCount/2));
-         memcpy(rightPage+innerHeaderSize,pageData+innerHeaderSize+innerEntrySize*(left_count),innerEntrySize*right_count);
-
-         T::readInnerKey(left_max,leftPage+innerHeaderSize+innerEntrySize*(left_count-1));
-         T::readInnerKey(right_min,rightPage+innerHeaderSize);
-         T::readInnerKey(right_max,rightPage+innerHeaderSize+innerEntrySize*(right_count -1));
-
-         unsigned char* target_page;
-         if (positions[level+1] < left_count) {
-             target_page = leftPage;
-             if (!((insertKey<left_max) || (insertKey == left_max))){
-            	 left_max =insertKey;
-             }
-         }
-         else {
-             assert(!((insertKey < left_max) || (insertKey == left_max)));
-             positions[level+1] -= left_count;
-             assert(positions[level+1] < right_count);
-             target_page = rightPage;
-
-             if (!((insertKey < right_max) || (insertKey == right_max))) {
-                assert(positions[level+1] + 1 == right_count);
-                right_max = insertKey;  // e is the rightmost entry and its key the right_max
-             }
-         }
-
-         {
-             assert(getInnerCount(target_page) < maxInnerCount);
-  		     unsigned entrySizeInner=innerEntrySize;
-  		     unsigned oldCount=Segment::readUint32Aligned(static_cast<unsigned char*>(target_page)+16);
-  		     unsigned slot = positions[level+1]+1;
+      	  insertPage = pages[level+1].getPageNo();
+          if (count<maxInnerCount) {
+             BufferReferenceModified inner;
+             inner.modify(pages[level]);
              unsigned char newEntry[innerEntrySize];
              T::writeInnerKey(newEntry,insertKey);
              Segment::writeUint32Aligned(newEntry+T::innerKeySize,insertPage);
 
-  		     memmove(static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*(slot+1)),
+	         BTreeLogActions::InsertInner(positions[level+1]+1,LogData(newEntry,innerEntrySize)).applyButKeep(inner, pages[level]);
+
+             if ((positions[level+1]+1==count)&&(level>0)){
+                updateKey(level-1,insertKey);
+             }
+             if (insertRight)
+                positions[level+1]++;
+             break;
+          }
+          // No, we have to split
+          BufferReferenceModified right;
+          tree.allocPage(right);
+
+          const unsigned char* pageData = static_cast<const unsigned char*>(pages[level].getPage());
+
+          const unsigned  left_pageno = pages[level].getPageNo();
+          const unsigned  right_pageno = right.getPageNo();
+          const unsigned  next_pageno = Segment::readUint32Aligned(pageData+12);
+
+          unsigned left_count = maxInnerCount/ 2;
+          unsigned right_count = maxInnerCount - left_count;
+          unsigned page_count = getInnerCount(pageData);
+
+          typename T::InnerKey right_max, right_min, left_max;
+
+          unsigned char leftPage[BufferReference::pageSize], rightPage[BufferReference::pageSize];
+          memset(leftPage,0,BufferReference::pageSize);
+          Segment::writeUint32Aligned(leftPage+8,~0u);
+          Segment::writeUint32Aligned(leftPage+12,right_pageno);
+          Segment::writeUint32Aligned(leftPage+16,left_count);
+          memcpy(leftPage+innerHeaderSize,pageData+innerHeaderSize,innerEntrySize*left_count);
+
+          memset(rightPage,0,BufferReference::pageSize);
+          Segment::writeUint32Aligned(rightPage+8,~0u);
+          Segment::writeUint32Aligned(rightPage+12,next_pageno);
+          Segment::writeUint32Aligned(rightPage+16,maxInnerCount-(maxInnerCount/2));
+          memcpy(rightPage+innerHeaderSize,pageData+innerHeaderSize+innerEntrySize*(left_count),innerEntrySize*right_count);
+
+          T::readInnerKey(left_max,leftPage+innerHeaderSize+innerEntrySize*(left_count-1));
+          T::readInnerKey(right_min,rightPage+innerHeaderSize);
+          T::readInnerKey(right_max,rightPage+innerHeaderSize+innerEntrySize*(right_count -1));
+
+          unsigned char* target_page;
+          if (positions[level+1] < left_count) {
+              target_page = leftPage;
+              if (!((insertKey<left_max) || (insertKey == left_max))){
+             	 left_max =insertKey;
+              }
+          }
+          else {
+              assert(!((insertKey < left_max) || (insertKey == left_max)));
+              positions[level+1] -= left_count;
+              assert(positions[level+1] < right_count);
+              target_page = rightPage;
+
+              if (!((insertKey < right_max) || (insertKey == right_max))) {
+                 assert(positions[level+1] + 1 == right_count);
+                 right_max = insertKey;  // e is the rightmost entry and its key the right_max
+              }
+          }
+
+         //insert new key
+          {
+              assert(getInnerCount(target_page) < maxInnerCount);
+  		      unsigned entrySizeInner=innerEntrySize;
+  		      unsigned oldCount=Segment::readUint32Aligned(static_cast<unsigned char*>(target_page)+16);
+  		      unsigned slot = positions[level+1]+1;
+              unsigned char newEntry[innerEntrySize];
+              T::writeInnerKey(newEntry,insertKey);
+              Segment::writeUint32Aligned(newEntry+T::innerKeySize,insertPage);
+
+  		      memmove(static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*(slot+1)),
   				   static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*slot),
   				   entrySizeInner*(oldCount-slot));
 
-  		     memcpy(static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*slot),newEntry,innerEntrySize);
-  		     Segment::writeUint32Aligned(static_cast<unsigned char*>(target_page)+16,oldCount+1);
-  		     unsigned newCount=Segment::readUint32Aligned(static_cast<unsigned char*>(target_page)+16);
-  		     if (hasToKeepPage){
-  	             Segment::writeUint32(target_page+innerHeaderSize+innerEntrySize*(newCount-1)+T::innerKeySize,pages[level+1].getPageNo());
+  		      memcpy(static_cast<unsigned char*>(target_page)+innerHeaderSize+(entrySizeInner*slot),newEntry,innerEntrySize);
+  		      Segment::writeUint32Aligned(static_cast<unsigned char*>(target_page)+16,oldCount+1);
+  		      unsigned newCount=Segment::readUint32Aligned(static_cast<unsigned char*>(target_page)+16);
+  		      if (hasToKeepPage){
+  	              Segment::writeUint32(target_page+innerHeaderSize+innerEntrySize*(newCount-1)+T::innerKeySize,pages[level+1].getPageNo());
 
-  		    	 hasToKeepPage = false;
-  		     }
+  		          hasToKeepPage = false;
+  		      }
 
-  	         if (insertRight)
+  	          if (insertRight)
   	            ++positions[level+1];
-         }
+          }
 
-         if (level > 0) {
-             updateKey(level - 1, left_max);
-         }
+          //propagate changes up
+          if (level > 0) {
+              updateKey(level - 1, left_max);
+          }
 
-
-         {
-            BufferReferenceModified left;
-            left.modify(pages[level]);
-            BTreeLogActions::UpdateInnerPage update_left(
+          // where do we put the key?
+          {
+             BufferReferenceModified left;
+             left.modify(pages[level]);
+             BTreeLogActions::UpdateInnerPage update_left(
                   LogData(static_cast<unsigned char*> (left.getPage()) + 8, BufferReference::pageSize - 8),
                   LogData(leftPage + 8, BufferReference::pageSize - 8));
-            BTreeLogActions::UpdateInnerPage update_right(
+             BTreeLogActions::UpdateInnerPage update_right(
                   LogData(static_cast<unsigned char*> (right.getPage()) + 8, BufferReference::pageSize - 8),
                   LogData(rightPage + 8, BufferReference::pageSize - 8));
-
-            if (target_page == leftPage) { // The key is on the left page
+            // The key is on the left page
+            if (target_page == leftPage) {
                update_left.applyButKeep(left, pages[level]);
                update_right.apply(right);
                insertRight = false;
-            } else { // The key is on the right page
+            }
+            // The key is on the right page
+            else {
                update_left.apply(left);
                update_right.applyButKeep(right, pages[level]);
                insertRight = true;
@@ -571,6 +570,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
             }
          }
 
+         //Allocate the new root
          if (level == 0) {
              ++depth;
 
@@ -578,9 +578,8 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
                 pages[i].swap(pages[i - 1]);
                 positions[i] = positions[i - 1];
              }
-             // Allocate the new root page
-             BufferReferenceModified newRoot; tree.allocPage(newRoot);
 
+             BufferReferenceModified newRoot; tree.allocPage(newRoot);
              unsigned char newPage[BufferReference::pageSize];
              memset(newPage, 0, BufferReference::pageSize);
              Segment::writeUint32(newPage+8,~0u);
