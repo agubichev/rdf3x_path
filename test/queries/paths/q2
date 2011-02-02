@@ -1,0 +1,1 @@
+select ??p where {<http://www.mpii.de/yago/resource/Albert%5FEinstein> ??p <http://www.mpii.de/yago/resource/Japan>}

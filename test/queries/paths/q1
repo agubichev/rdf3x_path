@@ -1,0 +1,1 @@
+select ??p ?a where {<http://www.mpii.de/yago/resource/Ulm> ??p ?a}
