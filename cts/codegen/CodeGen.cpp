@@ -7,6 +7,7 @@
 #include "rts/operator/FullyAggregatedIndexScan.hpp"
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
+#include "rts/operator/DijkstraScan.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
 #include "rts/operator/MergeUnion.hpp"
@@ -24,6 +25,7 @@
 #include <map>
 #include <set>
 #include <cassert>
+#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -36,7 +38,19 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan);
+/// Structure for bindings, we use either single-value binding with Register, or vector-value binding with Vector Register
+struct Binding{
+   map<unsigned,Register*> valuebinding;
+   map<unsigned,VectorRegister*> pathbinding;
+};
+//---------------------------------------------------------------------------
+/// Structure for registers, we separate registers for single values and for paths
+struct MapRegister{
+   map<const QueryGraph::Node*,unsigned> valueregister;
+   map<const QueryGraph::Node*,unsigned> pathregister;
+};
+//---------------------------------------------------------------------------
+static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter);
 //---------------------------------------------------------------------------
 static void resolveScanVariable(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,unsigned slot,const QueryGraph::Node& node,Register*& reg,bool& bound,bool unused=false)
    // Resolve a variable used in a scan
@@ -56,13 +70,53 @@ static void resolveScanVariable(Runtime& runtime,const map<unsigned,Register*>& 
          reg=(*(context.find(var))).second;
       } else {
          bound=false;
-         if (projection.count(var))
+         if (projection.count(var)){
             bindings[var]=reg;
+         }
       }
    }
 }
 //---------------------------------------------------------------------------
-static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static void resolvePathScanVariable(Runtime& runtime, const set<unsigned>& pathprojection,map<unsigned,VectorRegister*>& pathbindings,const map<const QueryGraph::Node*,unsigned>& pathregisters, const QueryGraph::Node& node, VectorRegister*& reg, bool& bound)
+// resolve a path variable used in a path scan
+{
+	assert(node.pathTriple);
+	bool constant=node.constPredicate;
+	unsigned var=node.predicate;
+	reg=runtime.getVectorRegister((*pathregisters.find(&node)).second);
+	if (constant){
+		/// constant paths are not supported at present
+		bound=true;
+	} else {
+		bound = false;
+		if (pathprojection.count(var)){
+			pathbindings[var]=reg;
+		}
+	}
+}
+//---------------------------------------------------------------------------
+static Operator* translateDijkstraScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
+// Translate a path scan into an operator tree
+{
+	const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
+
+	// Initialize the registers
+	bool constSubject,constPredicate,constObject;
+	Register* subject,*object;
+	VectorRegister* pathpredicate;
+	resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject);
+	resolvePathScanVariable(runtime,projection,bindings.pathbinding,registers.pathregister,node,pathpredicate,constPredicate);
+	resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
+
+	//  return the operator
+	return DijkstraScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
+	                         subject,constSubject,
+	                         pathpredicate,constPredicate,
+	                         object,constObject,
+		    plan->cardinality, pathfilter);
+}
+//---------------------------------------------------------------------------
+static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* /*pathfilter*/)
    // Translate an index scan into an operator tree
 {
    const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
@@ -70,9 +124,9 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
    // Initialize the registers
    bool constSubject,constPredicate,constObject;
    Register* subject,*predicate,*object;
-   resolveScanVariable(runtime,context,projection,bindings,registers,0,node,subject,constSubject);
-   resolveScanVariable(runtime,context,projection,bindings,registers,1,node,predicate,constPredicate);
-   resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject);
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject);
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,1,node,predicate,constPredicate);
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
 
    // And return the operator
    if (runtime.hasDifferentialIndex())
@@ -84,7 +138,7 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
 			    plan->cardinality);
 }
 //---------------------------------------------------------------------------
-static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* /*pathfilter*/)
    // Translate an aggregated index scan into an operator tree
 {
    const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
@@ -93,9 +147,9 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigne
    // Initialize the registers
    bool constSubject,constPredicate,constObject;
    Register* subject,*predicate,*object;
-   resolveScanVariable(runtime,context,projection,bindings,registers,0,node,subject,constSubject,(order==Database::Order_Object_Predicate_Subject)||(order==Database::Order_Predicate_Object_Subject));
-   resolveScanVariable(runtime,context,projection,bindings,registers,1,node,predicate,constPredicate,(order==Database::Order_Subject_Object_Predicate)||(order==Database::Order_Object_Subject_Predicate));
-   resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject,(order==Database::Order_Subject_Predicate_Object)||(order==Database::Order_Predicate_Subject_Object));
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject,(order==Database::Order_Object_Predicate_Subject)||(order==Database::Order_Predicate_Object_Subject));
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,1,node,predicate,constPredicate,(order==Database::Order_Subject_Object_Predicate)||(order==Database::Order_Object_Subject_Predicate));
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject,(order==Database::Order_Subject_Predicate_Object)||(order==Database::Order_Predicate_Subject_Object));
 
    // And return the operator
    if (runtime.hasDifferentialIndex())
@@ -107,7 +161,7 @@ static Operator* translateAggregatedIndexScan(Runtime& runtime,const map<unsigne
 				      plan->cardinality);
 }
 //---------------------------------------------------------------------------
-static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* /*pathfilter*/)
    // Translate an fully aggregated index scan into an operator tree
 {
    const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
@@ -116,9 +170,9 @@ static Operator* translateFullyAggregatedIndexScan(Runtime& runtime,const map<un
    // Initialize the registers
    bool constSubject,constPredicate,constObject;
    Register* subject,*predicate,*object;
-   resolveScanVariable(runtime,context,projection,bindings,registers,0,node,subject,constSubject,(order!=Database::Order_Subject_Predicate_Object)&&(order!=Database::Order_Subject_Object_Predicate));
-   resolveScanVariable(runtime,context,projection,bindings,registers,1,node,predicate,constPredicate,(order!=Database::Order_Predicate_Subject_Object)&&(order!=Database::Order_Predicate_Object_Subject));
-   resolveScanVariable(runtime,context,projection,bindings,registers,2,node,object,constObject,(order!=Database::Order_Object_Subject_Predicate)&&(order!=Database::Order_Object_Predicate_Subject));
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject,(order!=Database::Order_Subject_Predicate_Object)&&(order!=Database::Order_Subject_Object_Predicate));
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,1,node,predicate,constPredicate,(order!=Database::Order_Predicate_Subject_Object)&&(order!=Database::Order_Predicate_Object_Subject));
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject,(order!=Database::Order_Object_Subject_Predicate)&&(order!=Database::Order_Object_Predicate_Subject));
 
    // And return the operator
    if (runtime.hasDifferentialIndex())
@@ -136,7 +190,8 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
    switch (plan->op) {
       case Plan::IndexScan:
       case Plan::AggregatedIndexScan:
-      case Plan::FullyAggregatedIndexScan: {
+      case Plan::FullyAggregatedIndexScan:
+      case Plan::DijkstraScan: {
          const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
          if ((!node.constSubject)&&(!context.count(node.subject)))
             variables.insert(node.subject);
@@ -156,6 +211,7 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
          break;
       case Plan::HashGroupify:
       case Plan::Filter:
+      case Plan::PathFilter:
          collectVariables(context,variables,plan->left);
          break;
       case Plan::TableFunction: {
@@ -190,26 +246,26 @@ static void getJoinVariables(const map<unsigned,Register*>& context,set<unsigned
    }
 }
 //---------------------------------------------------------------------------
-static void mergeBindings(const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<unsigned,Register*>& leftBindings,const map<unsigned,Register*>& rightBindings)
+static void mergeBindings(const set<unsigned>& projection,Binding& bindings,const Binding& leftBindings,const Binding& rightBindings)
    // Merge bindings after a join
 {
-   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
       if (projection.count((*iter).first))
-         bindings[(*iter).first]=(*iter).second;
-   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
-      if (projection.count((*iter).first)&&(!bindings.count((*iter).first)))
-         bindings[(*iter).first]=(*iter).second;
+         bindings.valuebinding[(*iter).first]=(*iter).second;
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
+      if (projection.count((*iter).first)&&(!bindings.valuebinding.count((*iter).first)))
+         bindings.valuebinding[(*iter).first]=(*iter).second;
 }
 //---------------------------------------------------------------------------
-static Operator* addAdditionalSelections(Runtime& runtime,Operator* input,const set<unsigned>& joinVariables,map<unsigned,Register*>& leftBindings,map<unsigned,Register*>& rightBindings,unsigned joinedOn)
+static Operator* addAdditionalSelections(Runtime& runtime,Operator* input,const set<unsigned>& joinVariables,Binding& leftBindings,Binding& rightBindings,unsigned joinedOn)
    // Convert additional join predicates into a selection
 {
    // Examine join conditions
    vector<Register*> left,right;
    for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
       if ((*iter)!=joinedOn) {
-         left.push_back(leftBindings[*iter]);
-         right.push_back(rightBindings[*iter]);
+         left.push_back(leftBindings.valuebinding[*iter]);
+         right.push_back(rightBindings.valuebinding[*iter]);
       }
    }
 
@@ -228,7 +284,7 @@ static Operator* addAdditionalSelections(Runtime& runtime,Operator* input,const 
    }
 }
 //---------------------------------------------------------------------------
-static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a nested loop join into an operator tree
 {
    // Get the join variables (if any)
@@ -237,9 +293,10 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Reg
    newProjection.insert(joinVariables.begin(),joinVariables.end());
 
    // Build the input trees
-   map<unsigned,Register*> leftBindings,rightBindings;
-   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
-   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
+   Binding leftBindings,rightBindings;
+
+   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left,pathfilter);
+   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    // Build the operator
@@ -251,7 +308,7 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Reg
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a merge join into an operator tree
 {
    // Get the join variables (if any)
@@ -263,22 +320,23 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    assert(joinVariables.count(joinOn));
 
    // Build the input trees
-   map<unsigned,Register*> leftBindings,rightBindings;
-   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
-   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
+   Binding leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left,pathfilter);
+   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
+
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
-   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          leftTail.push_back((*iter).second);
-   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          rightTail.push_back((*iter).second);
 
    // Build the operator
-   Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,plan->cardinality);
+   Operator* result=new MergeJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,plan->cardinality);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
@@ -286,7 +344,7 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a hash join into an operator tree
 {
    // Get the join variables (if any)
@@ -297,22 +355,22 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
    unsigned joinOn=*(joinVariables.begin());
 
    // Build the input trees
-   map<unsigned,Register*> leftBindings,rightBindings;
-   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
-   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
+   Binding leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left,pathfilter);
+   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
-   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          leftTail.push_back((*iter).second);
-   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          rightTail.push_back((*iter).second);
 
    // Build the operator
-   Operator* result=new HashJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
+   Operator* result=new HashJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
@@ -320,15 +378,15 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a hash groupify into an operator tree
 {
    // Build the input trees
-   Operator* tree=translatePlan(runtime,context,projection,bindings,registers,plan->left);
+   Operator* tree=translatePlan(runtime,context,projection,bindings,registers,plan->left,pathfilter);
 
    // Collect output registers
    vector<Register*> output;
-   for (map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=bindings.valuebinding.begin(),limit=bindings.valuebinding.end();iter!=limit;++iter)
       output.push_back((*iter).second);
 
    // Build the operator
@@ -338,7 +396,7 @@ static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Regis
 static void collectVariables(set<unsigned>& filterVariables,const QueryGraph::Filter& filter)
    // Collect all query variables
 {
-   if (filter.type==QueryGraph::Filter::Variable)
+   if (filter.type==QueryGraph::Filter::Variable||filter.type==QueryGraph::Filter::PathVariable)
       filterVariables.insert(filter.id);
    if (filter.arg1)
       collectVariables(filterVariables,*filter.arg1);
@@ -348,9 +406,9 @@ static void collectVariables(set<unsigned>& filterVariables,const QueryGraph::Fi
       collectVariables(filterVariables,*filter.arg3);
 }
 //---------------------------------------------------------------------------
-static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindings,const QueryGraph::Filter& filter);
+static Selection::Predicate* buildSelection(const Binding& bindings,const QueryGraph::Filter& filter);
 //---------------------------------------------------------------------------
-static void collectSelectionArgs(const map<unsigned,Register*>& bindings,vector<Selection::Predicate*>& args,const QueryGraph::Filter* input)
+static void collectSelectionArgs(const Binding& bindings,vector<Selection::Predicate*>& args,const QueryGraph::Filter* input)
    // Collect all function arguments
 {
    for (const QueryGraph::Filter* iter=input;iter;iter=iter->arg2) {
@@ -359,7 +417,7 @@ static void collectSelectionArgs(const map<unsigned,Register*>& bindings,vector<
    }
 }
 //---------------------------------------------------------------------------
-static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindings,const QueryGraph::Filter& filter)
+static Selection::Predicate* buildSelection(const Binding& bindings,const QueryGraph::Filter& filter)
    // Construct a complex filter predicate
 {
    switch (filter.type) {
@@ -383,8 +441,8 @@ static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindi
             return new Selection::ConstantLiteral(filter.id); else
             return new Selection::TemporaryConstantLiteral(filter.value);
       case QueryGraph::Filter::Variable:
-         if (bindings.count(filter.id))
-            return new Selection::Variable((*bindings.find(filter.id)).second); else
+         if (bindings.valuebinding.count(filter.id))
+            return new Selection::Variable((*bindings.valuebinding.find(filter.id)).second); else
             return new Selection::Null();
       case QueryGraph::Filter::IRI:
          if (~filter.id)
@@ -403,7 +461,7 @@ static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindi
       case QueryGraph::Filter::Builtin_datatype: return new Selection::BuiltinDatatype(buildSelection(bindings,*filter.arg1));
       case QueryGraph::Filter::Builtin_bound:
          if (~filter.id)
-            return new Selection::BuiltinBound((*bindings.find(filter.id)).second); else
+            return new Selection::BuiltinBound((*bindings.valuebinding.find(filter.id)).second); else
             return new Selection::False();
       case QueryGraph::Filter::Builtin_sameterm: return new Selection::BuiltinSameTerm(buildSelection(bindings,*filter.arg1),buildSelection(bindings,*filter.arg2));
       case QueryGraph::Filter::Builtin_isiri: return new Selection::BuiltinIsIRI(buildSelection(bindings,*filter.arg1));
@@ -414,11 +472,30 @@ static Selection::Predicate* buildSelection(const map<unsigned,Register*>& bindi
          vector<Selection::Predicate*> args;
          collectSelectionArgs(bindings,args,filter.arg2);
          return new Selection::BuiltinIn(buildSelection(bindings,*filter.arg1),args); }
+      case QueryGraph::Filter::Builtin_length:
+      case QueryGraph::Filter::Builtin_containsany:
+      case QueryGraph::Filter::PathVariable:
+      case QueryGraph::Filter::Builtin_containsonly:
+    	  break; //does not happen
    }
    throw; // Cannot happen
 }
 //---------------------------------------------------------------------------
-static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translatePathFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* /*pathfilter*/)
+// Translate a path filter into an operator tree
+{
+   QueryGraph::Filter* filter=reinterpret_cast<QueryGraph::Filter*>(plan->right);
+   // Collect path variables
+   set<unsigned> filterVariables;
+   collectVariables(filterVariables,*filter);
+   set<unsigned> newProjection=projection;
+   for (set<unsigned>::const_iterator iter=filterVariables.begin(),limit=filterVariables.end();iter!=limit;++iter)
+      newProjection.insert(*iter);
+   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left,filter);
+   return tree;
+}
+//---------------------------------------------------------------------------
+static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a filter into an operator tree
 {
    const QueryGraph::Filter& filter=*reinterpret_cast<QueryGraph::Filter*>(plan->right);
@@ -431,25 +508,25 @@ static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>&
    set<unsigned> newProjection=projection;
    for (set<unsigned>::const_iterator iter=filterVariables.begin(),limit=filterVariables.end();iter!=limit;++iter)
       newProjection.insert(*iter);
-   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
+   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left,pathfilter);
 
    // Build the operator, try special cases first
    Operator* result=0;
    if (((filter.type==QueryGraph::Filter::Equal)||(filter.type==QueryGraph::Filter::NotEqual))&&(filter.arg1->type==QueryGraph::Filter::Variable)) {
-      if (((filter.arg2->type==QueryGraph::Filter::Literal)||(filter.arg2->type==QueryGraph::Filter::IRI))&&(bindings.count(filter.arg1->id))) {
+      if (((filter.arg2->type==QueryGraph::Filter::Literal)||(filter.arg2->type==QueryGraph::Filter::IRI))&&(bindings.valuebinding.count(filter.arg1->id))) {
          vector<unsigned> values;
          values.push_back(filter.arg2->id);
-         result=new Filter(tree,bindings[filter.arg1->id],values,filter.type==QueryGraph::Filter::NotEqual,plan->cardinality);
+         result=new Filter(tree,bindings.valuebinding[filter.arg1->id],values,filter.type==QueryGraph::Filter::NotEqual,plan->cardinality);
       }
    }
    if ((!result)&&((filter.type==QueryGraph::Filter::Equal)||(filter.type==QueryGraph::Filter::NotEqual))&&(filter.arg2->type==QueryGraph::Filter::Variable)) {
-      if (((filter.arg1->type==QueryGraph::Filter::Literal)||(filter.arg1->type==QueryGraph::Filter::IRI))&&(bindings.count(filter.arg2->id))) {
+      if (((filter.arg1->type==QueryGraph::Filter::Literal)||(filter.arg1->type==QueryGraph::Filter::IRI))&&(bindings.valuebinding.count(filter.arg2->id))) {
          vector<unsigned> values;
          values.push_back(filter.arg1->id);
-         result=new Filter(tree,bindings[filter.arg2->id],values,filter.type==QueryGraph::Filter::NotEqual,plan->cardinality);
+         result=new Filter(tree,bindings.valuebinding[filter.arg2->id],values,filter.type==QueryGraph::Filter::NotEqual,plan->cardinality);
       }
    }
-   if ((!result)&&(filter.type==QueryGraph::Filter::Builtin_in)&&(filter.arg1->type==QueryGraph::Filter::Variable)&&(bindings.count(filter.arg1->id))) {
+   if ((!result)&&(filter.type==QueryGraph::Filter::Builtin_in)&&(filter.arg1->type==QueryGraph::Filter::Variable)&&(bindings.valuebinding.count(filter.arg1->id))) {
       vector<unsigned> values;
       bool valid=true;
       if (filter.arg2) {
@@ -464,7 +541,7 @@ static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>&
          }
       }
       if (valid) {
-         result=new Filter(tree,bindings[filter.arg1->id],values,false,plan->cardinality);
+         result=new Filter(tree,bindings.valuebinding[filter.arg1->id],values,false,plan->cardinality);
       }
    }
    if (!result) {
@@ -474,12 +551,12 @@ static Operator* translateFilter(Runtime& runtime,const map<unsigned,Register*>&
    // Cleanup the binding
    for (set<unsigned>::const_iterator iter=filterVariables.begin(),limit=filterVariables.end();iter!=limit;++iter)
       if (!projection.count(*iter))
-         bindings.erase(*iter);
+         bindings.valuebinding.erase(*iter);
 
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateUnion(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateUnion(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a union into an operator tree
 {
    // Collect the parts
@@ -493,31 +570,31 @@ static Operator* translateUnion(Runtime& runtime,const map<unsigned,Register*>& 
    }
 
    // Translate the parts of the union
-   vector<map<unsigned,Register*> > subBindings;
+   vector<Binding> subBindings;
    vector<Operator*> trees;
    subBindings.resize(parts.size());
    trees.resize(parts.size());
    for (unsigned index=0;index<parts.size();index++)
-      trees[index]=translatePlan(runtime,context,projection,subBindings[index],registers,parts[index]);
+      trees[index]=translatePlan(runtime,context,projection,subBindings[index],registers,parts[index],pathfilter);
 
    // Collect all bindings
-   for (vector<map<unsigned,Register*> >::const_iterator iter=subBindings.begin(),limit=subBindings.end();iter!=limit;++iter)
-      for (map<unsigned,Register*>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
-         if (!bindings.count((*iter2).first))
-            bindings[(*iter2).first]=(*iter2).second;
+   for (vector<Binding>::const_iterator iter=subBindings.begin(),limit=subBindings.end();iter!=limit;++iter)
+      for (map<unsigned,Register*>::const_iterator iter2=(*iter).valuebinding.begin(),limit2=(*iter).valuebinding.end();iter2!=limit2;++iter2)
+         if (!bindings.valuebinding.count((*iter2).first))
+            bindings.valuebinding[(*iter2).first]=(*iter2).second;
 
    // Construct the mappings and initializations
    vector<vector<Register*> > mappings,initializations;
    mappings.resize(parts.size());
    initializations.resize(parts.size());
    for (unsigned index=0;index<subBindings.size();index++) {
-      for (map<unsigned,Register*>::const_iterator iter=subBindings[index].begin(),limit=subBindings[index].end();iter!=limit;++iter)
-         if (bindings[(*iter).first]!=(*iter).second) {
+      for (map<unsigned,Register*>::const_iterator iter=subBindings[index].valuebinding.begin(),limit=subBindings[index].valuebinding.end();iter!=limit;++iter)
+         if (bindings.valuebinding[(*iter).first]!=(*iter).second) {
             mappings[index].push_back((*iter).second);
-            mappings[index].push_back(bindings[(*iter).first]);
+            mappings[index].push_back(bindings.valuebinding[(*iter).first]);
          }
-      for (map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
-         if (!subBindings[index].count((*iter).first))
+      for (map<unsigned,Register*>::const_iterator iter=bindings.valuebinding.begin(),limit=bindings.valuebinding.end();iter!=limit;++iter)
+         if (!subBindings[index].valuebinding.count((*iter).first))
             initializations[index].push_back((*iter).second);
    }
 
@@ -527,20 +604,20 @@ static Operator* translateUnion(Runtime& runtime,const map<unsigned,Register*>& 
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateMergeUnion(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateMergeUnion(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a merge union into an operator tree
 {
    // Translate the input
-   map<unsigned,Register*> leftBinding,rightBinding;
-   Operator* left=translatePlan(runtime,context,projection,leftBinding,registers,plan->left);
-   Operator* right=translatePlan(runtime,context,projection,rightBinding,registers,plan->right);
+   Binding leftBinding,rightBinding;
+   Operator* left=translatePlan(runtime,context,projection,leftBinding,registers,plan->left,pathfilter);
+   Operator* right=translatePlan(runtime,context,projection,rightBinding,registers,plan->right,pathfilter);
 
    // Collect the binding
-   assert(leftBinding.size()==1);
-   assert(rightBinding.size()==1);
-   unsigned resultVar=(*(leftBinding.begin())).first;
-   Register* leftReg=(*(leftBinding.begin())).second,*rightReg=(*(rightBinding.begin())).second;
-   bindings[resultVar]=leftReg;
+   assert(leftBinding.valuebinding.size()==1);
+   assert(rightBinding.valuebinding.size()==1);
+   unsigned resultVar=(*(leftBinding.valuebinding.begin())).first;
+   Register* leftReg=(*(leftBinding.valuebinding.begin())).second,*rightReg=(*(rightBinding.valuebinding.begin())).second;
+   bindings.valuebinding[resultVar]=leftReg;
 
    // Build the operator
    Operator* result=new MergeUnion(leftReg,left,leftReg,right,rightReg,plan->cardinality);
@@ -548,7 +625,7 @@ static Operator* translateMergeUnion(Runtime& runtime,const map<unsigned,Registe
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateTableFunction(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translateTableFunction(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a table function into an operator tree
 {
    const QueryGraph::TableFunction& function=*reinterpret_cast<QueryGraph::TableFunction*>(plan->right);
@@ -558,12 +635,12 @@ static Operator* translateTableFunction(Runtime& runtime,const map<unsigned,Regi
    for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter=function.input.begin(),limit=function.input.end();iter!=limit;++iter)
       if (~(*iter).id)
          newProjection.insert((*iter).id);
-   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left);
+   Operator* tree=translatePlan(runtime,context,newProjection,bindings,registers,plan->left,pathfilter);
    vector<TableFunction::FunctionArgument> input;
    for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter=function.input.begin(),limit=function.input.end();iter!=limit;++iter) {
       TableFunction::FunctionArgument arg;
       if (~(*iter).id) {
-         arg.reg=bindings[(*iter).id];
+         arg.reg=bindings.valuebinding[(*iter).id];
       } else {
          arg.reg=0;
          arg.value=(*iter).value;
@@ -575,10 +652,10 @@ static Operator* translateTableFunction(Runtime& runtime,const map<unsigned,Regi
    vector<Register*> output;
    unsigned slot=0;
    for (vector<unsigned>::const_iterator iter=function.output.begin(),limit=function.output.end();iter!=limit;++iter,++slot) {
-      Register* reg=runtime.getRegister((*registers.find(reinterpret_cast<const QueryGraph::Node*>(&function))).second+slot);
+      Register* reg=runtime.getRegister((*registers.valueregister.find(reinterpret_cast<const QueryGraph::Node*>(&function))).second+slot);
       output.push_back(reg);
       if (projection.count(*iter))
-         bindings[*iter]=reg;
+         bindings.valuebinding[*iter]=reg;
    }
 
    // Build the operator
@@ -587,69 +664,86 @@ static Operator* translateTableFunction(Runtime& runtime,const map<unsigned,Regi
    // Cleanup the binding
    for (vector<QueryGraph::TableFunction::Argument>::const_iterator iter=function.input.begin(),limit=function.input.end();iter!=limit;++iter)
       if ((~(*iter).id)&&(!projection.count((*iter).id)))
-         bindings.erase((*iter).id);
+         bindings.valuebinding.erase((*iter).id);
 
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
    // Translate a plan into an operator tree
 {
    Operator* result=0;
    switch (plan->op) {
-      case Plan::IndexScan: result=translateIndexScan(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::AggregatedIndexScan: result=translateAggregatedIndexScan(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::FullyAggregatedIndexScan: result=translateFullyAggregatedIndexScan(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::NestedLoopJoin: result=translateNestedLoopJoin(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::MergeJoin: result=translateMergeJoin(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::HashGroupify: result=translateHashGroupify(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::Filter: result=translateFilter(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan); break;
-      case Plan::TableFunction: result=translateTableFunction(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::IndexScan: result=translateIndexScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::AggregatedIndexScan: result=translateAggregatedIndexScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::FullyAggregatedIndexScan: result=translateFullyAggregatedIndexScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::DijkstraScan: result = translateDijkstraScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::NestedLoopJoin: result=translateNestedLoopJoin(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::MergeJoin: result=translateMergeJoin(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::HashGroupify: result=translateHashGroupify(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::Filter: result=translateFilter(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::TableFunction: result=translateTableFunction(runtime,context,projection,bindings,registers,plan,pathfilter); break;
       case Plan::Singleton: result=new SingletonScan(); break;
+      case Plan::PathFilter: result=translatePathFilter(runtime,context,projection,bindings,registers,plan,pathfilter);break;
    }
    return result;
 }
 //---------------------------------------------------------------------------
-static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registers,map<unsigned,set<unsigned> >& registerClasses,const QueryGraph::SubQuery& query,unsigned id)
+static pair<unsigned, unsigned> allocateRegisters(MapRegister& registers,map<unsigned,set<unsigned> >& registerClasses,
+									const QueryGraph::SubQuery& query,unsigned id,unsigned pathid)
    // Allocate registers
 {
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
       const QueryGraph::Node& node=*iter;
-      registers[&node]=id;
+      if (node.pathTriple){
+    	  registers.pathregister[&node]=pathid;
+    	  pathid++;
+      }
+      registers.valueregister[&node]=id;
+
       if (!node.constSubject)
          registerClasses[node.subject].insert(id+0);
-      if (!node.constPredicate)
+      if (!node.constPredicate&&!node.pathTriple)
          registerClasses[node.predicate].insert(id+1);
       if (!node.constObject)
          registerClasses[node.object].insert(id+2);
+
       id+=3;
    }
-   for (vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter)
-      id=allocateRegisters(registers,registerClasses,(*iter),id);
+   for (vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter){
+      pair<unsigned, unsigned> p=allocateRegisters(registers,registerClasses,(*iter),id,pathid);
+      id=p.first; pathid=p.second;
+   }
    for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter)
-      for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
-         id=allocateRegisters(registers,registerClasses,(*iter2),id);
+      for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2){
+         pair<unsigned, unsigned> p=allocateRegisters(registers,registerClasses,(*iter2),id,pathid);
+         id=p.first; pathid=p.second;
+      }
    for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter) {
-      registers[reinterpret_cast<const QueryGraph::Node*>(&(*iter))]=id;
+      registers.valueregister[reinterpret_cast<const QueryGraph::Node*>(&(*iter))]=id;
       unsigned slot=0;
       for (vector<unsigned>::const_iterator iter2=(*iter).output.begin(),limit2=(*iter).output.end();iter2!=limit2;++iter2,++slot)
          registerClasses[*iter2].insert(id+slot);
       id+=(*iter).output.size();
    }
-   return id;
+   return pair<unsigned, unsigned>(id, pathid);
 }
 //---------------------------------------------------------------------------
-Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,vector<Register*>& output)
+Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,Output& output)
    // Perform a naive translation of a query into an operator tree without output generation
 {
    // Allocate registers for all relations
-   map<const QueryGraph::Node*,unsigned> registers;
+   MapRegister registers;
    map<unsigned,set<unsigned> > registerClasses;
-   unsigned registerCount=allocateRegisters(registers,registerClasses,query.getQuery(),0);
+   map<unsigned, set<unsigned> > pathRegisterClasses;
+
+   pair<unsigned,unsigned> p=allocateRegisters(registers,registerClasses,query.getQuery(),0,0);
+   unsigned registerCount=p.first;
    unsigned unboundVariable=registerCount;
+   runtime.allocateVectorRegisters(p.second);
    runtime.allocateRegisters(unboundVariable+1);
 
    // Prepare domain information for join attributes
@@ -673,8 +767,9 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
             continue;
          // Lookup the register addresses
          PotentialDomainDescription* domain=runtime.getDomainDescription(domainCount++);
-         for (set<unsigned>::const_iterator iter2=(*iter).second.begin(),limit2=(*iter).second.end();iter2!=limit2;++iter2)
+         for (set<unsigned>::const_iterator iter2=(*iter).second.begin(),limit2=(*iter).second.end();iter2!=limit2;++iter2){
             runtime.getRegister(*iter2)->domain=domain;
+         }
       }
    }
 
@@ -687,34 +782,47 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
    } else {
       // Construct the projection
       set<unsigned> projection;
-      for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
+      for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter){
          projection.insert(*iter);
+      }
+
       for (QueryGraph::order_iterator iter=query.orderBegin(),limit=query.orderEnd();iter!=limit;++iter)
          if (~(*iter).id)
             projection.insert((*iter).id);
 
       // And build the tree
-      map<unsigned,Register*> context,bindings;
-      tree=translatePlan(runtime,context,projection,bindings,registers,plan);
+      map<unsigned,Register*> context;
+      Binding bindings;
+      QueryGraph::Filter* pathfilter=0;
+      tree=translatePlan(runtime,context,projection,bindings,registers,plan,pathfilter);
 
       // Sort if necessary
       if (query.orderBegin()!=query.orderEnd()) {
          vector<Register*> regs;
          vector<pair<Register*,bool> > order;
          for (set<unsigned>::const_iterator iter=projection.begin(),limit=projection.end();iter!=limit;++iter)
-            regs.push_back(bindings[*iter]);
+            regs.push_back(bindings.valuebinding[*iter]);
          for (QueryGraph::order_iterator iter=query.orderBegin(),limit=query.orderEnd();iter!=limit;++iter)
             if (~(*iter).id)
-               order.push_back(pair<Register*,bool>(bindings[(*iter).id],(*iter).descending)); else
+               order.push_back(pair<Register*,bool>(bindings.valuebinding[(*iter).id],(*iter).descending)); else
                order.push_back(pair<Register*,bool>(0,(*iter).descending));
          tree=new Sort(runtime.getDatabase(),tree,regs,order,tree->getExpectedOutputCardinality());
       }
 
       // Remember the output registers
-      for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
-         if (bindings.count(*iter))
-            output.push_back(bindings[*iter]); else
-            output.push_back(runtime.getRegister(unboundVariable));
+      for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter){
+         if (bindings.valuebinding.count(*iter)){
+        	output.order.push_back(0);
+            output.valueoutput.push_back(bindings.valuebinding[*iter]);
+         }
+         else if (bindings.pathbinding.count(*iter)) {
+        	output.order.push_back(1);
+        	output.pathoutput.push_back(bindings.pathbinding[*iter]);
+         }
+         else {
+            output.valueoutput.push_back(runtime.getRegister(unboundVariable));
+         }
+      }
    }
 
    return tree;
@@ -724,7 +832,8 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
    // Perform a naive translation of a query into an operator tree
 {
    // Build the tree itself
-   vector<Register*> output;
+   Output output;
+
    Operator* tree=translateIntern(runtime,query,plan,output);
    if (!tree) return 0;
 
