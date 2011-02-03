@@ -46,12 +46,15 @@ void Plan::print(unsigned indent) const
       case MergeUnion: cout << "MergeUnion"; break;
       case TableFunction: cout << "TableFunction"; break;
       case Singleton: cout << "Singleton"; break;
+      case DijkstraScan: cout<<"DijkstraScan"; break;
+      case PathFilter: cout<<"PathFilter"; break;
    }
    cout << " cardinality=" << cardinality << " costs=" << costs << endl;
    switch (op) {
       case IndexScan: break;
       case AggregatedIndexScan: break;
       case FullyAggregatedIndexScan: break;
+      case DijkstraScan: break;
       case NestedLoopJoin:
       case MergeJoin:
       case HashJoin: left->print(indent+1); right->print(indent+1); break;
@@ -61,6 +64,7 @@ void Plan::print(unsigned indent) const
       case MergeUnion: left->print(indent+1); right->print(indent+1); break;
       case TableFunction: left->print(indent+1); break;
       case Singleton: break;
+      case PathFilter: break;
    }
 }
 //---------------------------------------------------------------------------

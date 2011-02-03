@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <algorithm>
+#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -61,7 +62,8 @@ void PlanGen::addPlan(Problem* problem,Plan* plan)
             }
             // No, remove the existing plan
             if (last)
-               last->next=iter->next; else
+               last->next=iter->next;
+            else
                problem->plans=iter->next;
             plans.free(iter);
          } else if ((!~iter->ordering)&&(iter->costs>=plan->costs)) {
@@ -139,6 +141,25 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query
    return plan;
 }
 //---------------------------------------------------------------------------
+static Plan* buildPathFilters(PlanContainer& plans,const QueryGraph::SubQuery& query,Plan* plan,unsigned pathvar){
+   set<unsigned> allAttributes;
+   allAttributes.insert(pathvar);
+   for (vector<QueryGraph::Filter>::const_iterator iter=query.pathfilter.begin(),limit=query.pathfilter.end();iter!=limit;++iter)
+      if ((*iter).isApplicable(allAttributes)) {
+         Plan* p2=plans.alloc();
+         p2->op=Plan::PathFilter;
+         p2->opArg=(*iter).id;
+         p2->left=plan;
+         p2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
+         p2->next=0;
+         p2->cardinality=plan->cardinality*0.5;
+         p2->costs=plan->costs+Costs::filter(plan->cardinality);
+         p2->ordering=plan->ordering;
+         plan=p2;
+      }
+   return plan;
+}
+//---------------------------------------------------------------------------
 static void normalizePattern(Database::DataOrder order,unsigned& c1,unsigned& c2,unsigned& c3)
     // Extract subject/predicate/object order
 {
@@ -159,6 +180,23 @@ static unsigned getCardinality(Database& db,Database::DataOrder order,unsigned c
 {
    normalizePattern(order,c1,c2,c3);
    return db.getExactStatistics().getCardinality(c1,c2,c3);
+}
+//---------------------------------------------------------------------------
+void PlanGen::buildDijkstraScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned predicate){
+	// Initialize a new plan
+	Plan* plan=plans.alloc();
+	plan->op=Plan::DijkstraScan;
+	plan->left=0;
+	plan->right=0;
+	plan->next=0;
+	plan->opArg=order;
+	plan->cardinality = 100; ///random
+	plan->costs = 1000; ///random
+
+	plan=buildPathFilters(plans,query,plan,predicate);
+
+	// And store it
+	addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C)
@@ -265,6 +303,7 @@ void PlanGen::buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Da
 
    // And store it
    addPlan(result,plan);
+
 }
 //---------------------------------------------------------------------------
 static bool isUnused(const QueryGraph::Filter* filter,unsigned val)
@@ -308,7 +347,6 @@ static bool isUnused(const QueryGraph& query,const QueryGraph::Node& node,unsign
    for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
       if ((*iter)==val)
          return false;
-
    return isUnused(query.getQuery(),node,val);
 }
 //---------------------------------------------------------------------------
@@ -331,45 +369,62 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
    unsigned s=node.constSubject?~0u:node.subject,p=node.constPredicate?~0u:node.predicate,o=node.constObject?~0u:node.object;
    unsigned sc=node.constSubject?node.subject:~0u,pc=node.constPredicate?node.predicate:~0u,oc=node.constObject?node.object:~0u;
 
-   // Build all relevant scans
-   if ((unusedSubject+unusedPredicate+unusedObject)>=2) {
-      if (!unusedSubject) {
-         buildFullyAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc);
-      } else if (!unusedObject) {
-         buildFullyAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc);
-      } else {
-         buildFullyAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,s,sc);
-      }
-   } else {
-      if (unusedObject)
-         buildAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc); else
-         buildIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc,o,oc);
-      if (unusedPredicate)
-         buildAggregatedIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc); else
-         buildIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc,p,pc);
-      if (unusedSubject)
-         buildAggregatedIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc); else
-         buildIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc,s,sc);
-      if (unusedPredicate)
-         buildAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc); else
-         buildIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc,p,pc);
-      if (unusedObject)
-         buildAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc); else
-         buildIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc,o,oc);
-      if (unusedSubject)
-         buildAggregatedIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc); else
-         buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc,s,sc);
+   if (node.pathTriple){
+	   if (node.constObject&&node.constSubject) {
+		   buildDijkstraScan(query,Database::Order_Subject_Predicate_Object,result,p);
+	   } else if (node.constSubject) {
+		   buildDijkstraScan(query,Database::Order_Subject_Predicate_Object,result,p);
+	   } else if (node.constObject){
+		   buildDijkstraScan(query,Database::Order_Object_Predicate_Subject,result,p);
+	   }
    }
-
+   else {
+	   // Build all relevant scans
+	   if ((unusedSubject+unusedPredicate+unusedObject)>=2) {
+		   if (!unusedSubject) {
+			   buildFullyAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc);
+		   } else if (!unusedObject) {
+			   buildFullyAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc);
+		   } else {
+			   buildFullyAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,s,sc);
+		   }
+	   } else {
+		   if (unusedObject)
+			   buildAggregatedIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc);
+		   else
+			   buildIndexScan(query,Database::Order_Subject_Predicate_Object,result,s,sc,p,pc,o,oc);
+		   if (unusedPredicate)
+			   buildAggregatedIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc);
+		   else
+			   buildIndexScan(query,Database::Order_Subject_Object_Predicate,result,s,sc,o,oc,p,pc);
+		   if (unusedSubject)
+			   buildAggregatedIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc);
+		   else
+			   buildIndexScan(query,Database::Order_Object_Predicate_Subject,result,o,oc,p,pc,s,sc);
+		   if (unusedPredicate)
+			   buildAggregatedIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc);
+		   else
+			   buildIndexScan(query,Database::Order_Object_Subject_Predicate,result,o,oc,s,sc,p,pc);
+		   if (unusedObject)
+			   buildAggregatedIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc);
+		   else
+			   buildIndexScan(query,Database::Order_Predicate_Subject_Object,result,p,pc,s,sc,o,oc);
+		   if (unusedSubject)
+			   buildAggregatedIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc);
+		   else
+			   buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc,s,sc);
+	   }
+   }
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {
       Plan* iter2=iter;
       while (iter2->op==Plan::Filter)
          iter2=iter2->left;
+      while (iter2->op==Plan::PathFilter)
+    	 iter2=iter2->left;
       iter2->left=static_cast<Plan*>(0)+id;
       iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&node));
    }
-
    return result;
 }
 //---------------------------------------------------------------------------
@@ -596,6 +651,7 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
       case Plan::IndexScan:
       case Plan::AggregatedIndexScan:
       case Plan::FullyAggregatedIndexScan:
+      case Plan::DijkstraScan:
       case Plan::Singleton:
          // We reached a leaf.
          break;
@@ -612,6 +668,8 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
       case Plan::HashGroupify: case Plan::TableFunction:
          findFilters(plan->left,filters);
          break;
+      case Plan::PathFilter:
+    	 break; //never happens
    }
 }
 //---------------------------------------------------------------------------
@@ -630,7 +688,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    Problem* last=0;
    unsigned id=0;
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter,++id) {
-      Problem* p=buildScan(query,*iter,id);
+	  Problem* p=buildScan(query,*iter,id);
       if (last)
          last->next=p; else
          dpTable[0]=p;

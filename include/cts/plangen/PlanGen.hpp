@@ -50,6 +50,8 @@ class PlanGen
    void buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C);
    /// Generate an fully aggregated index scan
    void buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C);
+   /// Generate an Dijkstra scan, looking for all nodes by some path from the source
+   void buildDijkstraScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned predicate);
    /// Generate base table accesses
    Problem* buildScan(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned id);
    /// Build the informaion about a join

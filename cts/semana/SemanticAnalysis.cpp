@@ -8,6 +8,8 @@
 #include <set>
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
+using namespace std;
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -64,7 +66,7 @@ static bool encode(DictionarySegment& dict,DifferentialIndex* diffIndex,const SP
    // Encode an element for the query graph
 {
    switch (element.type) {
-      case SPARQLParser::Element::Variable:
+      case SPARQLParser::Element::Variable: case SPARQLParser::Element::PathVariable:
          id=element.id;
          constant=false;
          return true;
@@ -118,11 +120,12 @@ static bool encode(DictionarySegment& dict,DifferentialIndex* diffIndex,const SP
 static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
    // Check if a variable is bound in a pattern group
 {
-   for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter)
+   for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter){
       if ((((*iter).subject.type==SPARQLParser::Element::Variable)&&((*iter).subject.id==id))||
-          (((*iter).predicate.type==SPARQLParser::Element::Variable)&&((*iter).predicate.id==id))||
+          (((*iter).predicate.type==SPARQLParser::Element::Variable)&&((*iter).predicate.id==id)) ||
           (((*iter).object.type==SPARQLParser::Element::Variable)&&((*iter).object.id==id)))
          return true;
+   }
    for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter=group.optional.begin(),limit=group.optional.end();iter!=limit;++iter)
       if (binds(*iter,id))
          return true;
@@ -130,6 +133,16 @@ static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
       for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          if (binds(*iter2,id))
             return true;
+   return false;
+}
+//---------------------------------------------------------------------------
+static bool bindsPath(const SPARQLParser::PatternGroup& group, unsigned id)
+// Check if a path variable is bound in a pattern group
+{
+   for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter){
+       if (((*iter).predicate.type==SPARQLParser::Element::PathVariable)&&((*iter).predicate.id==id))
+    	   return true;
+   }
    return false;
 }
 //---------------------------------------------------------------------------
@@ -166,6 +179,27 @@ static bool encodeTernaryFilter(QueryGraph::Filter::Type type,DictionarySegment&
    output.arg2=new QueryGraph::Filter();
    output.arg3=(input.arg3)?(new QueryGraph::Filter()):0;
    return encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1)&&encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&((!input.arg3)||encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3));
+}
+//---------------------------------------------------------------------------
+static bool encodeLengthFilter(QueryGraph::Filter::Type type,DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output){
+  // Encode a (len(??path)<const) operator. We do not use it at the moment
+   output.type=type;
+   output.arg1=new QueryGraph::Filter();
+   switch(input.arg1->type){
+   	   case SPARQLParser::Filter::Equal: output.arg1->type=QueryGraph::Filter::Equal; break;
+   	   case SPARQLParser::Filter::NotEqual: output.arg1->type=QueryGraph::Filter::NotEqual; break;
+   	   case SPARQLParser::Filter::Less: output.arg1->type=QueryGraph::Filter::Less; break;
+   	   case SPARQLParser::Filter::LessOrEqual: output.arg1->type=QueryGraph::Filter::LessOrEqual; break;
+   	   case SPARQLParser::Filter::Greater: output.arg1->type=QueryGraph::Filter::Greater; break;
+   	   case SPARQLParser::Filter::GreaterOrEqual: output.arg1->type=QueryGraph::Filter::GreaterOrEqual; break;
+   	   default:
+   		   /// should not happen
+   		   return false;
+   }
+
+   output.arg2=new QueryGraph::Filter();
+   output.arg3=new QueryGraph::Filter();
+   return encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3);
 }
 //---------------------------------------------------------------------------
 static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
@@ -212,6 +246,14 @@ static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,co
             output.type=QueryGraph::Filter::Null;
          }
          return true;
+      case SPARQLParser::Filter::PathVariable:
+         if (bindsPath(group,input.valueArg)) {
+            output.type=QueryGraph::Filter::PathVariable;
+            output.id=input.valueArg;
+         } else {
+        	return false;
+         }
+         return true;
       case SPARQLParser::Filter::IRI: {
          SPARQLParser::Element e;
          e.type=SPARQLParser::Element::IRI;
@@ -245,6 +287,28 @@ static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,co
       case SPARQLParser::Filter::Builtin_isliteral: return encodeUnaryFilter(QueryGraph::Filter::Builtin_isliteral,dict,diffIndex,group,input,output);
       case SPARQLParser::Filter::Builtin_regex: return encodeTernaryFilter(QueryGraph::Filter::Builtin_regex,dict,diffIndex,group,input,output);
       case SPARQLParser::Filter::Builtin_in: return encodeBinaryFilter(QueryGraph::Filter::Builtin_in,dict,diffIndex,group,input,output);
+      case SPARQLParser::Filter::Builtin_length:
+    	  bool res;
+    	  res=encodeBinaryFilter(QueryGraph::Filter::Builtin_length,dict,diffIndex,group,input,output);
+    	  if (res){
+    		  output.arg2->id=atoi(output.arg2->value.c_str());
+    	  }
+    	  return res;
+      case SPARQLParser::Filter::Builtin_containsAny:
+    	  res=encodeBinaryFilter(QueryGraph::Filter::Builtin_containsany,dict,diffIndex,group,input,output);
+    	  if (res){
+    		  if (!(~output.arg2->id))
+    			  /// did not find the IRI from the filter
+    			  return false;
+    	  }
+    	  return res;
+      case SPARQLParser::Filter::Builtin_containsOnly:
+    	  res=encodeBinaryFilter(QueryGraph::Filter::Builtin_containsonly,dict,diffIndex,group,input,output);
+    	  if (res){
+    		  if (!(~output.arg2->id))
+    			  return false;
+    	  }
+    	  return res;
    }
    return false; // XXX cannot happen
 }
@@ -264,6 +328,12 @@ static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,co
    // Encode recursively
    output.filters.push_back(QueryGraph::Filter());
    return encodeFilter(dict,diffIndex,group,input,output.filters.back());
+}
+//---------------------------------------------------------------------------
+static bool encodePathFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output){
+	output.pathfilter.push_back(QueryGraph::Filter());
+	return encodeFilter(dict,diffIndex,group,input,output.pathfilter.back());
+
 }
 //---------------------------------------------------------------------------
 static void encodeTableFunction(const SPARQLParser::PatternGroup& /*group*/,const SPARQLParser::Filter& input,QueryGraph::SubQuery& output)
@@ -314,11 +384,16 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
    for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter) {
       // Encode the entries
       QueryGraph::Node node;
+      node.pathTriple = false;
       if ((!encode(dict,diffIndex,(*iter).subject,node.subject,node.constSubject))||
           (!encode(dict,diffIndex,(*iter).predicate,node.predicate,node.constPredicate))||
           (!encode(dict,diffIndex,(*iter).object,node.object,node.constObject))) {
          // A constant could not be resolved. This will produce an empty result
          return false;
+      }
+
+      if (iter->predicate.type ==SPARQLParser::Element::PathVariable){
+    	  node.pathTriple = true;
       }
       output.nodes.push_back(node);
    }
@@ -333,6 +408,12 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
          // The filter variable is not bound. This will produce an empty result
          return false;
       }
+   }
+
+   for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.pathfilters.begin(),limit=group.pathfilters.end();iter!=limit;++iter){
+	   if (!encodePathFilter(dict,diffIndex,group,*iter,output)){
+		   return false;
+	   }
    }
 
    // Encode all optional parts
@@ -379,9 +460,17 @@ void SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
    // Compute the edges
    output.constructEdges();
 
+
    // Add the projection entry
-   for (SPARQLParser::projection_iterator iter=input.projectionBegin(),limit=input.projectionEnd();iter!=limit;++iter)
+   for (SPARQLParser::projection_iterator iter=input.projectionBegin(),limit=input.projectionEnd();iter!=limit;++iter){
       output.addProjection(*iter);
+   }
+
+   // Add the path projection entry
+   for (SPARQLParser::projection_iterator iter=input.pathprojectionBegin(), limit=input.pathprojectionEnd(); iter!=limit;++iter){
+	  output.addProjection(*iter);
+   }
+
 
    // Set the duplicate handling
    switch (input.getProjectionModifier()) {

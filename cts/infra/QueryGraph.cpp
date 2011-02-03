@@ -92,7 +92,7 @@ bool QueryGraph::Filter::isApplicable(const std::set<unsigned>& variables) const
    // Could be applied?
 {
    // A variable?
-   if (type==Variable)
+   if (type==Variable || type==PathVariable)
       return variables.count(id);
 
    // Check the input

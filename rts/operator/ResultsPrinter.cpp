@@ -8,6 +8,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <list>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -20,7 +21,7 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-ResultsPrinter::ResultsPrinter(Runtime& runtime,Operator* input,const vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
+ResultsPrinter::ResultsPrinter(Runtime& runtime,Operator* input,const CodeGen::Output& output,DuplicateHandling duplicateHandling,unsigned limit,bool silent)
    : Operator(1),output(output),input(input),runtime(runtime),dictionary(runtime.getDatabase().getDictionary()),duplicateHandling(duplicateHandling),outputMode(DefaultOutput),limit(limit),silent(silent)
    // Constructor
 {
@@ -83,7 +84,7 @@ void CacheEntry::print(const map<unsigned,CacheEntry>& stringCache,bool escape) 
    }
 }
 //---------------------------------------------------------------------------
-static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::const_iterator start,vector<unsigned>::const_iterator stop,bool escape)
+template<class T> static void printResult(map<unsigned,CacheEntry>& stringCache,typename T::const_iterator start,typename T::const_iterator stop,bool escape)
    // Print a result row
 {
    if (start==stop) return;
@@ -104,7 +105,6 @@ unsigned ResultsPrinter::first()
    // Produce the first tuple
 {
    observedOutputCardinality=1;
-
    // Empty input?
    unsigned count;
    if ((count=input->first())==0) {
@@ -115,16 +115,25 @@ unsigned ResultsPrinter::first()
 
    // Collect the values
    vector<unsigned> results;
+   vector<list<unsigned> > pathresults;
    map<unsigned,CacheEntry> stringCache;
    unsigned minCount=(duplicateHandling==ShowDuplicates)?2:1;
    unsigned entryCount=0;
    do {
       if (count<minCount) continue;
       results.push_back(count);
-      for (vector<Register*>::const_iterator iter=output.begin(),limit=output.end();iter!=limit;++iter) {
+
+	  for (vector<Register*>::const_iterator iter=output.valueoutput.begin(),limit=output.valueoutput.end();iter!=limit;++iter) {
          unsigned id=(*iter)->value;
          results.push_back(id);
          if (~id) stringCache[id];
+      }
+
+      for (vector<VectorRegister*>::const_iterator iter=output.pathoutput.begin(),limit=output.pathoutput.end();iter!=limit;++iter){
+    	  list<unsigned>& path=(*iter)->value;
+    	  pathresults.push_back(path);
+    	  for (list<unsigned>::iterator itlist=path.begin();itlist!=path.end();itlist++)
+    		  if (~(*itlist)) stringCache[*itlist];
       }
       if ((++entryCount)>=this->limit) break;
    } while ((count=input->next())!=0);
@@ -157,26 +166,66 @@ unsigned ResultsPrinter::first()
       return 1;
 
    // Expand duplicates?
-   unsigned columns=output.size();
+   unsigned columns=output.valueoutput.size();
    if (duplicateHandling==ExpandDuplicates) {
-      for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
-         unsigned count=*iter; ++iter;
-         for (unsigned index=0;index<count;index++) {
-            printResult(stringCache,iter,iter+columns,(outputMode==Embedded));
-            cout << endl;
-         }
-         iter+=columns;
-      }
+	  // output without paths
+	  if (output.pathoutput.size() == 0){
+		  for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
+			  unsigned count=*iter; ++iter;
+			  for (unsigned index=0;index<count;index++) {
+				  printResult<vector<unsigned> >(stringCache,iter,iter+columns,(outputMode==Embedded));
+				  cout << endl;
+			  }
+			  iter+=columns;
+		  }
+	  }
+	  // we need to combine paths and single values
+	  else {
+		  vector<unsigned>::const_iterator valueiter = results.begin();
+		  vector<list<unsigned> >::const_iterator pathiter = pathresults.begin();
+		  while (valueiter != results.end()){
+			  unsigned i=0;
+			  valueiter++;
+			  while (i < output.order.size()){
+				  unsigned count = i;
+				  while (output.order[i]==0 && i<output.order.size()) i++;
+				  if (count != i){
+					  printResult<vector<unsigned> >(stringCache, valueiter, valueiter+(i-count),(outputMode==Embedded));
+					  valueiter+=(i-count);
+				  }
+				  count = i;
+
+				  while (output.order[i]==1 && i<output.order.size()) i++;
+
+				  if (count != i){
+					  for (unsigned j=0; j<i-count; j++){
+						  cout<<" (";
+						  printResult<list<unsigned> >(stringCache,pathiter->begin(),pathiter->end(),(outputMode==Embedded));
+						  pathiter++;
+						  cout<<") ";
+					  }
+				  }
+			  }
+			  //end of one tuple
+			  cout<<endl;
+		  }
+	  }
    } else {
       // No, reduced, count, or duplicates
-      for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
-         unsigned count=*iter; ++iter;
-         printResult(stringCache,iter,iter+columns,(outputMode==Embedded));
-         if (duplicateHandling!=ReduceDuplicates)
-            cout << " " << count;
-         cout << endl;
-         iter+=columns;
-      }
+	  // output without paths
+	  if (output.pathoutput.size() == 0){
+		  for (vector<unsigned>::const_iterator iter=results.begin(),limit=results.end();iter!=limit;) {
+			  unsigned count=*iter; ++iter;
+			  printResult<vector<unsigned> >(stringCache,iter,iter+columns,(outputMode==Embedded));
+			  if (duplicateHandling!=ReduceDuplicates)
+				  cout << " " << count;
+			  cout << endl;
+			  iter+=columns;
+		  }
+	  }
+	  else {
+
+	  }
    }
 
    return 1;
@@ -192,7 +241,7 @@ void ResultsPrinter::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
    out.beginOperator("ResultsPrinter",expectedOutputCardinality,observedOutputCardinality);
-   out.addMaterializationAnnotation(output);
+   out.addMaterializationAnnotation(output.valueoutput);
    input->print(out);
    out.endOperator();
 }

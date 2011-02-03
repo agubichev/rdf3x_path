@@ -12,6 +12,7 @@
 //---------------------------------------------------------------------------
 #include "rts/runtime/DomainDescription.hpp"
 #include <vector>
+#include <list>
 //---------------------------------------------------------------------------
 class Database;
 class DifferentialIndex;
@@ -23,6 +24,19 @@ class Register
    public:
    /// The value
    unsigned value;
+   /// The potential domain (if known)
+   PotentialDomainDescription* domain;
+
+   /// Reset the register (both value and domain)
+   void reset();
+};
+//---------------------------------------------------------------------------
+/// A runtime register storing a vector
+class VectorRegister
+{
+   public:
+   /// The value
+   std::list<unsigned> value;
    /// The potential domain (if known)
    PotentialDomainDescription* domain;
 
@@ -42,6 +56,8 @@ class Runtime
    TemporaryDictionary* temporaryDictionary;
    /// The registers
    std::vector<Register> registers;
+   /// the registers for vectors
+   std::vector<VectorRegister> vectorregisters;
    /// The domain descriptions
    std::vector<PotentialDomainDescription> domainDescriptions;
 
@@ -63,10 +79,16 @@ class Runtime
    TemporaryDictionary& getTemporaryDictionary() const { return *temporaryDictionary; }
    /// Set the number of registers
    void allocateRegisters(unsigned count);
+   /// Set the number of vector registers
+   void allocateVectorRegisters(unsigned count);
    /// Get the number of registers
    unsigned getRegisterCount() const { return registers.size(); }
+   /// Get the number of vector registers
+   unsigned getVectorRegisterCount() const { return vectorregisters.size();}
    /// Access a specific register
    Register* getRegister(unsigned slot) { return &(registers[slot]); }
+   /// Access a vector register
+   VectorRegister* getVectorRegister(unsigned slot) { return &(vectorregisters[slot]); }
    /// Set the number of domain descriptions
    void allocateDomainDescriptions(unsigned count);
    /// Access a specific domain description

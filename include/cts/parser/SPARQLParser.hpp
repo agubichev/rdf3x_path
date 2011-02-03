@@ -36,7 +36,7 @@ class SPARQLParser
    /// An element in a graph pattern
    struct Element {
       /// Possible types
-      enum Type { Variable, Literal, IRI };
+      enum Type { Variable, PathVariable, Literal, IRI };
       /// Possible sub-types for literals
       enum SubType { None, CustomLanguage, CustomType };
       /// The type
@@ -65,9 +65,9 @@ class SPARQLParser
       /// Possible types
       enum Type {
          Or, And, Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Plus, Minus, Mul, Div,
-         Not, UnaryPlus, UnaryMinus, Literal, Variable, IRI, Function, ArgumentList,
+         Not, UnaryPlus, UnaryMinus, Literal, Variable, PathVariable, IRI, Function, ArgumentList,
          Builtin_str, Builtin_lang, Builtin_langmatches, Builtin_datatype, Builtin_bound, Builtin_sameterm,
-         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex, Builtin_in
+         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex, Builtin_in, Builtin_length, Builtin_containsAny, Builtin_containsOnly
       };
 
       /// The type
@@ -97,6 +97,8 @@ class SPARQLParser
       std::vector<Pattern> patterns;
       /// The filter conditions
       std::vector<Filter> filters;
+      /// The path filter conditions
+      std::vector<Filter> pathfilters;
       /// The optional parts
       std::vector<PatternGroup> optional;
       /// The union parts
@@ -119,13 +121,19 @@ class SPARQLParser
    std::map<std::string,std::string> prefixes;
    /// The named variables
    std::map<std::string,unsigned> namedVariables;
+   /// The path variables
+   std::map<std::string,unsigned> pathVariables;
    /// The total variable count
    unsigned variableCount;
+   /// The total number of path variables
+   unsigned pathVariableCount;
 
    /// The projection modifier
    ProjectionModifier projectionModifier;
    /// The projection clause
    std::vector<unsigned> projection;
+   /// The path projection
+   std::vector<unsigned> pathprojection;
    /// The pattern
    PatternGroup patterns;
    /// The sort order
@@ -166,8 +174,12 @@ class SPARQLParser
    Filter* parseBrackettedExpression(std::map<std::string,unsigned>& localVars);
    /// Parse a "Constraint" production
    Filter* parseConstraint(std::map<std::string,unsigned>& localVars);
+   /// Parse a "contains" path production
+   void parseContains(std::auto_ptr<Filter>& result, std::map<std::string,unsigned>& localVars);
    /// Parse a filter condition
    void parseFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars);
+   /// Parse a path filter condition
+   void parsePathFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse an entry in a pattern
    Element parsePatternElement(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse blank node patterns
@@ -210,6 +222,10 @@ class SPARQLParser
    projection_iterator projectionBegin() const { return projection.begin(); }
    /// Iterator over the projection
    projection_iterator projectionEnd() const { return projection.end(); }
+   /// Iterator over the path projection
+   projection_iterator pathprojectionBegin() const { return pathprojection.begin(); }
+   /// Iterator over the path projection
+   projection_iterator pathprojectionEnd() const { return pathprojection.end(); }
 
    /// Iterator over the order by clause
    typedef std::vector<Order>::const_iterator order_iterator;

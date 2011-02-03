@@ -1,4 +1,6 @@
 #include "rts/runtime/Runtime.hpp"
+#include <iostream>
+using namespace std;
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -14,6 +16,12 @@ void Register::reset()
 {
    value=~0u;
    domain=0;
+}
+//---------------------------------------------------------------------------
+void VectorRegister::reset()
+{
+	value.clear();
+	domain=0;
 }
 //---------------------------------------------------------------------------
 Runtime::Runtime(Database& db,DifferentialIndex* diff,TemporaryDictionary* temporaryDictionary)
@@ -35,6 +43,16 @@ void Runtime::allocateRegisters(unsigned count)
 
    for (unsigned index=0;index<count;index++)
       registers[index].reset();
+}
+//---------------------------------------------------------------------------
+void Runtime::allocateVectorRegisters(unsigned count)
+   // Set the number of vector registers
+{
+   vectorregisters.clear();
+   vectorregisters.resize(count);
+
+   for (unsigned index=0;index<count;index++)
+      vectorregisters[index].reset();
 }
 //---------------------------------------------------------------------------
 void Runtime::allocateDomainDescriptions(unsigned count)

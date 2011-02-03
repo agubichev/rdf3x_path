@@ -11,6 +11,8 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include "rts/operator/Operator.hpp"
+#include "rts/runtime/Runtime.hpp"
+#include "cts/codegen/CodeGen.hpp"
 #include <vector>
 //---------------------------------------------------------------------------
 class DictionarySegment;
@@ -27,8 +29,8 @@ class ResultsPrinter : public Operator
    enum OutputMode { DefaultOutput, Embedded };
 
    private:
-   /// The output registers
-   std::vector<Register*> output;
+   /// The output
+   CodeGen::Output output;
    /// The input
    Operator* input;
    /// The runtime
@@ -46,7 +48,7 @@ class ResultsPrinter : public Operator
 
    public:
    /// Constructor
-   ResultsPrinter(Runtime& runtime,Operator* input,const std::vector<Register*>& output,DuplicateHandling duplicateHandling,unsigned limit=~0u,bool silent=false);
+   ResultsPrinter(Runtime& runtime,Operator* input,const CodeGen::Output& output,DuplicateHandling duplicateHandling,unsigned limit=~0u,bool silent=false);
    /// Destructor
    ~ResultsPrinter();
 

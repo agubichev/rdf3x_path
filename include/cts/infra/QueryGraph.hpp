@@ -30,6 +30,9 @@ class QueryGraph
 
       /// Is there an implicit join edge to another node?
       bool canJoin(const Node& other) const;
+
+      /// Does the triple contains a path predicate?
+      bool pathTriple;
    };
    /// The potential join edges
    struct Edge {
@@ -48,9 +51,9 @@ class QueryGraph
       /// Possible types
       enum Type {
          Or, And, Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual, Plus, Minus, Mul, Div,
-         Not, UnaryPlus, UnaryMinus, Literal, Variable, IRI, Null, Function, ArgumentList,
+         Not, UnaryPlus, UnaryMinus, Literal, Variable, PathVariable, IRI, Null, Function, ArgumentList,
          Builtin_str, Builtin_lang, Builtin_langmatches, Builtin_datatype, Builtin_bound, Builtin_sameterm,
-         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex, Builtin_in
+         Builtin_isiri, Builtin_isblank, Builtin_isliteral, Builtin_regex, Builtin_in, Builtin_length, Builtin_containsany, Builtin_containsonly
       };
 
       /// The type
@@ -99,6 +102,8 @@ class QueryGraph
       std::vector<Edge> edges;
       /// The filter conditions
       std::vector<Filter> filters;
+      /// The path filter conditions
+      std::vector<Filter> pathfilter;
       /// Optional subqueries
       std::vector<SubQuery> optional;
       /// Union subqueries

@@ -473,7 +473,7 @@ template <class T> void BTree<T>::Updater::storePage(unsigned char* data,const t
 
           unsigned left_count = maxInnerCount/ 2;
           unsigned right_count = maxInnerCount - left_count;
-          unsigned page_count = getInnerCount(pageData);
+
 
           typename T::InnerKey right_max, right_min, left_max;
 

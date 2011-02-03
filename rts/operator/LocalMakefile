@@ -18,4 +18,5 @@ src_rts_operator:=					\
 	rts/operator/SingletonScan.cpp			\
 	rts/operator/Sort.cpp				\
 	rts/operator/TableFunction.cpp			\
-	rts/operator/Union.cpp
+	rts/operator/Union.cpp				\
+	rts/operator/DijkstraScan.cpp

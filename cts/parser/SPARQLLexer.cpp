@@ -1,4 +1,6 @@
 #include "cts/parser/SPARQLLexer.hpp"
+#include <iostream>
+using namespace std;
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -182,7 +184,14 @@ SPARQLLexer::Token SPARQLLexer::getNext()
             return String;
          // Variables
          case '?': case '$':
+            bool isPath;
+            isPath = false;
+            if (*pos == '?'){
+            	++pos;
+            	isPath = true;
+            }
             tokenStart=pos;
+
             while (pos!=input.end()) {
                char c=*pos;
                if (((c>='0')&&(c<='9'))||((c>='A')&&(c<='Z'))||((c>='a')&&(c<='z'))) {
@@ -190,6 +199,9 @@ SPARQLLexer::Token SPARQLLexer::getNext()
                } else break;
             }
             tokenEnd=pos; hasTokenEnd=true;
+            if (isPath){
+            	return PathVariable;
+            }
             return Variable;
          // Number
          case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
