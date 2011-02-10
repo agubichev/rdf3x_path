@@ -24,6 +24,8 @@ include tools/transactiontests/LocalMakefile
 include tools/translatesparql/LocalMakefile
 include tools/updatetest/LocalMakefile
 include tools/checkupdates/LocalMakefile
+include tools/neighbors/LocalMakefile
+include tools/id2name/LocalMakefile
 
 src_tools:=				\
 	$(src_tools_buildmonetdb)	\
@@ -46,5 +48,6 @@ src_tools:=				\
 	$(src_tools_resolvestrings)	\
 	$(src_tools_translatesparql)	\
 	$(src_tools_updatetest)     \
-	§(src_tools_checkupdates)
+	$(src_tools_neighbors)	\
+	$(src_tools_id2name)
 

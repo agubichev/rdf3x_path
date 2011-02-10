@@ -19,4 +19,6 @@ src_rts_operator:=					\
 	rts/operator/Sort.cpp				\
 	rts/operator/TableFunction.cpp			\
 	rts/operator/Union.cpp				\
-	rts/operator/DijkstraScan.cpp
+	rts/operator/DijkstraScan.cpp		\
+	rts/operator/FastDijkstraScan.cpp
+	

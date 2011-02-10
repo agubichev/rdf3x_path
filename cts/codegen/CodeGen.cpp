@@ -7,7 +7,7 @@
 #include "rts/operator/FullyAggregatedIndexScan.hpp"
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
-#include "rts/operator/DijkstraScan.hpp"
+#include "rts/operator/FastDijkstraScan.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
 #include "rts/operator/MergeUnion.hpp"
@@ -109,7 +109,7 @@ static Operator* translateDijkstraScan(Runtime& runtime,const map<unsigned,Regis
 	resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
 
 	//  return the operator
-	return DijkstraScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
+	return FastDijkstraScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
 	                         subject,constSubject,
 	                         pathpredicate,constPredicate,
 	                         object,constObject,
