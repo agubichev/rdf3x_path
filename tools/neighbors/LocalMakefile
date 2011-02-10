@@ -1,0 +1,6 @@
+src_tools_neighbors:=			\
+	tools/neighbors/neighbors.cpp
+
+$(PREFIX)neighbors$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_neighbors:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+
