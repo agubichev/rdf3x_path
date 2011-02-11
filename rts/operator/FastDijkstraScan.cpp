@@ -9,7 +9,7 @@
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
 #include "rts/operator/PlanPrinter.hpp"
-
+#include "infra/osdep/Timestamp.hpp"
 #include <map>
 #include <set>
 #include <algorithm>
@@ -202,7 +202,7 @@ unsigned ConstantOperator::next(){
 //---------------------------------------------------------------------------
 void FastDijkstraScan::DijkstraPrefix::getNeighbors(){
 	Register reg;
-//	cerr<<"Getting new neighbors!"<<endl;
+	cerr<<"Getting new neighbors!"<<endl;
 //	cerr<<"nodes size: "<<curNodes.size()<<endl;
 //	cerr<<"nodes: ";
 //	for (set<unsigned>::iterator it=curNodes.begin(); it!=curNodes.end(); it++)
@@ -218,9 +218,9 @@ void FastDijkstraScan::DijkstraPrefix::getNeighbors(){
 	MergeJoin join(scan2,&reg,rt,scan1,&ls,lt,0);
 	n.connections.clear();
 	n.connections.resize(curNodes.size());
-	if (curNodes.find(2930060)!=curNodes.end()){
-		cerr<<"finding neighbors for set "<<curNodes.size()<<endl;
-	}
+//	if (curNodes.find(2938353)!=curNodes.end()){
+//		cerr<<"finding neighbors for set "<<curNodes.size()<<endl;
+//	}
 	unsigned old=ls.value;
 	unsigned i=0;
 	bool firstiter=true;
@@ -228,28 +228,34 @@ void FastDijkstraScan::DijkstraPrefix::getNeighbors(){
 	for (set<unsigned>::iterator it = curNodes.begin(); it != curNodes.end(); it++)
 		n.ids.push_back(*it);
 	if (join.first()) do {
-		if (ls.value==2930060)
-			cerr<<"found neighbor: "<<lo.value<<endl;
+//		if (ls.value==2938353)
+//			cerr<<"found neighbor: "<<lo.value<<endl;
 		if (old==ls.value||firstiter){
 		   old=ls.value;
+		   while (n.ids[i]!=ls.value) i++;
+
 		   n.connections[i].push_back(pair<unsigned,unsigned>(lp.value,lo.value));
 		   firstiter=false;
 		}
 		else {
 		   old=ls.value;
 		   i++;
+		   while (n.ids[i]!=ls.value) i++;
 		   n.connections[i].push_back(pair<unsigned,unsigned>(lp.value,lo.value));
 		}
     } while (join.next());
 
-	if (curNodes.find(2930060)!=curNodes.end()){
-	for (unsigned j=0; j<n.connections.size(); j++){
-		cerr<<"node "<<n.ids[j]<<" "<<lookupLiteral(db,n.ids[j])<<" has "<<n.connections[j].size()<<" neighbors"<<endl;
-//		cerr<<"its neighbors: ";
-//		for (unsigned k=0; k<n.connections[j].size(); k++)
-//			cerr<<"    "<<lookupLiteral(db,(n.connections[j])[k].second)<<endl;
-	}
-	}
+//	if (curNodes.find(2938353)!=curNodes.end()){
+//	for (unsigned j=0; j<n.connections.size(); j++){
+////		cerr<<"node "<<n.ids[j]<<" "<<lookupLiteral(db,n.ids[j])<<" has "<<n.connections[j].size()<<" neighbors"<<endl;
+////		cerr<<"its neighbors: ";
+////		for (unsigned k=0; k<n.connections[j].size(); k++)
+////			cerr<<"    "<<lookupLiteral(db,(n.connections[j])[k].second)<<endl;
+//		if (n.ids[j]==2938353)
+//			cerr<<"activity index: "<<j<<endl;
+//
+//	}
+//	}
 }
 //---------------------------------------------------------------------------
 void FastDijkstraScan::DijkstraPrefix::init() {
@@ -283,6 +289,7 @@ void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
 {
 	findNeighbors(node);
 	for (vector<pair<unsigned,unsigned> >::iterator iter=neighbors.begin(),limit=neighbors.end(); iter!=limit; iter++){
+
 		if (isHandled(iter->second))
 			continue;
 		unsigned shortDist=getShortestDist(node)+1;
@@ -301,6 +308,8 @@ void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
 			p.onprefix=predicates[node].onprefix;
 			if (pathfilter)
 				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
+//			if (prevnode.node==2930060)
+//				cerr<<"setting previous for hus"<<endl;
 			predicates[iter->second]=p;
 			predecessors[iter->second]=prevnode;
 		}
@@ -309,14 +318,10 @@ void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
 //---------------------------------------------------------------------------
 void FastDijkstraScan::DijkstraPrefix::updateN(unsigned node,unsigned nodeindex){
 	vector<pair<unsigned,unsigned> >& succ=n.connections[nodeindex];
-//	cerr<<"CUR NODE: "<<node<<" "<<lookupLiteral(db,node)<<endl;
-	if (node==2930060) {
-		cerr<<"OUTPUT neighbors"<<endl;
-//		for (vector<pair<unsigned,unsigned> >::iterator iter=succ.begin();iter!=succ.end();iter++)
-//			cerr<<lookupLiteral(db,iter->second)<<endl;
-	}
+//	if (node==2938353)
+//		cerr<<"updating neighbors for activity "<<nodeindex<<", "<<n.ids[nodeindex]<<" "<<succ.size()<<endl;
+////2938353
 	for (vector<pair<unsigned,unsigned> >::iterator iter=succ.begin(),limit=succ.end(); iter!=limit; iter++){
-//		cerr<<"neighbors: "<<lookupLiteral(db,iter->first)<<" "<<lookupLiteral(db,iter->second)<<endl;
 		if (isHandled(iter->second))
 			continue;
 		unsigned shortDist=getShortestDist(node)+1;
@@ -335,12 +340,12 @@ void FastDijkstraScan::DijkstraPrefix::updateN(unsigned node,unsigned nodeindex)
 //				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
 //			predicates[iter->second]=p;
 			predecessors[iter->second]=prevnode;
-			if (iter->second == 3118414){
-				cerr<<"WE REACHED IT"<<endl;
-				cerr<<"prev node: "<<lookupLiteral(db,prevnode.node)<<endl;
-				cerr<<"prev prev node: "<<lookupLiteral(db,predecessors[prevnode.node].node)<<endl;
-				cerr<<"prev prev prev node: "<<lookupLiteral(db,predecessors[predecessors[prevnode.node].node].node)<<endl;
-			}
+//			if (iter->second == 3118414){
+//				cerr<<"WE REACHED IT"<<endl;
+//				cerr<<"prev node: "<<lookupLiteral(db,prevnode.node)<<endl;
+//				cerr<<"prev prev node: "<<lookupLiteral(db,predecessors[prevnode.node].node)<<endl;
+//				cerr<<"prev prev prev node: "<<lookupLiteral(db,predecessors[predecessors[prevnode.node].node].node)<<endl;
+//			}
 		}
 	}
 }
@@ -364,7 +369,7 @@ bool FastDijkstraScan::DijkstraPrefix::evaledge(const QueryGraph::Filter& filter
 				// this edge already exists in prefix - no need to check anything
 				return true;
 			if (node.edge==filterid || curNode==filterid){
-				//current edge is the one we look for, update the prefix
+				// current edge is the one we look for, update the prefix
 				p.onprefix[filterid]=true;
 				return true;
 			}
@@ -391,55 +396,17 @@ bool FastDijkstraScan::DijkstraPrefix::evaledge(const QueryGraph::Filter& filter
 unsigned FastDijkstraScan::DijkstraPrefix::next()
 	// Return next tuple
 {
-//	unsigned curNode;
-//	while (!workingSet.empty()){
-//		// prepare the path
-//		value2->value.clear();
-//		curNode=(workingSet.begin())->second;
-//		workingSet.erase(workingSet.begin());
-//		settledNodes.insert(curNode);
-//		// next step in breadth: neighbors
-//		updateNeighbors(curNode);
-//
-//		// this is not point-to-point search
-//		if (!bound3)
-//			value3->value=curNode;
-//
-//		unsigned prev=0;
-//		bool output=false;
-//		if (!pathfilter)
-//			// no pathfilter specified, output every reachable node
-//			output=true;
-//		else if (predicates[value3->value].onnode)
-//			// there is a pathfilter and current node satisfies it
-//			output=true;
-//
-//		if (bound3&&(curNode!=value3->value)){
-//			// this is a point-to-point search and current value does not pass
-//			output=false;
-//		}
-//
-//		if (output){
-//			// output it!
-//			observedOutputCardinality++;
-//			// form the path from the end to the beginning
-//			while (predecessors.find(curNode)!=predecessors.end()){
-//				PreviousNode node=predecessors[curNode];
-//				prev=node.node;
-//				value2->value.push_front(node.edge);
-//				if (prev!=value1->value)
-//					value2->value.push_front(prev);
-//				curNode=prev;
-//			}
-//			return 1;
-//		}
-//	}
 	if (curnodes_iter==curNodes.begin()){
 //		cerr<<"begin"<<endl;
+		Timestamp a;
 		getNeighbors();
+		Timestamp b;
+//		cerr<<"getting neighbors: "<<b-a<<" ms"<<endl;
 	}
 
 	if (curnodes_iter==curNodes.end() && !workingSet.empty()){
+		Timestamp a;
+//		cerr<<"curNodes before: "<<curNodes.size();
 		curNodes.clear();
 		for (unsigned i=0; i<n.connections.size(); i++){
 			for (unsigned j=0; j<n.connections[i].size(); j++){
@@ -452,8 +419,10 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 		curIndex=0;
 		getNeighbors();
 		curnodes_iter=curNodes.begin();
+//		cerr<<", after: "<<curNodes.size()<<endl;
 //		cerr<<"updating the curNodes: "<<curNodes.size()<<endl;
-
+		Timestamp c;
+//		cerr<<"getting neighbors: "<<c-a<<" ms"<<endl;
 	}
 
 	while (curnodes_iter!=curNodes.end()){
@@ -462,11 +431,15 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 
 		workingSet.erase(pair<unsigned,unsigned>(curDist,curNode));
 		curnodes_iter++;
-		if (isHandled(curNode))
-			continue;
 
+		if (isHandled(curNode)){
+			curIndex++;
+			continue;
+		}
 
 		updateN(curNode,curIndex);
+//		cerr<<"curIndex, curNode, id: "<<curIndex<<" "<<curNode<<" "<<n.ids[curIndex]<<endl;
+
 		curIndex++;
 
 		settledNodes.insert(curNode);
@@ -489,6 +462,7 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 		}
 		return 1;
 	}
+
     return 0;
 }
 //---------------------------------------------------------------------------
