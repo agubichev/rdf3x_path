@@ -172,6 +172,8 @@ class ExplainPrinter : public PlanPrinter
    void addEqualPredicateAnnotation(const Register* reg1,const Register* reg2);
    /// Add a materialization annotation
    void addMaterializationAnnotation(const std::vector<Register*>& regs);
+   /// Add a path materialization annotation
+   void addPathMaterializationAnnotation(const std::vector<VectorRegister*>& regs);
    /// Add a generic annotation
    void addGenericAnnotation(const std::string& text);
    /// Close the current operator
@@ -179,6 +181,8 @@ class ExplainPrinter : public PlanPrinter
 
    /// Format a register (for generic annotations)
    std::string formatRegister(const Register* reg);
+   /// Format a path register (for generic annotations)
+   std::string formatPathRegister(const VectorRegister* reg);
    /// Format a constant value (for generic annotations)
    std::string formatValue(unsigned value);
 };
@@ -264,6 +268,11 @@ void ExplainPrinter::addMaterializationAnnotation(const std::vector<Register*>& 
 {
 }
 //---------------------------------------------------------------------------
+void ExplainPrinter::addPathMaterializationAnnotation(const std::vector<VectorRegister*>& /*pathregs*/)
+   // Add a path materialization annotation
+{
+}
+//---------------------------------------------------------------------------
 void ExplainPrinter::addGenericAnnotation(const std::string& /*text*/)
    // Add a generic annotation
 {
@@ -287,6 +296,20 @@ string ExplainPrinter::formatRegister(const Register* reg)
       // Arbitrary register outside the runtime system. Should not occur except for debugging!
       result << "@0x" << hex << reinterpret_cast<uintptr_t>(reg);
    }
+   return result.str();
+}
+//---------------------------------------------------------------------------
+string ExplainPrinter::formatPathRegister(const VectorRegister* reg)
+   // Format a register (for generic annotations)
+{
+   stringstream result;
+//   // Regular register?
+//   if (runtime.getRegisterCount()&&(reg>=runtime.getRegister(0))&&(reg<=runtime.getRegister(runtime.getRegisterCount()-1))) {
+//      result << "?" << (reg-runtime.getRegister(0));
+//   } else {
+//      // Arbitrary register outside the runtime system. Should not occur except for debugging!
+//      result << "@0x" << hex << reinterpret_cast<uintptr_t>(reg);
+//   }
    return result.str();
 }
 //---------------------------------------------------------------------------

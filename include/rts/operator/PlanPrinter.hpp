@@ -15,6 +15,7 @@
 //---------------------------------------------------------------------------
 class Runtime;
 class Register;
+class VectorRegister;
 //---------------------------------------------------------------------------
 /// Generic plan printing mechanism. Mainly used for debugging.
 class PlanPrinter
@@ -33,6 +34,8 @@ class PlanPrinter
    virtual void addEqualPredicateAnnotation(const Register* reg1,const Register* reg2) = 0;
    /// Add a materialization annotation
    virtual void addMaterializationAnnotation(const std::vector<Register*>& regs) = 0;
+   /// Add a path materialization annotation
+   virtual void addPathMaterializationAnnotation(const std::vector<VectorRegister*>& pathregs) = 0;
    /// Add a generic annotation
    virtual void addGenericAnnotation(const std::string& text) = 0;
    /// Close the current operator
@@ -40,6 +43,8 @@ class PlanPrinter
 
    /// Format a register (for generic annotations)
    virtual std::string formatRegister(const Register* reg) = 0;
+   /// Format a path register (for generic annotations)
+   virtual std::string formatPathRegister(const VectorRegister* reg) = 0;
    /// Format a constant value (for generic annotations)
    virtual std::string formatValue(unsigned value) = 0;
 };
@@ -76,6 +81,8 @@ class DebugPlanPrinter : public PlanPrinter
    void addEqualPredicateAnnotation(const Register* reg1,const Register* reg2);
    /// Add a materialization annotation
    void addMaterializationAnnotation(const std::vector<Register*>& regs);
+   /// Add a path materialization annotation
+   void addPathMaterializationAnnotation(const std::vector<VectorRegister*>& pathregs);
    /// Add a generic annotation
    void addGenericAnnotation(const std::string& text);
    /// Close the current operator
@@ -83,6 +90,8 @@ class DebugPlanPrinter : public PlanPrinter
 
    /// Format a register (for generic annotations)
    std::string formatRegister(const Register* reg);
+   /// Format a path register (for generic annotations)
+   std::string formatPathRegister(const VectorRegister* reg);
    /// Format a constant value (for generic annotations)
    std::string formatValue(unsigned value);
 };

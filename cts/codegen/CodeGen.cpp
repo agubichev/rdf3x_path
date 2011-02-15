@@ -8,6 +8,7 @@
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
 #include "rts/operator/FastDijkstraScan.hpp"
+#include "rts/operator/DijkstraScan.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
 #include "rts/operator/MergeUnion.hpp"
@@ -249,12 +250,23 @@ static void getJoinVariables(const map<unsigned,Register*>& context,set<unsigned
 static void mergeBindings(const set<unsigned>& projection,Binding& bindings,const Binding& leftBindings,const Binding& rightBindings)
    // Merge bindings after a join
 {
-   for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter){
       if (projection.count((*iter).first))
          bindings.valuebinding[(*iter).first]=(*iter).second;
-   for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
+   }
+   for (map<unsigned,VectorRegister*>::const_iterator iter=leftBindings.pathbinding.begin(),limit=leftBindings.pathbinding.end();iter!=limit;++iter){
+      if (projection.count((*iter).first))
+    	  bindings.pathbinding[(*iter).first]=(*iter).second;
+   }
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter){
       if (projection.count((*iter).first)&&(!bindings.valuebinding.count((*iter).first)))
          bindings.valuebinding[(*iter).first]=(*iter).second;
+   }
+   for (map<unsigned,VectorRegister*>::const_iterator iter=rightBindings.pathbinding.begin(),limit=rightBindings.pathbinding.end();iter!=limit;++iter){
+      if (projection.count((*iter).first))
+    	  bindings.pathbinding[(*iter).first]=(*iter).second;
+   }
+
 }
 //---------------------------------------------------------------------------
 static Operator* addAdditionalSelections(Runtime& runtime,Operator* input,const set<unsigned>& joinVariables,Binding& leftBindings,Binding& rightBindings,unsigned joinedOn)

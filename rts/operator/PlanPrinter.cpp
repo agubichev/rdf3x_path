@@ -89,6 +89,21 @@ void DebugPlanPrinter::addMaterializationAnnotation(const vector<Register*>& reg
    out << "]" << endl;
 }
 //---------------------------------------------------------------------------
+void DebugPlanPrinter::addPathMaterializationAnnotation(const std::vector<VectorRegister*>& regs)
+   // Add a path materialization annotation
+{
+   if (regs.size()==0)
+      return;
+   indent();
+   out << "[[";
+   bool first=true;
+   for (vector<VectorRegister*>::const_iterator iter=regs.begin(),limit=regs.end();iter!=limit;++iter) {
+      if (first) first=false; else out << " ";
+      out << formatPathRegister(*iter);
+   }
+   out << "]]" << endl;
+}
+//---------------------------------------------------------------------------
 void DebugPlanPrinter::addGenericAnnotation(const string& text)
    // Add a generic annotation
 {
@@ -115,6 +130,27 @@ string DebugPlanPrinter::formatRegister(const Register* reg)
       // Arbitrary register outside the runtime system. Should not occur except for debugging!
       result << "@0x" << hex << reinterpret_cast<uintptr_t>(reg);
    }
+   return result.str();
+}
+//---------------------------------------------------------------------------
+string DebugPlanPrinter::formatPathRegister(const VectorRegister* reg)
+   // Format a register (for generic annotations)
+{
+   stringstream result;
+   // Regular register?
+   if (runtime.getVectorRegisterCount()&&(reg>=runtime.getVectorRegister(0))&&(reg<=runtime.getVectorRegister(runtime.getVectorRegisterCount()-1))) {
+	  // make it consistent with single-value numeration
+	  result<<"??"<<3*(reg-runtime.getVectorRegister(0))+1;
+   }
+   else {
+      result << "should not happen";
+   }
+//   if (runtime.getRegisterCount()&&(reg>=runtime.getRegister(0))&&(reg<=runtime.getRegister(runtime.getRegisterCount()-1))) {
+//      result << "?" << (reg-runtime.getRegister(0));
+//   } else {
+//      // Arbitrary register outside the runtime system. Should not occur except for debugging!
+//      result << "@0x" << hex << reinterpret_cast<uintptr_t>(reg);
+//   }
    return result.str();
 }
 //---------------------------------------------------------------------------
