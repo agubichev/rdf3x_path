@@ -92,6 +92,17 @@ private:
 		// length of the prefix - for length constrains
 		unsigned prefixlength;
 	};
+	/// struct to keep constraints that helps to cut off the search space
+	struct Constraints{
+		// length bound
+		unsigned maxlen;
+		// containsOnly constraint  - one set for each path variable
+		map<unsigned,set<unsigned> > containsonly;
+		// any constraint violated?
+		bool violated;
+		// should we cut off the branch starting with this node?
+		set<unsigned> cutOff;
+	};
 	/// Precomputed predicated on prefixes
 	map<unsigned,PredicateOnNode> predicates;
 	/// cutoff for length, if specified
@@ -121,6 +132,7 @@ private:
 
 	void getNeighbors();
 	void updateN(unsigned node,unsigned nodeIndex);
+	void findConstraints(const QueryGraph::Filter& filter, Constraints& constr);
 	struct Neighbors{
 		vector<vector<pair<unsigned,unsigned> > > connections;
 		vector<unsigned> ids;
@@ -131,6 +143,8 @@ private:
 	unsigned curIndex;
 	Database& db;
 	unsigned workingsetmax;
+	bool output;
+	Constraints constr;
 public:
 	/// Constructor
 	DijkstraPrefix(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,QueryGraph::Filter* pathfilter): FastDijkstraScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathfilter), db(db) {
@@ -176,9 +190,9 @@ class ConstantOperator: public Operator{
 	/// Print the operator
 	void print(PlanPrinter& out);
 	/// Handle a merge hint
-	void addMergeHint(Register* l,Register* r) {};
+	void addMergeHint(Register* /*l*/,Register* /*r*/) {};
 	/// Register parts of the tree that can be executed asynchronous
-	void getAsyncInputCandidates(Scheduler& scheduler) {};
+	void getAsyncInputCandidates(Scheduler& /*scheduler*/) {};
 };
 //---------------------------------------------------------------------------
 void ConstantOperator::print(PlanPrinter& out){
@@ -206,7 +220,6 @@ void FastDijkstraScan::DijkstraPrefix::getNeighbors(){
 	Register *s=0, *o=0;
 	rs.reset(); rp.reset(); ro.reset();
 	IndexScan* scan1=IndexScan::create(db,order,&rs,false,&rp,false,&ro,false,0);
-
 
 	ConstantOperator* scan2=new ConstantOperator(&reg,curNodes);
 	vector<Register*> lt,rt;
@@ -250,6 +263,20 @@ void FastDijkstraScan::DijkstraPrefix::getNeighbors(){
 
 }
 //---------------------------------------------------------------------------
+void FastDijkstraScan::DijkstraPrefix::findConstraints(const QueryGraph::Filter& filter, FastDijkstraScan::DijkstraPrefix::Constraints& constr){
+	if (filter.type==QueryGraph::Filter::And){
+		findConstraints(*filter.arg1,constr);
+		findConstraints(*filter.arg2,constr);
+	}
+	else if (filter.type==QueryGraph::Filter::Builtin_length){
+		constr.maxlen=std::max(constr.maxlen,filter.arg2->id);
+	}
+	else if (filter.type==QueryGraph::Filter::Builtin_containsonly){
+		constr.containsonly[filter.arg1->id].insert(filter.arg2->id);
+	}
+	return;
+}
+//---------------------------------------------------------------------------
 void FastDijkstraScan::DijkstraPrefix::init() {
 	// init the computation. Original value of the pathfilter set to false
 	predecessors.clear();
@@ -258,12 +285,17 @@ void FastDijkstraScan::DijkstraPrefix::init() {
 	shortestDistances.clear();
 	curNodes.clear();
 	workingSet.insert(pair<unsigned, unsigned>(0,value1->value));
+	shortestDistances[value1->value]=0;
 	PredicateOnNode p; p.onnode=false; p.prefixlength=0;
 	predicates[value1->value]=p;
 	curNodes.insert(value1->value);
 	curnodes_iter=curNodes.begin();
 	curIndex=0;
 	workingsetmax=0;
+	constr.maxlen=0;
+	constr.violated=false;
+	findConstraints(*pathfilter, constr);
+	output=false;
 }
 //---------------------------------------------------------------------------
 unsigned FastDijkstraScan::DijkstraPrefix::getShortestDist(unsigned node){
@@ -301,6 +333,7 @@ void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
 			p.onprefix=predicates[node].onprefix;
 			if (pathfilter)
 				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
+
 			predicates[iter->second]=p;
 			predecessors[iter->second]=prevnode;
 		}
@@ -317,16 +350,20 @@ void FastDijkstraScan::DijkstraPrefix::updateN(unsigned node,unsigned nodeindex)
 		if (shortDist<oldShortDist) {
 			workingSet.erase(pair<unsigned,unsigned>(oldShortDist,iter->second));
 			shortestDistances[iter->second]=shortDist;
-			workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
+
 			PreviousNode prevnode;
 			prevnode.edge=iter->first;
 			prevnode.node=node;
-//			PredicateOnNode p;
-//			p.prefixlength=predicates[curNodes[nodeindex]].prefixlength+1;
-//			p.onprefix=predicates[curNodes[nodeindex]].onprefix;
-//			if (pathfilter)
-//				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
-//			predicates[iter->second]=p;
+			PredicateOnNode p;
+			p.prefixlength=predicates[node].prefixlength+1;
+			p.onprefix=predicates[node].onprefix;
+			if (pathfilter)
+				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
+
+			// don't add to the working set nodes that lead to cut-off branches
+			if (pathfilter && !constr.cutOff.count(iter->second))
+				workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
+			predicates[iter->second]=p;
 			predecessors[iter->second]=prevnode;
 		}
 	}
@@ -337,8 +374,6 @@ unsigned FastDijkstraScan::DijkstraPrefix::first(){
 	observedOutputCardinality=0;
 	cerr<<"FIRST"<<endl;
 	init();
-	// skip the 0 length path
-	next();
 	return next();
 }
 //---------------------------------------------------------------------------
@@ -365,14 +400,23 @@ bool FastDijkstraScan::DijkstraPrefix::evaledge(const QueryGraph::Filter& filter
 				// the prefix already does not contain the edge, no need to check further
 				return false;
 			}
-			if (node.edge==filterid)
+			if (node.edge==filterid){
 				p.onprefix[filterid]=true;
-			else
+			}
+			else {
 				p.onprefix[filterid]=false;
+				constr.cutOff.insert(curNode);
+			}
 			return p.onprefix[filterid];
 		case QueryGraph::Filter::Builtin_length:
-			//compare the current prefix length with the constrain from the filter
-			return (p.prefixlength<=filter.arg2->id);
+			//compare the current prefix length with the constraint from the filter
+			if (p.prefixlength>filter.arg2->id){
+				//do we also violate the global maxlen constraint?
+				if (p.prefixlength>constr.maxlen && constr.maxlen>0)
+					constr.violated=true;
+				return false;
+			}
+			return true;
 		default:
 			return false;
 	}
@@ -385,59 +429,95 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 		getNeighbors();
 	}
 
-	if (curnodes_iter==curNodes.end() && !workingSet.empty()){
-		curNodes.clear();
-		for (unsigned i=0; i<n.connections.size(); i++){
-			for (unsigned j=0; j<n.connections[i].size(); j++){
-				if (!isHandled((n.connections[i])[j].second))
-					curNodes.insert((n.connections[i])[j].second);
+	// if it's a point-to-point search and we've already found the result
+	if (output && bound3)
+		return 0;
+	else
+		output=false;
+
+	while (!workingSet.empty()) {
+		if (curnodes_iter==curNodes.end() && !workingSet.empty()){
+			if (constr.violated)
+				return 0;
+			curNodes.clear();
+			// copying the neighbors.
+			// can we just use workingSet???
+			for (unsigned i=0; i<n.connections.size(); i++){
+				for (unsigned j=0; j<n.connections[i].size(); j++){
+					if (!isHandled((n.connections[i])[j].second) && !constr.cutOff.count((n.connections[i])[j].second))
+						curNodes.insert((n.connections[i])[j].second);
+				}
+			}
+			n.connections.clear();
+			n.ids.clear();
+			curIndex=0;
+
+			Timestamp t1;
+			getNeighbors();
+			Timestamp t2;
+			cerr<<"getting neighbors: "<<t2-t1<<" ms"<<endl;
+			cerr<<"curNodes: "<<curNodes.size()<<endl;
+			curnodes_iter=curNodes.begin();
+		}
+
+//	for (set<pair<unsigned, unsigned>,CompareByDistance >::iterator itw=workingSet.begin(); itw!=workingSet.end(); itw++)
+//		cerr<<"("<<(*itw).first<<", "<<(*itw).second<<") ";
+//	cerr<<endl;
+
+		while (curnodes_iter!=curNodes.end()){
+			unsigned curNode=*curnodes_iter;
+			unsigned curDist=getShortestDist(curNode); // we need to store it in curNodes!!!
+
+			workingSet.erase(pair<unsigned,unsigned>(curDist,curNode));
+			curnodes_iter++;
+
+			if (isHandled(curNode)){
+				curIndex++;
+				continue;
+			}
+
+			updateN(curNode,curIndex);
+
+			if (workingSet.size()>workingsetmax)
+				workingsetmax=workingSet.size();
+			curIndex++;
+
+			settledNodes.insert(curNode);
+
+			// this is not point-to-point search
+			if (!bound3)
+				value3->value=curNode;
+
+			if (!pathfilter)
+				// no pathfilter specified, output every reachable node
+				output=true;
+			else if (predicates[value3->value].onnode)
+				// there is a pathfilter and current node satisfies it
+				output=true;
+
+			if (bound3&&(curNode!=value3->value)){
+				// this is a point-to-point search and current value does not pass
+				output=false;
+			}
+			unsigned prev=0;
+			if (output) {
+				observedOutputCardinality++;
+				// form the path from the end to the beginning
+				value2->value.clear();
+
+				while (predecessors.find(curNode)!=predecessors.end()){
+					PreviousNode node=predecessors[curNode];
+					prev=node.node;
+					value2->value.push_front(node.edge);
+					if (prev!=value1->value)
+						value2->value.push_front(prev);
+					curNode=prev;
+				}
+				return 1;
 			}
 		}
-		n.connections.clear();
-		n.ids.clear();
-		curIndex=0;
-
-		getNeighbors();
-		curnodes_iter=curNodes.begin();
 	}
 
-	while (curnodes_iter!=curNodes.end()){
-		unsigned curNode=*curnodes_iter;
-		unsigned curDist=getShortestDist(curNode); // we need to store it in curNodes!!!
-
-		workingSet.erase(pair<unsigned,unsigned>(curDist,curNode));
-		curnodes_iter++;
-
-		if (isHandled(curNode)){
-			curIndex++;
-			continue;
-		}
-
-		updateN(curNode,curIndex);
-
-		if (workingSet.size()>workingsetmax)
-			workingsetmax=workingSet.size();
-		curIndex++;
-
-		settledNodes.insert(curNode);
-
-		// this is not point-to-point search
-		value3->value=curNode;
-		unsigned prev=0;
-		observedOutputCardinality++;
-		// form the path from the end to the beginning
-		value2->value.clear();
-
-		while (predecessors.find(curNode)!=predecessors.end()){
-			PreviousNode node=predecessors[curNode];
-			prev=node.node;
-			value2->value.push_front(node.edge);
-			if (prev!=value1->value)
-				value2->value.push_front(prev);
-		   		curNode=prev;
-		}
-		return 1;
-	}
 //	cerr<<"settled nodes: "<<settledNodes.size()<<endl;
 //	cerr<<"max working set size: "<<workingsetmax<<endl;
 //	for (unsigned j=0; j<n.connections.size(); j++){
