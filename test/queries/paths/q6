@@ -1,0 +1,1 @@
+select ?person where {?place ??c  <http://www.mpii.de/yago/resource/Germany> . ?person <http://www.mpii.de/yago/resource/wasBornIn> ?place.  ?person <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.mpii.de/yago/resource/wikicategory%5FAmerican%5Fphilosophers> .pathfilter(containsOnly(??c,<http://www.mpii.de/yago/resource/isLocatedIn>))}

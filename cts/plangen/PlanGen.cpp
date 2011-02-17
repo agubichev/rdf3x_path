@@ -190,8 +190,8 @@ void PlanGen::buildDijkstraScan(const QueryGraph::SubQuery& query,Database::Data
 	plan->right=0;
 	plan->next=0;
 	plan->opArg=order;
-	plan->cardinality = 100; ///random
-	plan->costs = 1000; ///random
+	plan->cardinality = ~0u; ///random
+	plan->costs = ~0u; ///random
 
 	plan=buildPathFilters(plans,query,plan,predicate);
 
@@ -840,7 +840,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                for (Plan* leftPlan=iter->plans;leftPlan;leftPlan=leftPlan->next) {
                   for (Plan* rightPlan=iter2->plans;rightPlan;rightPlan=rightPlan->next) {
                      // Try a merge joins
-                     if (leftPlan->ordering==rightPlan->ordering) {
+                     if (leftPlan->ordering==rightPlan->ordering && leftPlan->op != Plan::DijkstraScan && rightPlan->op != Plan::DijkstraScan && leftPlan->op != Plan::PathFilter && rightPlan->op != Plan::PathFilter) {
                         for (vector<unsigned>::const_iterator iter=joinOrderings.begin(),limit=joinOrderings.end();iter!=limit;++iter) {
                            if (leftPlan->ordering==(*iter)) {
                               Plan* p=plans.alloc();

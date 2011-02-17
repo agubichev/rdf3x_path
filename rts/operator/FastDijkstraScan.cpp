@@ -123,15 +123,13 @@ private:
 	void findNeighbors(unsigned node);
 	/// Dijkstra's init
 	void init();
-	/// updating neighbors in Dijkstra's algo
-	void updateNeighbors(unsigned node);
 	/// is the node handled already?
 	bool isHandled(unsigned node);
 	/// get the shortest dist from the start to the node
 	unsigned getShortestDist(unsigned node);
 
 	void getNeighbors();
-	void updateN(unsigned node,unsigned nodeIndex);
+	void updateNeighbors(unsigned node,unsigned nodeIndex);
 	void findConstraints(const QueryGraph::Filter& filter, Constraints& constr);
 	struct Neighbors{
 		vector<vector<pair<unsigned,unsigned> > > connections;
@@ -309,38 +307,7 @@ bool FastDijkstraScan::DijkstraPrefix::isHandled(unsigned node){
 	return (settledNodes.find(node)!=settledNodes.end());
 }
 //---------------------------------------------------------------------------
-void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
-// update the distance to neighbors
-{
-	findNeighbors(node);
-	for (vector<pair<unsigned,unsigned> >::iterator iter=neighbors.begin(),limit=neighbors.end(); iter!=limit; iter++){
-
-		if (isHandled(iter->second))
-			continue;
-		unsigned shortDist=getShortestDist(node)+1;
-		unsigned oldShortDist=getShortestDist(iter->second);
-
-		if (shortDist<oldShortDist) {
-			workingSet.erase(pair<unsigned,unsigned>(oldShortDist,iter->second));
-			shortestDistances[iter->second]=shortDist;
-			workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
-			// evaluate the predicate on prefix and last edge
-			PreviousNode prevnode;
-			prevnode.edge=iter->first;
-			prevnode.node=node;
-			PredicateOnNode p;
-			p.prefixlength=predicates[node].prefixlength+1;
-			p.onprefix=predicates[node].onprefix;
-			if (pathfilter)
-				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
-
-			predicates[iter->second]=p;
-			predecessors[iter->second]=prevnode;
-		}
-	}
-}
-//---------------------------------------------------------------------------
-void FastDijkstraScan::DijkstraPrefix::updateN(unsigned node,unsigned nodeindex){
+void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node,unsigned nodeindex){
 	vector<pair<unsigned,unsigned> >& succ=n.connections[nodeindex];
 	for (vector<pair<unsigned,unsigned> >::iterator iter=succ.begin(),limit=succ.end(); iter!=limit; iter++){
 		if (isHandled(iter->second))
@@ -372,7 +339,6 @@ void FastDijkstraScan::DijkstraPrefix::updateN(unsigned node,unsigned nodeindex)
 unsigned FastDijkstraScan::DijkstraPrefix::first(){
 	// value1 is always fixed
 	observedOutputCardinality=0;
-	cerr<<"FIRST"<<endl;
 	init();
 	return next();
 }
@@ -455,8 +421,8 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 			Timestamp t1;
 			getNeighbors();
 			Timestamp t2;
-			cerr<<"getting neighbors: "<<t2-t1<<" ms"<<endl;
-			cerr<<"curNodes: "<<curNodes.size()<<endl;
+//			cerr<<"getting neighbors: "<<t2-t1<<" ms"<<endl;
+//			cerr<<"curNodes: "<<curNodes.size()<<endl;
 			curnodes_iter=curNodes.begin();
 		}
 
@@ -476,7 +442,7 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 				continue;
 			}
 
-			updateN(curNode,curIndex);
+			updateNeighbors(curNode,curIndex);
 
 			if (workingSet.size()>workingsetmax)
 				workingsetmax=workingSet.size();

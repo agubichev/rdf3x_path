@@ -1,1 +1,1 @@
-select * where { <http://www.mpii.de/yago/resource/Ulm> ??c ?v. pathfilter(maxlength(??c,4)&&containsOnly(??c,<http://www.mpii.de/yago/resource/isLocatedIn>))}
+select ?v where { ?v ??c <http://www.mpii.de/yago/resource/France> . pathfilter(containsOnly(??c,<http://www.mpii.de/yago/resource/isLocatedIn>))}
