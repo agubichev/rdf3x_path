@@ -292,7 +292,8 @@ void FastDijkstraScan::DijkstraPrefix::init() {
 	workingsetmax=0;
 	constr.maxlen=0;
 	constr.violated=false;
-	findConstraints(*pathfilter, constr);
+	if (pathfilter)
+		findConstraints(*pathfilter, constr);
 	output=false;
 }
 //---------------------------------------------------------------------------
@@ -328,8 +329,9 @@ void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node,unsigned no
 				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
 
 			// don't add to the working set nodes that lead to cut-off branches
-			if (pathfilter && !constr.cutOff.count(iter->second))
+			if (!pathfilter || (pathfilter && !constr.cutOff.count(iter->second)))
 				workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
+
 			predicates[iter->second]=p;
 			predecessors[iter->second]=prevnode;
 		}
@@ -454,9 +456,10 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 			if (!bound3)
 				value3->value=curNode;
 
-			if (!pathfilter)
+			if (!pathfilter){
 				// no pathfilter specified, output every reachable node
 				output=true;
+			}
 			else if (predicates[value3->value].onnode)
 				// there is a pathfilter and current node satisfies it
 				output=true;
