@@ -32,7 +32,7 @@ class DatabasePartition
       Tag_SPO,Tag_Tag_SOP,Tag_OPS,Tag_OSP,Tag_PSO,Tag_POS,
       Tag_SP,Tag_SO,Tag_OP,Tag_OS,Tag_PS,Tag_PO,
       Tag_S,Tag_O,Tag_P,
-      Tag_Dictionary,Tag_ExactStatistics
+      Tag_Dictionary,Tag_ExactStatistics,Tag_PathSelectivity
    };
 
    private:

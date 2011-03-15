@@ -597,9 +597,9 @@ bool FactsSegment::Scan::find(unsigned value1,unsigned value2,unsigned value3)
    const Triple* l=pos,*r=posLimit;
    while (l<r) {
       const Triple* m=l+((r-l)/2);
-      if (greater(m->value1,m->value2,m->value3,value1,value2,value3)) {
+      if (::greater(m->value1,m->value2,m->value3,value1,value2,value3)) {
          r=m;
-      } else if (greater(value1,value2,value3,m->value1,m->value2,m->value3)) {
+      } else if (::greater(value1,value2,value3,m->value1,m->value2,m->value3)) {
          l=m+1;
       } else {
          pos=m;

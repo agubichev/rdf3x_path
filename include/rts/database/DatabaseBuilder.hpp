@@ -13,6 +13,7 @@
 #include "rts/database/Database.hpp"
 #include "rts/buffer/BufferReference.hpp"
 #include "infra/util/Type.hpp"
+#include "rts/segment/PathSelectivitySegment.hpp"
 //---------------------------------------------------------------------------
 class Segment;
 //---------------------------------------------------------------------------
@@ -79,6 +80,17 @@ class DatabaseBuilder
       /// Load a new data item
       virtual bool next(unsigned& v1,unsigned& v2) = 0;
    };
+	/// Selectivity info reader
+	class SelectivityReader
+	{
+	   public:
+	   /// Constructor
+	   SelectivityReader();
+
+	    virtual ~SelectivityReader();
+	    /// Load new selectivity
+       virtual bool next(unsigned& node, PathSelectivitySegment::Direction& dir, unsigned& selectivity)=0;
+	};
    /// A RDF triple
    struct Triple {
       /// The values as IDs
@@ -151,6 +163,8 @@ class DatabaseBuilder
 
    /// Compute the exact statistics (after loading)
    void computeExactStatistics(const char* tempFile);
+   /// Load the path selectivities
+   void loadPathSelectivity(SelectivityReader& reader);
 };
 //---------------------------------------------------------------------------
 #endif

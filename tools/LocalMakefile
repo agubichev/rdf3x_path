@@ -26,6 +26,11 @@ include tools/updatetest/LocalMakefile
 include tools/checkupdates/LocalMakefile
 include tools/neighbors/LocalMakefile
 include tools/id2name/LocalMakefile
+include tools/centrality/LocalMakefile
+include tools/pathselectivity/LocalMakefile
+include tools/testloading/LocalMakefile
+include tools/selectivityerror/LocalMakefile
+include tools/dijkstratest/LocalMakefile
 
 src_tools:=				\
 	$(src_tools_buildmonetdb)	\
@@ -49,5 +54,11 @@ src_tools:=				\
 	$(src_tools_translatesparql)	\
 	$(src_tools_updatetest)     \
 	$(src_tools_neighbors)	\
-	$(src_tools_id2name)
-
+	$(src_tools_id2name)	\
+	$(src_tools_centrality)	\
+	$(src_tools_pathselectivity)	\
+	$(src_tools_testloading)	\
+	$(src_tools_selectivityerror)	\
+	$(src_tools_dijkstratest)	\
+	$(src_tools_dijkstra)	\
+	$(src_tools_timeneighbors)

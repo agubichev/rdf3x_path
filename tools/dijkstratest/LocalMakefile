@@ -1,0 +1,18 @@
+src_tools_dijkstratest:=			\
+	tools/dijkstratest/dijkstratest.cpp
+
+src_tools_dijkstra:=			\
+	tools/dijkstratest/dijkstra.cpp
+
+src_tools_timeneighbors:=			\
+	tools/dijkstratest/timeneighbors.cpp
+
+$(PREFIX)dijkstratest$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_dijkstratest:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+
+$(PREFIX)dijkstra$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_dijkstra:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+
+$(PREFIX)timeneighbors$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_timeneighbors:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+	
