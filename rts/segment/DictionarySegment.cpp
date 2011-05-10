@@ -125,7 +125,7 @@ class DictionarySegment::HashIndexImplementation
 };
 //---------------------------------------------------------------------------
 void DictionarySegment::HashIndexImplementation::setRootPage(unsigned page)
-   // Se the root page
+   // Set the root page
 {
    segment.indexRoot=page;
    segment.setSegmentData(slotIndexRoot,segment.indexRoot);
@@ -371,6 +371,7 @@ bool DictionarySegment::lookupById(unsigned id,const char*& start,const char*& s
    unsigned ofsLen=readUint32(static_cast<const unsigned char*>(ref.getPage())+8+8*dirSlot+4);
    unsigned ofs=ofsLen>>16,len=(ofsLen&0xFFFF);
 
+//   cerr<<"pageno: "<<pageNo<<endl;
    // Now search the entry on the page itself
    ref=readShared(pageNo);
    const char* page=static_cast<const char*>(ref.getPage());

@@ -9,6 +9,8 @@
 #include <utility>
 #include <cassert>
 #include <cstring>
+#include <iostream>
+using namespace std;
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -244,7 +246,6 @@ template <class T> template <class S> void BTree<T>::performBulkload(S& source)
    // Write the leaf pages
    std::vector<std::pair<typename T::InnerKey,unsigned> > boundaries;
    packLeaves(source,boundaries);
-
    // Only one leaf node? Special case this
    if (boundaries.size()==1) {
       std::vector<std::pair<typename T::InnerKey,unsigned> > newBoundaries;

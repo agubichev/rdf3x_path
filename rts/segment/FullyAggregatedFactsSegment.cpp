@@ -117,7 +117,7 @@ class FullyAggregatedFactsSegment::IndexImplementation
 };
 //---------------------------------------------------------------------------
 void FullyAggregatedFactsSegment::IndexImplementation::setRootPage(unsigned page)
-   // Se the root page
+   // Set the root page
 {
    segment.indexRoot=page;
    segment.setSegmentData(slotIndexRoot,segment.indexRoot);

@@ -14,6 +14,7 @@
 #include "rts/buffer/BufferReference.hpp"
 #include "infra/util/Type.hpp"
 #include "rts/segment/PathSelectivitySegment.hpp"
+#include <vector>
 //---------------------------------------------------------------------------
 class Segment;
 //---------------------------------------------------------------------------
@@ -165,6 +166,9 @@ class DatabaseBuilder
    void computeExactStatistics(const char* tempFile);
    /// Load the path selectivities
    void loadPathSelectivity(SelectivityReader& reader);
+   /// Compute the path selectivities
+   void computePathSelectivity(std::vector<unsigned>& back_selectivity, std::vector<unsigned>& forw_selectivity);
+
 };
 //---------------------------------------------------------------------------
 #endif

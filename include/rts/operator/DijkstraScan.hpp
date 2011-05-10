@@ -39,9 +39,13 @@ class DijkstraScan : public Operator
    QueryGraph::Filter* pathfilter;
    /// DB dictionary
    DictionarySegment dict;
+   /// Plan that defines start/stop of the scan
+   Operator* subplan;
+   /// Register for start/stop of unbounded Dijkstra scan
+   Register* pathnode;
 
    /// Constructor
-   DijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,QueryGraph::Filter* pathfilter);
+   DijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter);
 
    // Implementations
    class DijkstraPrefix;
@@ -65,7 +69,7 @@ class DijkstraScan : public Operator
    void getAsyncInputCandidates(Scheduler& /*scheduler*/){};
 
    /// Create a suitable operator
-   static DijkstraScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,VectorRegister* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,QueryGraph::Filter* pathfilter);
+   static DijkstraScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,VectorRegister* predicateRegister,bool predicateBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter);
 };
 //---------------------------------------------------------------------------
 #endif

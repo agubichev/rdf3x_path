@@ -38,6 +38,8 @@ class PlanGen
    Database* db;
    /// The current query
    const QueryGraph* fullQuery;
+   /// The query that defines start/stop of the path scan
+   const QueryGraph* pathSubQuery;
 
    PlanGen(const PlanGen&);
    void operator=(const PlanGen&);
@@ -48,10 +50,12 @@ class PlanGen
    void buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C);
    /// Generate an aggregated index scan
    void buildAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* problem,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C);
-   /// Generate an fully aggregated index scan
+   /// Generate a fully aggregated index scan
    void buildFullyAggregatedIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C);
-   /// Generate an Dijkstra scan, looking for all nodes by some path from the source
-   void buildDijkstraScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned predicate);
+   /// Generate a Dijkstra scan, looking for all nodes by some path from the source
+   void buildDijkstraScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned predicate,unsigned subj,unsigned obj);
+   /// Generate a Dijkstra scan with unknown start and end
+   void buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem* result,unsigned predicate,unsigned subj,unsigned obj);
    /// Generate base table accesses
    Problem* buildScan(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned id);
    /// Build the informaion about a join

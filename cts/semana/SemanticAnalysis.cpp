@@ -380,6 +380,8 @@ static void encodeTableFunction(const SPARQLParser::PatternGroup& /*group*/,cons
 static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,QueryGraph::SubQuery& output)
    // Transform a subquery
 {
+
+   vector<QueryGraph::Node> unboundedPath;
    // Encode all patterns
    for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter) {
       // Encode the entries
@@ -394,8 +396,32 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
 
       if (iter->predicate.type ==SPARQLParser::Element::PathVariable){
     	  node.pathTriple = true;
+    	  if (!node.constObject&&!node.constSubject)
+    		  unboundedPath.push_back(node);
       }
       output.nodes.push_back(node);
+   }
+
+   // find the triples that help refining the start/stop of unbounded Dijkstra scan
+   for (std::vector<QueryGraph::Node>::iterator iter=unboundedPath.begin(); iter!=unboundedPath.end(); iter++){
+	  for (std::vector<QueryGraph::Node>::iterator node_iter=output.nodes.begin(); node_iter!=output.nodes.end(); node_iter++){
+		   if (node_iter->constObject){
+			   if (node_iter->subject==iter->subject){
+				   node_iter->usedInDijkstraInit=true;
+			   }
+			   else if (node_iter->subject==iter->object){
+				   node_iter->usedInDijkstraInit=true;
+			   }
+		   }
+		   if (node_iter->constSubject){
+			   if (node_iter->object==iter->subject){
+				   node_iter->usedInDijkstraInit=true;
+			   }
+			   else if (node_iter->object==iter->object){
+				   node_iter->usedInDijkstraInit=true;
+			   }
+		   }
+	  }
    }
 
    // Encode the filter conditions
@@ -412,7 +438,8 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
 
    for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.pathfilters.begin(),limit=group.pathfilters.end();iter!=limit;++iter){
 	   if (!encodePathFilter(dict,diffIndex,group,*iter,output)){
-		   return false;
+	      // The filter variable is not bound. This will produce an empty result
+		  return false;
 	   }
    }
 

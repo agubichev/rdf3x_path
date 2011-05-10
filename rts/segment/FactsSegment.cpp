@@ -2,6 +2,7 @@
 #include "rts/database/DatabaseBuilder.hpp"
 #include "rts/transaction/LogAction.hpp"
 #include "rts/segment/BTree.hpp"
+#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x

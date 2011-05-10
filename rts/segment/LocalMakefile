@@ -8,5 +8,7 @@ src_rts_segment:=					\
 	rts/segment/FullyAggregatedFactsSegment.cpp	\
 	rts/segment/PredicateSetSegment.cpp		\
 	rts/segment/SegmentInventorySegment.cpp		\
-	rts/segment/SpaceInventorySegment.cpp
+	rts/segment/SpaceInventorySegment.cpp		\
+	rts/segment/PathSelectivitySegment.cpp
+	
 

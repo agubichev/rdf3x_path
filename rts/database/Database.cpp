@@ -7,6 +7,7 @@
 #include "rts/segment/ExactStatisticsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include "rts/segment/PathSelectivitySegment.hpp"
 #include <iostream>
 #include <cassert>
 //---------------------------------------------------------------------------
@@ -171,5 +172,11 @@ DictionarySegment& Database::getDictionary()
    // Get the dictionary
 {
    return *(partition->lookupSegment<DictionarySegment>(DatabasePartition::Tag_Dictionary));
+}
+//---------------------------------------------------------------------------
+PathSelectivitySegment& Database::getPathSelectivity()
+   // Get the dictionary
+{
+   return *(partition->lookupSegment<PathSelectivitySegment>(DatabasePartition::Tag_PathSelectivity));
 }
 //---------------------------------------------------------------------------

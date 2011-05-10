@@ -8,7 +8,9 @@
 #include "rts/segment/ExactStatisticsSegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include "rts/segment/PathSelectivitySegment.hpp"
 #include "rts/segment/Segment.hpp"
+#include "rts/pathstat/PathSelectivity.hpp"
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -68,6 +70,16 @@ DatabaseBuilder::StringInfoReader::StringInfoReader()
 }
 //---------------------------------------------------------------------------
 DatabaseBuilder::StringInfoReader::~StringInfoReader()
+   // Destructor
+{
+}
+//---------------------------------------------------------------------------
+DatabaseBuilder::SelectivityReader::SelectivityReader()
+   // Constructor
+{
+}
+//---------------------------------------------------------------------------
+DatabaseBuilder::SelectivityReader::~SelectivityReader()
    // Destructor
 {
 }
@@ -500,5 +512,46 @@ void DatabaseBuilder::computeExactStatistics(const char* tmpFile)
    // Remove the map
    countMap.close();
    remove(tmpFile);
+}
+//---------------------------------------------------------------------------
+namespace {
+//---------------------------------------------------------------------------
+/// Reader for hash -> page mappings
+class SelectivityInfoReader : public PathSelectivitySegment::SelectivitySource
+{
+   private:
+   /// The source
+   DatabaseBuilder::SelectivityReader& reader;
+
+   public:
+   /// Constructor
+   SelectivityInfoReader(DatabaseBuilder::SelectivityReader& reader) : reader(reader) {}
+
+   /// Get the next entry
+   bool next(unsigned& node,PathSelectivitySegment::Direction& dir, unsigned& selectivity);
+};
+//---------------------------------------------------------------------------
+bool SelectivityInfoReader::next(unsigned& node,PathSelectivitySegment::Direction& dir,unsigned& selectivity)
+   // Get the next entry
+{
+   return reader.next(node,dir,selectivity);
+}
+//---------------------------------------------------------------------------
+}
+//---------------------------------------------------------------------------
+void DatabaseBuilder::loadPathSelectivity(SelectivityReader& reader)
+   // load path selectivity
+{
+   PathSelectivitySegment* seg = new PathSelectivitySegment(out.getFirstPartition());
+   out.getFirstPartition().addSegment(seg,DatabasePartition::Tag_PathSelectivity);
+
+   SelectivityInfoReader source(reader);
+   seg->loadSelectivitySource(source);
+}
+//---------------------------------------------------------------------------
+void DatabaseBuilder::computePathSelectivity(vector<unsigned>& back_selectivity, vector<unsigned>& forw_selectivity)
+   // compute path scan selectivity
+{
+	PathSelectivity().computeSelectivity(out,back_selectivity,forw_selectivity);
 }
 //---------------------------------------------------------------------------

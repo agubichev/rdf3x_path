@@ -8,6 +8,7 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/segment/AggregatedFactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include "infra/osdep/Timestamp.hpp"
 #include <iostream>
 #include <vector>
 #include <set>
@@ -91,68 +92,56 @@ struct Neighbors{
 	vector<vector<pair<unsigned, unsigned> > > connections;
 };
 static Neighbors n;
+//---------------------------------------------------------------------------
+static void findNeighbors(Database& db,set<unsigned>& nodes, set<unsigned>& neighbors, Database::DataOrder order){
+	Register rs,rp,ro;
+	Register *s=0, *o=0;
 
-
-static void findNeighbors(Database& db,set<unsigned>& nodes, set<unsigned>& neighbors){
-	Register ls,lp,lo;
-	ls.reset(); lp.reset(); lo.reset();
-	IndexScan* scan1=IndexScan::create(db,Database::Order_Subject_Predicate_Object,&ls,false,&lp,false,&lo,false,0);
+	rs.reset(); rp.reset(); ro.reset();
+	IndexScan* scan1=IndexScan::create(db,Database::Order_Object_Predicate_Subject,&rs,false,&rp,false,&ro,false,0);
 
 	Register reg;
-	cerr<<"nodes size: "<<nodes.size()<<endl;
+//	cerr<<"nodes size: "<<nodes.size()<<endl;
 	ConstantOperator* scan2=new ConstantOperator(&reg,nodes);
 
-	vector<Register*> lt,rt; lt.push_back(&lp);lt.push_back(&lo);
-//	rt.push_back(&a);rt.push_back(&b);
-	MergeJoin join(scan2,&reg,rt,scan1,&ls,lt,0);
+	vector<Register*> lt,rt;
+	if (order==Database::Order_Subject_Predicate_Object){
+		s=&rs;
+		o=&ro;
+		cerr<<"SPO"<<endl;
+	}
+	else {
+		cerr<<"OPS"<<endl;
+		s=&ro;
+		o=&rs;
+	}
 
-	vector<unsigned> res;
-	unsigned old=ls.value;
-	unsigned i=0;
-	bool firstiter=true;
-	n.ids.clear();
-	n.connections.clear();
-	n.connections.resize(nodes.size());
+	rt.push_back(o);
+	rt.push_back(&rp);
 
-	for (set<unsigned>::iterator it=nodes.begin();it!=nodes.end();it++)
-		n.ids.push_back(*it);
+	MergeJoin join(scan2,&reg,lt,scan1,s,rt,0);
 
 //	if (scan1->first()) do {
-//		cerr<<ls.value<<" "<<lp.value<<" "<<lo.value<<endl;
-//		cerr<<lookupLiteral(db,ls.value)<<" "<<lookupLiteral(db,lp.value)<<" "<<lookupLiteral(db,lo.value)<<endl;
+//		cerr<<s->value<<" "<<rp.value<<" "<<o->value<<endl;
+//		cerr<<lookupLiteral(db,s->value)<<" "<<lookupLiteral(db,rp.value)<<" "<<lookupLiteral(db,o->value)<<endl;
 //	} while (scan1->next());
 
+	Timestamp t1;
 	if (join.first()) do {
-		if (old==ls.value||firstiter){
-		   old=ls.value;
-		   n.connections[i].push_back(pair<unsigned,unsigned>(lp.value,lo.value));
-		   firstiter=false;
-		}
-		else {
-		   old=ls.value;
-		   i++;
-		   n.connections[i].push_back(pair<unsigned,unsigned>(lp.value,lo.value));
-		}
-//	   cerr<<"neighbors: "<<ls.value<<" "<<lp.value<<" "<<lo.value<<endl;
-//	   cerr<<"neighbors: "<<lookupLiteral(db, ls.value)<<" "<<lookupLiteral(db, lp.value)<<" "<<lookupLiteral(db, lo.value)<<endl;
-	   neighbors.insert(lo.value);
-
+	   cerr<<"neighbors: "<<s->value<<" "<<rp.value<<" "<<o->value<<endl;
+	   cerr<<"neighbors: "<<lookupLiteral(db,s->value)<<" "<<lookupLiteral(db,rp.value)<<" "<<lookupLiteral(db,o->value)<<endl;
+	   neighbors.insert(o->value);
 	} while (join.next());
-
-	for (unsigned j=0; j<n.connections.size(); j++){
-		cerr<<"node "<<lookupLiteral(db,n.ids[j])<<" has "<<n.connections[j].size()<<" neighbors"<<endl;
-//		for (unsigned k=0; k<n.connections[j].size(); k++)
-//			cerr<<"    "<<lookupLiteral(db,(n.connections[j])[k].first)<<" "<<lookupLiteral(db,(n.connections[j])[k].second)<<endl;
-	}
-//	   neighbors.clear();
+	Timestamp t2;
+	cerr<<"time: "<<t2-t1<<" ms"<<endl;
 
 }
 //---------------------------------------------------------------------------
 
 int main(int argc,char* argv[])
 {
-   if (argc<3) {
-      cout << "usage: " << argv[0] << " <rdfstore> <start>" << endl;
+   if (argc<2) {
+      cout << "usage: " << argv[0] << " <rdfstore> " << endl;
       return 1;
    }
 
@@ -172,67 +161,29 @@ int main(int argc,char* argv[])
 
 
    set<unsigned> nodes;
-//   nodes.insert(atoi(argv[2]));
-//   nodes.insert(128);
-//   nodes.insert(323);
 
-//   nodes.insert(363);
-//   nodes.insert(448);
-//   nodes.insert(4348);
-//   nodes.insert(4349);
-//   nodes.insert(4352);
-//   nodes.insert(4354);
-//   nodes.insert(11757);
-//   nodes.insert(12822);
-//   nodes.insert(12823);
-//   nodes.insert(12843);
-//   nodes.insert(21091);
-//   nodes.insert(35288);
-//   nodes.insert(44922);
-//   nodes.insert(182488);
-//   nodes.insert(200614);
-//   nodes.insert(337085);
-//   nodes.insert(372554);
-//   nodes.insert(393717);
-//   nodes.insert(449311);
-//   nodes.insert(696325);
-//   nodes.insert(717001);
-//   nodes.insert(767304);
-//   nodes.insert(973165);
-//   nodes.insert(1031797);
-//   nodes.insert(1197305);
-//   nodes.insert(1215849);
-//   nodes.insert(1374649);
-//   nodes.insert(1451916);
-//   nodes.insert(1503518);
-//   nodes.insert(1943326);
-//   nodes.insert(2052258);
-//   nodes.insert(2254987);
-//   nodes.insert(2450002);
-//   nodes.insert(2471914);
-//   nodes.insert(2511022);
-//   nodes.insert(2531829);
-//   nodes.insert(2590952);
-   nodes.insert(2930060);
-//   nodes.insert(2931239);
-//   nodes.insert(2931889);
-//   nodes.insert(2932504);
-   nodes.insert(3016927);
+   nodes.insert(131704);
 
-//   nodes.insert(4);
-//   nodes.insert(5);
+//   nodes.insert(2);
+   nodes.insert(5);
    set<unsigned> res;
 
-   for (unsigned i=0; i<1; i++) {
-	   findNeighbors(db,nodes,res);
-	   nodes.clear();
-//	   cerr<<"res size: "<<res.size()<<endl;
-//	   cout<<"----------------------------------------------------------------"<<endl;
-//	   cout<<"res "<<i<<endl;
-//	   for (set<unsigned>::iterator it=res.begin();it!=res.end();it++)
-//		   cout<<lookupLiteral(db,*it)<<endl;
-	   nodes=res;
-	   res.clear();
-   }
+//   for (unsigned i=0; i<1; i++) {
+
+//   Timestamp t1;
+   findNeighbors(db,nodes,res,Database::Order_Object_Predicate_Subject);
+//   Timestamp t2;
+//   cerr<<"time: "<<t2-t1<<" ms"<<endl;
+   cerr<<"nodes size: "<<nodes.size()<<endl;
+   cerr<<"res size: "<<res.size()<<endl;
+//	   nodes.clear();
+////	   cerr<<"res size: "<<res.size()<<endl;
+////	   cout<<"----------------------------------------------------------------"<<endl;
+////	   cout<<"res "<<i<<endl;
+////	   for (set<unsigned>::iterator it=res.begin();it!=res.end();it++)
+////		   cout<<lookupLiteral(db,*it)<<endl;
+//	   nodes=res;
+//	   res.clear();
+//   }
 }
 //---------------------------------------------------------------------------

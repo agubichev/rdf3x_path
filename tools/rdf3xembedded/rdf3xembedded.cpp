@@ -299,7 +299,7 @@ string ExplainPrinter::formatRegister(const Register* reg)
    return result.str();
 }
 //---------------------------------------------------------------------------
-string ExplainPrinter::formatPathRegister(const VectorRegister* reg)
+string ExplainPrinter::formatPathRegister(const VectorRegister* /*reg*/)
    // Format a register (for generic annotations)
 {
    stringstream result;

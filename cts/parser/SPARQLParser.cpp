@@ -899,12 +899,15 @@ void SPARQLParser::parseGraphPattern(PatternGroup& group)
          lexer.unget(token);
          return;
       } else if (token==SPARQLLexer::Identifier) {
+    	 cerr<<"getting the filter"<<endl;
          if (!lexer.isKeyword("filter")&&!lexer.isKeyword("pathfilter"))
             throw ParserException("'filter' or 'pathfilter' expected");
          if (lexer.isKeyword("filter"))
         	 parseFilter(group,localVars);
          else
         	 parsePathFilter(group,localVars);
+    	 cerr<<"parsed the filter"<<endl;
+
          continue;
       } else {
          // Error while parsing, let our caller handle it
@@ -919,7 +922,6 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
 {
    while (true) {
       SPARQLLexer::Token token=lexer.getNext();
-
       if (token==SPARQLLexer::LCurly) {
          // Parse the group
          PatternGroup newGroup;
@@ -961,6 +963,10 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
          } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("pathfilter"))) {
         	 map<string,unsigned> localVars;
         	 parsePathFilter(group,localVars);
+
+        	 token=lexer.getNext();
+             if (token!=SPARQLLexer::Dot)
+            	 lexer.unget(token);
          } else{
             lexer.unget(token);
             parseGraphPattern(group);
@@ -976,6 +982,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
 void SPARQLParser::parseWhere()
    // Parse the where part if any
 {
+	cerr<<"parsing where"<<endl;
    if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("where")))
       throw ParserException("'where' expected");
    if (lexer.getNext()!=SPARQLLexer::LCurly)

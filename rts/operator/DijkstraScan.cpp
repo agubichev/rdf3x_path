@@ -29,8 +29,8 @@ void DijkstraScan::print(PlanPrinter& out)
    out.endOperator();
 }
 //---------------------------------------------------------------------------
-DijkstraScan::DijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,QueryGraph::Filter* pathfilter)
-   : Operator(expectedOutputCardinality),dict(db.getDictionary()),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),order(order),facts(db.getFacts(order)),pathfilter(pathfilter)
+DijkstraScan::DijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter)
+   : Operator(expectedOutputCardinality),dict(db.getDictionary()),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),order(order),facts(db.getFacts(order)),pathfilter(pathfilter),pathnode(pathnode),subplan(subplan)
    // Constructor
 {
 }
@@ -38,7 +38,8 @@ DijkstraScan::DijkstraScan(Database& db,Database::DataOrder order,Register* valu
 DijkstraScan::~DijkstraScan()
    // Destructor
 {
-
+	if (subplan)
+		delete subplan;
 }
 //---------------------------------------------------------------------------
 unsigned DijkstraScan::first()
@@ -103,9 +104,27 @@ private:
 	bool isHandled(unsigned node);
 	/// get the shortest dist from the start to the node
 	unsigned getShortestDist(unsigned node);
+	/// struct to keep constraints that helps to cut off the search space
+	struct Constraints{
+		// length bound
+		unsigned maxlen;
+		// containsOnly constraint  - one set for each path variable
+		map<unsigned,set<unsigned> > containsonly;
+		// any constraint violated?
+		bool violated;
+		// should we cut off the branch starting with this node?
+		set<unsigned> cutOff;
+	};
+	void findConstraints(const QueryGraph::Filter& filter, Constraints& constr);
+
+	/// do we have output in the next()
+	bool output;
+	Constraints constr;
+	set<unsigned> startNodes;
+
 public:
 	/// Constructor
-	DijkstraPrefix(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,QueryGraph::Filter* pathfilter): DijkstraScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathfilter) {}
+	DijkstraPrefix(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter): DijkstraScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathnode,subplan,pathfilter) {}
 	/// First tuple
 	unsigned first();
 	/// Next tuple
@@ -126,15 +145,53 @@ void DijkstraScan::DijkstraPrefix::findNeighbors(unsigned node) {
     iter=neighbors.begin();
 }
 //---------------------------------------------------------------------------
+void DijkstraScan::DijkstraPrefix::findConstraints(const QueryGraph::Filter& filter, DijkstraScan::DijkstraPrefix::Constraints& constr){
+	if (filter.type==QueryGraph::Filter::And){
+		findConstraints(*filter.arg1,constr);
+		findConstraints(*filter.arg2,constr);
+	}
+	else if (filter.type==QueryGraph::Filter::Builtin_length){
+		constr.maxlen=std::max(constr.maxlen,filter.arg2->id);
+	}
+	else if (filter.type==QueryGraph::Filter::Builtin_containsonly){
+		constr.containsonly[filter.arg1->id].insert(filter.arg2->id);
+	}
+	return;
+}
+//---------------------------------------------------------------------------
 void DijkstraScan::DijkstraPrefix::init() {
+	cerr<<"slow Dijkstra"<<endl;
 	// init the computation. Original value of the pathfilter set to false
 	predecessors.clear();
 	workingSet.clear();
 	settledNodes.clear();
 	shortestDistances.clear();
-	workingSet.insert(pair<unsigned, unsigned>(0,value1->value));
-	PredicateOnNode p; p.onnode=false; p.prefixlength=0;
-	predicates[value1->value]=p;
+	startNodes.clear();
+
+	// start nodes are defined by some condition in the subplan
+	if (subplan){
+		if (subplan->first()) do {
+			startNodes.insert(pathnode->value);
+		} while (subplan->next());
+	}
+	else
+		startNodes.insert(value1->value);
+
+	cerr<<"StartNodes size: "<<startNodes.size()<<endl;
+
+	for (set<unsigned>::iterator it=startNodes.begin(); it!=startNodes.end(); it++){
+		workingSet.insert(pair<unsigned, unsigned>(0,*it));
+		shortestDistances[*it]=0;
+		PredicateOnNode p; p.onnode=false; p.prefixlength=0;
+		predicates[*it]=p;
+	}
+	constr.maxlen=0;
+	constr.violated=false;
+	if (pathfilter)
+		findConstraints(*pathfilter, constr);
+	cerr<<"constrains for scan "<<value1->value<<", "<<value3->value<<": "<<constr.containsonly.size()<<endl;
+//	cerr<<(*constr.containsonly.begin()).first<<" "<<*((*constr.containsonly.begin()).second.begin())<<endl;
+	output=false;
 }
 //---------------------------------------------------------------------------
 unsigned DijkstraScan::DijkstraPrefix::getShortestDist(unsigned node){
@@ -160,7 +217,7 @@ void DijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
 		if (shortDist<oldShortDist) {
 			workingSet.erase(pair<unsigned,unsigned>(oldShortDist,iter->second));
 			shortestDistances[iter->second]=shortDist;
-			workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
+//			workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
 			// evaluate the predicate on prefix and last edge
 			PreviousNode prevnode;
 			prevnode.edge=iter->first;
@@ -170,6 +227,10 @@ void DijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node)
 			p.onprefix=predicates[node].onprefix;
 			if (pathfilter)
 				p.onnode=evaledge(*pathfilter,prevnode,p,iter->second);
+			// don't add to the working set nodes that lead to cut-off branches
+			if (!pathfilter || (pathfilter && !constr.cutOff.count(iter->second)))
+				workingSet.insert(pair<unsigned,unsigned>(shortDist,iter->second));
+
 			predicates[iter->second]=p;
 			predecessors[iter->second]=prevnode;
 		}
@@ -202,14 +263,16 @@ bool DijkstraScan::DijkstraPrefix::evaledge(const QueryGraph::Filter& filter,Pre
 			return false;
 		case QueryGraph::Filter::Builtin_containsonly:
 			filterid=filter.arg2->id;
-			if (!p.onprefix[filterid]&&node.node!=value1->value){
+			if (!p.onprefix[filterid]&&!startNodes.count(node.node)){
 				// the prefix already does not contain the edge, no need to check further
 				return false;
 			}
 			if (node.edge==filterid)
 				p.onprefix[filterid]=true;
-			else
+			else{
 				p.onprefix[filterid]=false;
+				constr.cutOff.insert(curNode);
+			}
 			return p.onprefix[filterid];
 		case QueryGraph::Filter::Builtin_length:
 			//compare the current prefix length with the constrain from the filter
@@ -269,7 +332,7 @@ unsigned DijkstraScan::DijkstraPrefix::next()
     return 0;
 }
 //---------------------------------------------------------------------------
-DijkstraScan* DijkstraScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,VectorRegister* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality,QueryGraph::Filter* pathfilter)
+DijkstraScan* DijkstraScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,VectorRegister* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter)
    // Constructor
 {
    // Setup the slot bindings
@@ -294,6 +357,6 @@ DijkstraScan* DijkstraScan::create(Database& db,Database::DataOrder order,Regist
     	  return 0; //never happens
    }
    // Construct the appropriate operator
-   DijkstraScan* result = new DijkstraPrefix(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathfilter);
+   DijkstraScan* result = new DijkstraPrefix(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathnode,subplan,pathfilter);
    return result;
 }

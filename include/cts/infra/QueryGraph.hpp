@@ -33,6 +33,10 @@ class QueryGraph
 
       /// Does the triple contains a path predicate?
       bool pathTriple;
+
+      /// Do we use this triple to initialize the Dijkstra scan?
+      bool usedInDijkstraInit;
+
    };
    /// The potential join edges
    struct Edge {

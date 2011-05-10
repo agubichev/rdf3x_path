@@ -41,7 +41,7 @@ int main(int argc,char* argv[]){
 
 	string s = argv[2];
 	unsigned id;
-	db.getDictionary().lookup(s,Type::Literal,0,id);
+	db.getDictionary().lookup(s,Type::URI,0,id);
 	cout<<"id: "<<id<<endl;
 
 

@@ -1,0 +1,7 @@
+src_tools_selectivityerror:=			\
+	tools/selectivityerror/selectivityerror.cpp
+
+
+$(PREFIX)selectivityerror$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_selectivityerror:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT))) 
+	$(buildexe)
+

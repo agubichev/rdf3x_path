@@ -1,0 +1,1 @@
+select ?v where { ?v ??c <http://www.mpii.de/yago/resource/Germany> . ?v <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.mpii.de/yago/resource/wordnet%5Fmountain%5F109359803> . pathfilter(containsOnly(??c,<http://www.mpii.de/yago/resource/isLocatedIn>))}

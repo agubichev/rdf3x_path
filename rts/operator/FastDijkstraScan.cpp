@@ -44,8 +44,8 @@ void FastDijkstraScan::print(PlanPrinter& out)
    out.endOperator();
 }
 //---------------------------------------------------------------------------
-FastDijkstraScan::FastDijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,QueryGraph::Filter* pathfilter)
-   : Operator(expectedOutputCardinality),dict(db.getDictionary()),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),order(order),facts(db.getFacts(order)),pathfilter(pathfilter)
+FastDijkstraScan::FastDijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter)
+   : Operator(expectedOutputCardinality),dict(db.getDictionary()),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),order(order),facts(db.getFacts(order)),pathfilter(pathfilter),subplan(subplan),pathnode(pathnode)
    // Constructor
 {
 }
@@ -53,7 +53,8 @@ FastDijkstraScan::FastDijkstraScan(Database& db,Database::DataOrder order,Regist
 FastDijkstraScan::~FastDijkstraScan()
    // Destructor
 {
-
+	if (subplan)
+		delete subplan;
 }
 //---------------------------------------------------------------------------
 unsigned FastDijkstraScan::first()
@@ -143,9 +144,13 @@ private:
 	unsigned workingsetmax;
 	bool output;
 	Constraints constr;
+	set<unsigned> startNodes;
+
+	//debugging only
+	int count;
 public:
 	/// Constructor
-	DijkstraPrefix(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,QueryGraph::Filter* pathfilter): FastDijkstraScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathfilter), db(db) {
+	DijkstraPrefix(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter): FastDijkstraScan(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathnode,subplan,pathfilter), db(db) ,count(0){
 	}
 	/// First tuple
 	unsigned first();
@@ -282,11 +287,26 @@ void FastDijkstraScan::DijkstraPrefix::init() {
 	settledNodes.clear();
 	shortestDistances.clear();
 	curNodes.clear();
-	workingSet.insert(pair<unsigned, unsigned>(0,value1->value));
-	shortestDistances[value1->value]=0;
-	PredicateOnNode p; p.onnode=false; p.prefixlength=0;
-	predicates[value1->value]=p;
-	curNodes.insert(value1->value);
+	startNodes.clear();
+
+	// start nodes are defined by some condition in the subplan
+	if (subplan){
+		if (subplan->first()) do{
+			startNodes.insert(pathnode->value);
+		} while (subplan->next());
+	}
+	else
+		startNodes.insert(value1->value);
+
+	cerr<<"StartNodes size: "<<startNodes.size()<<endl;
+
+	for (set<unsigned>::iterator it=startNodes.begin(); it!=startNodes.end(); it++){
+		workingSet.insert(pair<unsigned, unsigned>(0,*it));
+		shortestDistances[*it]=0;
+		PredicateOnNode p; p.onnode=false; p.prefixlength=0;
+		predicates[*it]=p;
+		curNodes.insert(*it);
+	}
 	curnodes_iter=curNodes.begin();
 	curIndex=0;
 	workingsetmax=0;
@@ -294,6 +314,7 @@ void FastDijkstraScan::DijkstraPrefix::init() {
 	constr.violated=false;
 	if (pathfilter)
 		findConstraints(*pathfilter, constr);
+	cerr<<"constrains for scan "<<value1->value<<", "<<value3->value<<": "<<constr.containsonly.size()<<endl;
 	output=false;
 }
 //---------------------------------------------------------------------------
@@ -318,7 +339,6 @@ void FastDijkstraScan::DijkstraPrefix::updateNeighbors(unsigned node,unsigned no
 		if (shortDist<oldShortDist) {
 			workingSet.erase(pair<unsigned,unsigned>(oldShortDist,iter->second));
 			shortestDistances[iter->second]=shortDist;
-
 			PreviousNode prevnode;
 			prevnode.edge=iter->first;
 			prevnode.node=node;
@@ -364,7 +384,7 @@ bool FastDijkstraScan::DijkstraPrefix::evaledge(const QueryGraph::Filter& filter
 			return false;
 		case QueryGraph::Filter::Builtin_containsonly:
 			filterid=filter.arg2->id;
-			if (!p.onprefix[filterid]&&node.node!=value1->value){
+			if (!p.onprefix[filterid]&&!startNodes.count(node.node)){
 				// the prefix already does not contain the edge, no need to check further
 				return false;
 			}
@@ -389,12 +409,15 @@ bool FastDijkstraScan::DijkstraPrefix::evaledge(const QueryGraph::Filter& filter
 			return false;
 	}
 }
+
 //---------------------------------------------------------------------------
 unsigned FastDijkstraScan::DijkstraPrefix::next()
 	// Return next tuple
 {
 	if (curnodes_iter==curNodes.begin()){
+		cerr<<"AAA"<<endl;
 		getNeighbors();
+
 	}
 
 	// if it's a point-to-point search and we've already found the result
@@ -409,7 +432,6 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 				return 0;
 			curNodes.clear();
 			// copying the neighbors.
-			// can we just use workingSet???
 			for (unsigned i=0; i<n.connections.size(); i++){
 				for (unsigned j=0; j<n.connections[i].size(); j++){
 					if (!isHandled((n.connections[i])[j].second) && !constr.cutOff.count((n.connections[i])[j].second))
@@ -421,10 +443,16 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 			curIndex=0;
 
 			Timestamp t1;
+/*
+			if (count>2)
+				return 0;
+			count++;
+*/
+
 			getNeighbors();
 			Timestamp t2;
-//			cerr<<"getting neighbors: "<<t2-t1<<" ms"<<endl;
-//			cerr<<"curNodes: "<<curNodes.size()<<endl;
+			cerr<<"getting neighbors: "<<t2-t1<<" ms"<<endl;
+			cerr<<"curNodes: "<<curNodes.size()<<endl;
 			curnodes_iter=curNodes.begin();
 		}
 
@@ -453,9 +481,13 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 			settledNodes.insert(curNode);
 
 			// this is not point-to-point search
-			if (!bound3)
+			if (!bound3){
 				value3->value=curNode;
-
+/*
+				cerr<<value3->value<<endl;
+				cerr<<predicates[value3->value].onnode<<endl;
+*/
+			}
 			if (!pathfilter){
 				// no pathfilter specified, output every reachable node
 				output=true;
@@ -470,6 +502,7 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
 			}
 			unsigned prev=0;
 			if (output) {
+//				cerr<<value3->value<<endl;
 				observedOutputCardinality++;
 				// form the path from the end to the beginning
 				value2->value.clear();
@@ -498,7 +531,7 @@ unsigned FastDijkstraScan::DijkstraPrefix::next()
     return 0;
 }
 //---------------------------------------------------------------------------
-FastDijkstraScan* FastDijkstraScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,VectorRegister* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality,QueryGraph::Filter* pathfilter)
+FastDijkstraScan* FastDijkstraScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,VectorRegister* predicate,bool predicateBound,Register* object,bool objectBound,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter)
    // Constructor
 {
    // Setup the slot bindings
@@ -523,6 +556,6 @@ FastDijkstraScan* FastDijkstraScan::create(Database& db,Database::DataOrder orde
     	  return 0; //never happens
    }
    // Construct the appropriate operator
-   FastDijkstraScan* result = new DijkstraPrefix(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathfilter);
+   FastDijkstraScan* result = new DijkstraPrefix(db,order,value1,bound1,value2,bound2,value3,bound3,expectedOutputCardinality,pathnode,subplan,pathfilter);
    return result;
 }

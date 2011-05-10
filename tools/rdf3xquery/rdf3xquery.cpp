@@ -163,7 +163,10 @@ int main(int argc,char* argv[])
       if (query.substr(0,8)=="explain ") {
          runQuery(db,query.substr(8),true);
       } else {
+    	 Timestamp t1;
          runQuery(db,query,false);
+         Timestamp t2;
+         cerr<<"TIME: "<<t2-t1<<" ms"<<endl;
       }
    } else {
       // No, accept user input

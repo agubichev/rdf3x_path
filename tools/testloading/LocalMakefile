@@ -1,0 +1,8 @@
+src_tools_testloading:=				\
+	tools/testloading/testloading.cpp		\
+	tools/testloading/Sorter.cpp		\
+	tools/testloading/TempFile.cpp
+
+$(PREFIX)testloading$(EXEEXT): $(addprefix $(PREFIX),$(src_tools_testloading:.cpp=$(OBJEXT)) $(src_infra:.cpp=$(OBJEXT)) $(src_rts:.cpp=$(OBJEXT)) $(src_cts:.cpp=$(OBJEXT)))
+	$(buildexe)
+

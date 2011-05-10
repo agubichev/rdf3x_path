@@ -20,6 +20,7 @@ class FilePartition;
 class DatabasePartition;
 class DictionarySegment;
 class ExactStatisticsSegment;
+class PathSelectivitySegment;
 //---------------------------------------------------------------------------
 /// Access to the RDF database
 class Database
@@ -69,6 +70,8 @@ class Database
    ExactStatisticsSegment& getExactStatistics();
    /// Get the dictionary
    DictionarySegment& getDictionary();
+   /// Get the path statistics
+   PathSelectivitySegment& getPathSelectivity();
 
    /// Get the first partition
    DatabasePartition& getFirstPartition() { return *partition; }
