@@ -723,7 +723,7 @@ void Selection::BuiltinRegEx::setSelection(Selection* s)
 void Selection::BuiltinRegEx::eval(Result& result)
    // Evaluate the predicate
 {
-#ifdef CONFIG_TR1
+/*#ifdef CONFIG_TR1
    Result text,pattern;
    arg1->eval(text);
    arg2->eval(pattern);
@@ -737,9 +737,9 @@ void Selection::BuiltinRegEx::eval(Result& result)
    } catch (const std::tr1::regex_error&) {
       result.setBoolean(false);
    }
-#else
+#else */
    result.setBoolean(false);
-#endif
+//#endif
 }
 //---------------------------------------------------------------------------
 string Selection::BuiltinRegEx::print(PlanPrinter& out)
