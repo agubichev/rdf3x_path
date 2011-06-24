@@ -141,7 +141,7 @@ static Operator* translateDijkstraScan(Runtime& runtime,const map<unsigned,Regis
 	resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
 
 	//  return the operator
-	return DijkstraScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
+	return FastDijkstraScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
 	                         subject,constSubject,
 	                         pathpredicate,constPredicate,
 	                         object,constObject,

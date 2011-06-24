@@ -85,7 +85,7 @@ int main(int argc,char* argv[]){
 		Timestamp t2;
 		// if result is too small, skip it
 		unsigned treeSize=eng->getSPMap().size();
-		if (treeSize>1000||treeSize<10){
+		if (treeSize<1000||treeSize<10){
 			i--;
 			continue;
 		}

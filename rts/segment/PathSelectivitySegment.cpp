@@ -79,7 +79,7 @@ class PathSelectivitySegment::HashIndexImplementation
 		bool operator==(const InnerKey& o) const { return ((node==o.node) && (dir==o.dir)); }
 		/// Compare
 		bool operator<(const InnerKey& o) const {return ((node<o.node)||((node==o.node)&&(dir<o.dir)));}
-		void print() const{ printf("path sel segm inner: node dir %u %u\n", node, dir);}
+		void print() const{;}
 	};
 
 	/// Read an inner key
@@ -107,7 +107,7 @@ class PathSelectivitySegment::HashIndexImplementation
 	    bool operator<(const LeafEntry& o) const {return ((node<o.node)||((node==o.node)&&(dir<o.dir))||((dir==o.dir)&&(selectivity<o.selectivity))||(selectivity<o.selectivity));}
 	    /// Compare
 	    bool operator<(const InnerKey& o) const {return ((node<o.node)||((node==o.node)&&(dir<o.dir))); }
-	    void print(){printf("path segm. : node, dir, sel %u %u %u\n", node, static_cast<unsigned int>(dir), selectivity);}
+	    void print(){ ;}
 	};
 	/// A leaf entry source
 	class LeafEntrySource {

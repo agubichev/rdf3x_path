@@ -6,6 +6,10 @@
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/ExactStatisticsSegment.hpp"
 #include "rts/segment/PathSelectivitySegment.hpp"
+#include "rts/runtime/TemporaryDictionary.hpp"
+#include "rts/runtime/Runtime.hpp"
+#include "rts/operator/PlanPrinter.hpp"
+
 #include <map>
 #include <set>
 #include <algorithm>
@@ -287,8 +291,11 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
 	subgraphStop.constructEdges();
 
 	// build the plans for the joins that define the start/stop of Dijkstra scan
-	Plan* subplanStart=translate(subgraphStart.getQuery());
-	Plan* subplanStop=translate(subgraphStop.getQuery());
+	Plan* subplanStart=0,*subplanStop=0;
+	if (subgraphStart.getQuery().edges.size()+subgraphStart.getQuery().nodes.size()>0)
+		subplanStart=translate(subgraphStart.getQuery());
+	if (subgraphStop.getQuery().edges.size()+subgraphStop.getQuery().nodes.size()>0)
+		subplanStop=translate(subgraphStop.getQuery());
 
 	Plan* subplan=0;
 
@@ -332,7 +339,7 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
 //	const QueryGraph::Node& node1=*reinterpret_cast<QueryGraph::Node*>(test->left->right);
 //	const QueryGraph::Node& node2=*reinterpret_cast<QueryGraph::Node*>(test->right->right);
 
-	//cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
+//  cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
 	}
 
     // And store it
@@ -838,6 +845,8 @@ PlanGen::Problem* PlanGen::buildTableFunction(const QueryGraph::TableFunction& /
 static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
    // Find all filters already applied in a plan
 {
+   if (!plan)
+	   return;
    switch (plan->op) {
       case Plan::Union:
       case Plan::MergeUnion:
@@ -877,6 +886,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    if ((query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded)>BitSet::maxWidth)
       return 0;
 
+   cerr<<"translating a query: "<<query.edges.size()<<" "<<query.nodes.size()<<" "<<query.filters.size()<<" "<<query.pathfilter.size()<<endl;
    // Seed the DP table with scans
    vector<Problem*> dpTable;
    dpTable.resize(query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded);
@@ -983,7 +993,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
 
    // Build larger join trees
    vector<unsigned> joinOrderings;
-   cerr<<"dbTAble size: "<<dpTable.size()<<endl;
+  // cerr<<"dbTable size: "<<dpTable.size()<<" "<<dpTable.back()<<endl;
    for (unsigned index=1;index<dpTable.size();index++) {
       map<BitSet,Problem*> lookup;
       for (unsigned index2=0;index2<index;index2++) {
@@ -1042,7 +1052,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                   }
                if (!problem) continue;
 
-               // Combine phyiscal plans
+               // Combine physical plans
                for (Plan* leftPlan=iter->plans;leftPlan;leftPlan=leftPlan->next) {
                   for (Plan* rightPlan=iter2->plans;rightPlan;rightPlan=rightPlan->next) {
                      // Try a merge joins
@@ -1058,7 +1068,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                               if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                               p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
                               p->ordering=leftPlan->ordering;
-                              cerr<<"ordering for a join: "<<p->ordering<<endl;
+                              cerr<<"ordering for a join: "<<p->ordering<<" "<<dpTable.back()<<endl;
                               addPlan(problem,p);
                               break;
                            }
@@ -1106,14 +1116,18 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
          }
       }
    }
-   // Extract the bestplan
-   if (dpTable.empty()||(!dpTable.back()))
+   // Extract the best plan
+   if (dpTable.empty()||(!dpTable.back())){
+	  cerr<<"table empty "<<dpTable.empty()<<" "<<!dpTable.back()<<endl;
       return 0;
+   }
    Plan* plan=dpTable.back()->plans;
-   if (!plan)
+   if (!plan){
       return 0;
+   }
 
 
+   //cerr<<"plan: "<<plan->op<<", right: "<<plan->right->op<<", left: "<<plan->left->op<<endl;
    // Add all remaining filters
    set<const QueryGraph::Filter*> appliedFilters;
    findFilters(plan,appliedFilters);
@@ -1152,9 +1166,10 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
    for (Plan* iter=plan;iter;iter=iter->next)
       if ((!best)||(iter->costs<best->costs)||((iter->costs==best->costs)&&(iter->cardinality<best->cardinality)))
          best=iter;
-   if (!best)
+   if (!best){
+	   cerr<<"not best: returning null"<<endl;
       return 0;
-
+   }
    // Aggregate, if required
    if ((query.getDuplicateHandling()==QueryGraph::CountDuplicates)||(query.getDuplicateHandling()==QueryGraph::NoDuplicates)||(query.getDuplicateHandling()==QueryGraph::ShowDuplicates)) {
       Plan* p=plans.alloc();
