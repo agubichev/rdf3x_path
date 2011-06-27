@@ -16,7 +16,7 @@
 using namespace std;
 //---------------------------------------------------------------------------
 BulkOperation::BulkOperation(DifferentialIndex& differentialIndex)
-   : differentialIndex(differentialIndex)
+   : differentialIndex(differentialIndex),deleteMarker(false)
    // Constructor
 {
 }
@@ -312,7 +312,7 @@ void BulkOperation::commit()
    realIds.clear();
 
    // Load the triples
-   differentialIndex.load(triples);
+   differentialIndex.load(triples,deleteMarker);
 
    // And release
    id2string.clear();

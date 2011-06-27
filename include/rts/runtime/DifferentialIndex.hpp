@@ -83,7 +83,7 @@ class DifferentialIndex
    Database& getDatabase() { return db; }
 
    /// Load new triples
-   void load(const std::vector<Triple>& triples);
+   void load(const std::vector<Triple>& triples, bool todelete);
    /// Map literals to ids
    void mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids);
 

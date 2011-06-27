@@ -2,6 +2,7 @@
 #include "rts/database/DatabaseBuilder.hpp"
 #include "rts/transaction/LogAction.hpp"
 #include "rts/segment/BTree.hpp"
+#include <stdio.h>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -68,7 +69,7 @@ class FactsSegment::IndexImplementation
       unsigned value1,value2,value3,created,deleted;
 
       /// Compare
-      bool operator<(const LeafEntry& o) const { return (value1<o.value1)||((value1==o.value1)&&((value2<o.value2)||((value2==o.value2)&&((value3<o.value3)||((value3==o.value3)&&(created<o.created)))))); }
+      bool operator<(const LeafEntry& o) const { return (value1<o.value1)||((value1==o.value1)&&((value2<o.value2)||((value2==o.value2)&&((value3<o.value3)||((value3==o.value3)&&(created<o.created)||((value3==o.value3)&&(deleted<o.deleted))))))); }
       /// Compare
       bool operator<(const InnerKey& o) const { return (value1<o.value1)||((value1==o.value1)&&((value2<o.value2)||((value2==o.value2)&&(value3<o.value3)))); }
    };
@@ -180,18 +181,27 @@ static unsigned char* writeDelta(unsigned char* writer,unsigned value)
 unsigned FactsSegment::IndexImplementation::packLeafEntries(unsigned char* writer,unsigned char* writerLimit,vector<FactsSegment::IndexImplementation::LeafEntry>::const_iterator entriesStart,vector<FactsSegment::IndexImplementation::LeafEntry>::const_iterator entriesLimit)
    // Pack the facts into leaves using prefix compression
 {
-   unsigned lastValue1,lastValue2,lastValue3;
+   unsigned lastValue1,lastValue2,lastValue3,lastDeleted;
+   bool deletedLastTriple=false;
    unsigned value1,value2,value3;
-   unsigned created=0,deleted=~0u,lc=created,ld=deleted;
+   unsigned created=0u,deleted=~0u,lc=created,ld=deleted;
 
    // Store the first entry
    if (entriesStart==entriesLimit)
       return 0;
    if ((writer+12)>writerLimit)
       return 0;
+
+   if (~(*entriesStart).deleted){
+	   entriesStart++;
+	   if (entriesStart==entriesLimit)
+	      return 1;
+   }
+
    Segment::writeUint32Aligned(writer,lastValue1=(*entriesStart).value1);
    Segment::writeUint32Aligned(writer+4,lastValue2=(*entriesStart).value2);
    Segment::writeUint32Aligned(writer+8,lastValue3=(*entriesStart).value3);
+   lastDeleted=(*entriesStart).deleted;
    writer+=12;
    if (((*entriesStart).created!=created)||((*entriesStart).deleted!=deleted)) {
       if ((writer+9)>writerLimit)
@@ -204,17 +214,34 @@ unsigned FactsSegment::IndexImplementation::packLeafEntries(unsigned char* write
    }
 
    // Store the remaining entries
+   printf("store the remaining entries\n");
    for (vector<LeafEntry>::const_iterator iter=entriesStart+1;iter!=entriesLimit;++iter) {
       // Compute the length
       value1=(*iter).value1; value2=(*iter).value2; value3=(*iter).value3;
+      printf("values: %u %u %u, deleted, deletedLastTriple: %u %u\n",value1,value2,value3,(*iter).deleted,deletedLastTriple);
+      // Delete the triple
+      if (~(*iter).deleted){
+   	     printf("deleting the tuple!\n");
+   	     deletedLastTriple=true;
+         lastValue1=value1; lastValue2=value2; lastValue3=value3; lastDeleted=(*iter).deleted;
+   	     continue;
+      }
+
       unsigned len;
       if (value1==lastValue1) {
          if (value2==lastValue2) {
             if (value3==lastValue3) {
                // Skipping a duplicate
-               if (((*iter).created==created)&&((*iter).deleted==deleted))
+               if (((*iter).created==created)&&((*iter).deleted==deleted)){
+            	  printf("skipping a duplicate\n");
                   continue;
+               }
 
+               if (deletedLastTriple){
+            	   deletedLastTriple=false;
+            	   printf("also delete this tuple\n");
+            	   continue;
+               }
                // Both stamp must change, otherwise we get inconsistent data!
                assert(((*iter).created!=created)&&((*iter).deleted!=deleted));
 
@@ -302,6 +329,17 @@ unsigned FactsSegment::IndexImplementation::packLeafEntries(unsigned char* write
          }
       }
 
+      // Delete if needed
+//      if (iter+1 != entriesLimit){
+//    	  printf("aaa\n");
+//    	  if (value1==(*(iter+1)).value1 && value2==(*(iter+1)).value2 && value3==(*(iter+1)).value3){
+//    		  if ((*iter).deleted == ~(*(iter+1)).deleted){
+//   			  printf("actually deleting the entry\n");
+//    			  continue;
+//    		  }
+//    	  }
+//      }
+
       // Pack the triple
       if (value1==lastValue1) {
          if (value2==lastValue2) {
@@ -327,7 +365,7 @@ unsigned FactsSegment::IndexImplementation::packLeafEntries(unsigned char* write
          writer=writeDelta(writer,value2);
          writer=writeDelta(writer,value3);
       }
-      lastValue1=value1; lastValue2=value2; lastValue3=value3;
+      lastValue1=value1; lastValue2=value2; lastValue3=value3; lastDeleted=(*iter).deleted;
    }
 
    // Done, everything fitted

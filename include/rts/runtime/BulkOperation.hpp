@@ -28,6 +28,8 @@ class BulkOperation
    std::map<DifferentialIndex::Literal,unsigned> string2id;
    /// The temporary dictionary
    std::vector<DifferentialIndex::Literal> id2string;
+   /// Will we delete entries?
+   bool deleteMarker;
 
    /// Map a string
    unsigned mapString(const DifferentialIndex::Literal& value);
@@ -42,7 +44,8 @@ class BulkOperation
    void insert(const std::string& subject,const std::string& predicate,const std::string& object,Type::ID objectType,const std::string& objectSubType);
    /// Build a lock cover
    void buildCover(unsigned maxSize,std::vector<PredicateLockManager::Box>& boxes);
-
+   /// Delete operation
+   void markDeleted(){deleteMarker=true;}
    /// Commit
    void commit();
    /// Abort
