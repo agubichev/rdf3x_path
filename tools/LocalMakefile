@@ -17,6 +17,7 @@ include tools/rdf3xembedded/LocalMakefile
 include tools/rdf3xload/LocalMakefile
 include tools/rdf3xreorg/LocalMakefile
 include tools/rdf3xupdate/LocalMakefile
+include tools/printscan/LocalMakefile
 include tools/rdf3xquery/LocalMakefile
 include tools/resolvestrings/LocalMakefile
 include tools/runbenchmark/LocalMakefile
@@ -46,5 +47,7 @@ src_tools:=				\
 	$(src_tools_resolvestrings)	\
 	$(src_tools_translatesparql)	\
 	$(src_tools_updatetest)     \
-	§(src_tools_checkupdates)
+	$(src_tools_checkupdates)   \
+    $(src_tools_printscan)
+	
 

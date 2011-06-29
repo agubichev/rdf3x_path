@@ -864,7 +864,6 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples, bool deleteMarker
    // SPO
    latches[0].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter){
-	  cerr<<"inserted: "<<(*iter).subject<<" "<<(*iter).predicate<<" "<<(*iter).object<<" "<<created<<" "<<deleted<<endl;
       triples[0].insert(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,created,deleted));
    }
    latches[0].unlock();
@@ -873,15 +872,15 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples, bool deleteMarker
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,deleted));
    latches[1].unlock();
-   // OSP
+   // OPS
    latches[2].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[2].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,deleted));
+      triples[2].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,deleted));
    latches[2].unlock();
-   // OPS
+   // OSP
    latches[3].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[3].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,deleted));
+      triples[3].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,deleted));
    latches[3].unlock();
    // PSO
    latches[4].lockExclusive();
@@ -893,6 +892,7 @@ void DifferentialIndex::load(const vector<Triple>& mewTriples, bool deleteMarker
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
       triples[5].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,deleted));
    latches[5].unlock();
+
 }
 //---------------------------------------------------------------------------
 void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids)
@@ -984,7 +984,6 @@ bool TriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& value3,unsi
    created=(*iter).created;
    deleted=(*iter).deleted;
    ++iter;
-   cerr<<"iterating: next tuple "<<value1<<" "<<value2<<" "<<value3<<" "<<deleted<<endl;
    return true;
 }
 //---------------------------------------------------------------------------
@@ -1105,7 +1104,6 @@ void DifferentialIndex::sync()
    for (unsigned index=0;index<6;index++) {
       if (triples[index].empty())
          continue;
-      cerr<<"size of loaded triple set: "<<triples[index].size()<<endl;
       {
          TriplesLoader loader(triples[index].begin(),triples[index].end());
          db.getFacts(static_cast<Database::DataOrder>(index)).update(loader);
