@@ -17,6 +17,7 @@ include tools/rdf3xembedded/LocalMakefile
 include tools/rdf3xload/LocalMakefile
 include tools/rdf3xreorg/LocalMakefile
 include tools/rdf3xupdate/LocalMakefile
+include tools/printscan/LocalMakefile
 include tools/rdf3xquery/LocalMakefile
 include tools/resolvestrings/LocalMakefile
 include tools/runbenchmark/LocalMakefile
@@ -61,4 +62,8 @@ src_tools:=				\
 	$(src_tools_selectivityerror)	\
 	$(src_tools_dijkstratest)	\
 	$(src_tools_dijkstra)	\
-	$(src_tools_timeneighbors)
+	$(src_tools_timeneighbors)  \
+	$(src_tools_checkupdates)   \
+        $(src_tools_printscan)
+	
+

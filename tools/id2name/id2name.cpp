@@ -21,42 +21,13 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-static unsigned numberOfNodes(Database& db){
-	// Collect all nodes
-	set<unsigned> allNodes;
-	{
-	   FactsSegment::Scan scan;
-	   if (scan.first(db.getFacts(Database::Order_Subject_Predicate_Object),0,0,0)) do {
-	      allNodes.insert(scan.getValue1());
-	      allNodes.insert(scan.getValue3());
-	   } while (scan.next());
-	}
-
-	cerr<<"nodes: "<<allNodes.size()<<endl;
-	return allNodes.size();
-}
-//---------------------------------------------------------------------------
-static string lookupById(Database& db,unsigned id)
+static void lookupById(Database& db,unsigned id)
    // Lookup a string id
 {
    const char* start=0,*stop=0; Type::ID type; unsigned subType;
    db.getDictionary().lookupById(id,start,stop,type,subType);
-   return string(start,stop);
-}
-//---------------------------------------------------------------------------
-static void randomLookups(Database& db){
-	srand(time(0));
-	unsigned dbSize=numberOfNodes(db);
-	Timestamp t1;
-	for (unsigned i=0; i < 4500; i++){
-		if (i%1000==0)
-			cerr<<"i "<<i<<endl;
-		unsigned id=rand()%dbSize;
-		const char* start=0,*stop=0; Type::ID type; unsigned subType;
-		db.getDictionary().lookupById(id,start,stop,type,subType);
-	}
-	Timestamp t2;
-	cerr<<"time: "<<t2-t1<<" ms"<<endl;
+
+   cout<<string(start,stop)<<endl;
 }
 //---------------------------------------------------------------------------
 /// lookup the name for internal id
@@ -73,7 +44,9 @@ int main(int argc,char* argv[]){
 	   return 1;
 	}
 
-	cout<<"name: "<<lookupById(db, atoi(argv[2]))<<endl;
 
-	randomLookups(db);
+	lookupById(db, atoi(argv[2]));
+
+
+
 }

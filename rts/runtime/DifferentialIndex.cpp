@@ -855,41 +855,44 @@ DifferentialIndex::~DifferentialIndex()
 {
 }
 //---------------------------------------------------------------------------
-void DifferentialIndex::load(const vector<Triple>& mewTriples)
+void DifferentialIndex::load(const vector<Triple>& mewTriples, bool deleteMarker)
    // Load new triples
 {
-   static const unsigned created = 0;
+   static const unsigned created = deleteMarker? ~0u:0u;
+   static const unsigned deleted = deleteMarker? 0u:~0u;
 
    // SPO
    latches[0].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[0].insert(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,created,~0u));
+   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter){
+      triples[0].insert(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,created,deleted));
+   }
    latches[0].unlock();
    // SOP
    latches[1].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,~0u));
+      triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,deleted));
    latches[1].unlock();
-   // OSP
+   // OPS
    latches[2].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[2].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,~0u));
+      triples[2].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,deleted));
    latches[2].unlock();
-   // OPS
+   // OSP
    latches[3].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[3].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,~0u));
+      triples[3].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,deleted));
    latches[3].unlock();
    // PSO
    latches[4].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[4].insert(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,created,~0u));
+      triples[4].insert(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,created,deleted));
    latches[4].unlock();
    // POS
    latches[5].lockExclusive();
    for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[5].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,~0u));
+      triples[5].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,deleted));
    latches[5].unlock();
+
 }
 //---------------------------------------------------------------------------
 void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids)
@@ -981,7 +984,6 @@ bool TriplesLoader::next(unsigned& value1,unsigned& value2,unsigned& value3,unsi
    created=(*iter).created;
    deleted=(*iter).deleted;
    ++iter;
-
    return true;
 }
 //---------------------------------------------------------------------------
