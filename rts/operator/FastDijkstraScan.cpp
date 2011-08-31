@@ -25,18 +25,6 @@ using namespace std;
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
-static string lookupLiteral(Database& db,unsigned id)
-   // Lookup a literal value
-{
-   const char* start=0,*end=start; Type::ID type; unsigned subType;
-   db.getDictionary().lookupById(id,start,end,type,subType);
-
-   if (type==Type::URI)
-      return "<"+string(start,end)+">"; else
-      return "\""+string(start,end)+"\"";
-}
-//---------------------------------------------------------------------------
 void FastDijkstraScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
@@ -45,7 +33,7 @@ void FastDijkstraScan::print(PlanPrinter& out)
 }
 //---------------------------------------------------------------------------
 FastDijkstraScan::FastDijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter)
-   : Operator(expectedOutputCardinality),dict(db.getDictionary()),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),order(order),facts(db.getFacts(order)),pathfilter(pathfilter),subplan(subplan),pathnode(pathnode)
+   : Operator(expectedOutputCardinality),value1(value1),value3(value3),value2(value2),bound1(bound1),bound2(bound2),bound3(bound3),facts(db.getFacts(order)),order(order),pathfilter(pathfilter),dict(db.getDictionary()),subplan(subplan),pathnode(pathnode)
    // Constructor
 {
 }

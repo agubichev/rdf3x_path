@@ -498,7 +498,6 @@ void SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
 	  output.addProjection(*iter);
    }
 
-
    // Set the duplicate handling
    switch (input.getProjectionModifier()) {
       case SPARQLParser::Modifier_None: output.setDuplicateHandling(QueryGraph::AllDuplicates); break;
@@ -506,6 +505,12 @@ void SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
       case SPARQLParser::Modifier_Reduced: output.setDuplicateHandling(QueryGraph::ReducedDuplicates); break;
       case SPARQLParser::Modifier_Count: output.setDuplicateHandling(QueryGraph::CountDuplicates); break;
       case SPARQLParser::Modifier_Duplicates: output.setDuplicateHandling(QueryGraph::ShowDuplicates); break;
+   }
+
+   // Set the query form
+   switch (input.getQueryForm()){
+      case SPARQLParser::Select: output.setQueryForm(QueryGraph::Select); break;
+      case SPARQLParser::Describe: output.setQueryForm(QueryGraph::Describe); break;
    }
 
    // Order by clause

@@ -45,6 +45,10 @@ class TemporaryDictionary
    std::vector<Literal> id2string;
    /// string to id
    std::map<Literal,unsigned> string2id;
+   /// Refresh the dictionary if the underlying diff index has changed
+   void refresh();
+
+   friend class DifferentialIndex;
 
    public:
    /// Constructor

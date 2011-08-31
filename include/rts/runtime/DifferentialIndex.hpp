@@ -4,6 +4,7 @@
 #include "infra/osdep/Latch.hpp"
 #include "rts/database/Database.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "rts/runtime/TemporaryDictionary.hpp"
 #include <map>
 #include <set>
 //---------------------------------------------------------------------------
@@ -28,6 +29,11 @@ class DifferentialIndex
    struct Triple {
       /// Entries
       unsigned subject,predicate,object;
+
+      /// Constructor
+      Triple(): subject(0),predicate(0),object(0) {}
+      /// Constructor
+      Triple(unsigned subject,unsigned predicate,unsigned object): subject(subject), predicate(predicate),object(object) {}
    };
    /// A versioned triple
    struct VersionedTriple {
@@ -66,12 +72,16 @@ class DifferentialIndex
    DictionarySegment& dict;
    /// Triples
    std::set<VersionedTriple> triples[6];
+   /// Deleted triples - to speed up the duplicate check
+   std::set<VersionedTriple> deletedTriples;
    /// Dictionary
    std::map<DictionarySegment::Literal,unsigned> string2id;
    /// Dictionary
    std::vector<DictionarySegment::Literal> id2string;
    /// The latches
    Latch latches[7];
+   /// The temporary dictionary
+   TemporaryDictionary tmpdict;
 
    public:
    /// Constructor
@@ -81,6 +91,8 @@ class DifferentialIndex
 
    /// Get the underlying database
    Database& getDatabase() { return db; }
+   /// Get the underlying temporary dictionary
+   TemporaryDictionary& getTemporaryDictionary() {return tmpdict;}
 
    /// Load new triples
    void load(const std::vector<Triple>& triples, bool todelete);

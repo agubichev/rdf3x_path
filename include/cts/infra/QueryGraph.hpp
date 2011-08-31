@@ -20,7 +20,8 @@ class QueryGraph
    public:
    /// Possible duplicate handling modes
    enum DuplicateHandling { AllDuplicates, CountDuplicates, ReducedDuplicates, NoDuplicates, ShowDuplicates };
-
+   /// Possible query forms
+   enum QueryForm {Select, Describe};
    /// A node in the graph
    struct Node {
       /// The values
@@ -129,6 +130,8 @@ class QueryGraph
    std::vector<unsigned> projection;
    /// The duplicate handling
    DuplicateHandling duplicateHandling;
+   /// The query form
+   QueryForm queryForm;
    /// The order by clause
    std::vector<Order> order;
    /// Maximum result size
@@ -154,6 +157,10 @@ class QueryGraph
    void setDuplicateHandling(DuplicateHandling d) { duplicateHandling=d; }
    /// Get the duplicate handling mode
    DuplicateHandling getDuplicateHandling() const { return duplicateHandling; }
+   /// Get the query form
+   QueryForm getQueryForm() const { return queryForm;}
+   /// Set the query form
+   void setQueryForm(QueryForm f) { queryForm=f; }
    /// Set the result limit
    void setLimit(unsigned l) { limit=l; }
    /// Get the result limit

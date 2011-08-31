@@ -28,6 +28,13 @@ TemporaryDictionary::~TemporaryDictionary()
 {
 }
 //---------------------------------------------------------------------------
+void TemporaryDictionary::refresh()
+   // Refresh the dictionary if the underlying diff index has changed
+{
+	if (diffIndex)
+		idBase=diffIndex->getNextId();
+}
+//---------------------------------------------------------------------------
 bool TemporaryDictionary::lookup(const std::string& text,Type::ID type,unsigned subType,unsigned& id)
    // Lookup an id for a given string
 {

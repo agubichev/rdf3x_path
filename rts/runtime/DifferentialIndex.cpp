@@ -7,7 +7,7 @@
 #include "rts/segment/DictionarySegment.hpp"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/runtime/Runtime.hpp"
-#include <iostream>
+#include "rts/runtime/TemporaryDictionary.hpp"
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -32,6 +32,8 @@ class DifferentialIndexScan : public Operator
    Latch& latch;
    /// The triples
    set<DifferentialIndex::VersionedTriple>& triples;
+   /// Deleted triples - we need to skip them while scanning the database index
+   set<DifferentialIndex::VersionedTriple> deletedTriples;
    /// The timestamp
    const unsigned timestamp;
    /// The values
@@ -95,6 +97,7 @@ void DifferentialIndexScan::incIter()
       const DifferentialIndex::VersionedTriple& t=(*iter);
       if ((~check2)&&(t.value2!=check2)) { ++iter; continue; }
       if ((~check3)&&(t.value3!=check3)) { ++iter; continue; }
+      if (~t.deleted) {++iter; continue;}
       if ((t.created>timestamp)||(t.deleted<timestamp)) { ++iter; continue; }
       break;
    }
@@ -130,6 +133,7 @@ unsigned DifferentialIndexScan::first()
       const DifferentialIndex::VersionedTriple& t=(*iter);
       if ((~check2)&&(t.value2!=check2)) { ++iter; continue; }
       if ((~check3)&&(t.value3!=check3)) { ++iter; continue; }
+      if (~t.deleted) {++iter; deletedTriples.insert(DifferentialIndex::VersionedTriple(t.value1,t.value2,t.value3,0,0));continue;}
       if ((t.created>timestamp)||(t.deleted<timestamp)) { ++iter; continue; }
       break;
    }
@@ -148,6 +152,9 @@ unsigned DifferentialIndexScan::first()
 
    // Compare
    if (iter==limit) {
+	  // check whether we need to skip this triple
+	  if (deletedTriples.count(DifferentialIndex::VersionedTriple(value1->value,value2->value,value3->value,0,0)))
+		  return next();
       observedOutputCardinality+=leftCount;
       return leftCount;
    }
@@ -205,6 +212,9 @@ unsigned DifferentialIndexScan::next()
          }
          return 0;
       }
+	  // check whether we need to skip this triple
+	  if (deletedTriples.count(DifferentialIndex::VersionedTriple(value1->value,value2->value,value3->value,0,0)))
+		  return next();
       observedOutputCardinality+=leftCount;
       return leftCount;
    }
@@ -215,6 +225,9 @@ unsigned DifferentialIndexScan::next()
       value2->value=t.value2;
       value3->value=t.value3;
       incIter();
+	  // check whether we need to skip this triple
+	  if (deletedTriples.count(DifferentialIndex::VersionedTriple(value1->value,value2->value,value3->value,0,0)))
+		  return next();
       observedOutputCardinality+=1;
       return 1;
    }
@@ -845,7 +858,7 @@ void FullyAggregatedDifferentialIndexScan::getAsyncInputCandidates(Scheduler& sc
 }
 //---------------------------------------------------------------------------
 DifferentialIndex::DifferentialIndex(Database& db)
-   : db(db),dict(db.getDictionary())
+   : db(db),dict(db.getDictionary()),tmpdict(*this)
    // Constructor
 {
 }
@@ -858,41 +871,114 @@ DifferentialIndex::~DifferentialIndex()
 void DifferentialIndex::load(const vector<Triple>& mewTriples, bool deleteMarker)
    // Load new triples
 {
-   static const unsigned created = deleteMarker? ~0u:0u;
-   static const unsigned deleted = deleteMarker? 0u:~0u;
+   unsigned created = deleteMarker? ~0u:0u;
+   unsigned deleted = deleteMarker? 0u:~0u;
+
+   // check for duplicates, i.e. the triples with the same SPO and opposite delete markers
+   vector<Triple> uniqueTriples;
+   for (vector<Triple>::const_iterator iter=mewTriples.begin(); iter!=mewTriples.end(); iter++){
+	   set<VersionedTriple>::iterator lookup=deletedTriples.find(VersionedTriple(iter->subject,iter->predicate,iter->object,~0u,0u));
+	   if (lookup!=deletedTriples.end()){
+		   deletedTriples.erase(lookup);
+	   }
+	   else
+		   uniqueTriples.push_back(Triple(iter->subject,iter->predicate,iter->object));
+   }
+
+   // populate the deletedTriples
+   if (~deleted){
+	   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end(); iter!=limit; iter++)
+	       deletedTriples.insert(VersionedTriple(iter->subject,iter->predicate,iter->object,~0u,0u));
+   }
 
    // SPO
    latches[0].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter){
+   for (vector<Triple>::const_iterator iter=uniqueTriples.begin(),limit=uniqueTriples.end();iter!=limit;++iter){
+	  // check whether we inserted the same triple previously
+	  if (~deleted){
+		  set<VersionedTriple>::iterator lookup = triples[0].find(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,~created,~deleted));
+		  if (lookup != triples[0].end()){
+			  triples[0].erase(lookup);
+			  deletedTriples.erase(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,~0u,0u));
+			  continue;
+		  }
+	  }
       triples[0].insert(VersionedTriple((*iter).subject,(*iter).predicate,(*iter).object,created,deleted));
    }
    latches[0].unlock();
    // SOP
    latches[1].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,deleted));
+   for (vector<Triple>::const_iterator iter=uniqueTriples.begin(),limit=uniqueTriples.end();iter!=limit;++iter){
+	  // check whether we inserted the same triple previously
+	  if (~deleted){
+		 set<VersionedTriple>::iterator lookup = triples[1].find(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,~created,~deleted));
+	     if (lookup != triples[1].end()){
+		    triples[1].erase(lookup);
+	    	continue;
+		 }
+	  }
+	  triples[1].insert(VersionedTriple((*iter).subject,(*iter).object,(*iter).predicate,created,deleted));
+   }
    latches[1].unlock();
    // OPS
    latches[2].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
+   for (vector<Triple>::const_iterator iter=uniqueTriples.begin(),limit=uniqueTriples.end();iter!=limit;++iter){
+      // check whether we inserted the same triple previously
+	  if (~deleted){
+		 set<VersionedTriple>::iterator lookup = triples[2].find(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,~created,~deleted));
+		 if (lookup != triples[2].end()){
+		    triples[2].erase(lookup);
+		   	continue;
+		 }
+	  }
       triples[2].insert(VersionedTriple((*iter).object,(*iter).predicate,(*iter).subject,created,deleted));
+   }
    latches[2].unlock();
    // OSP
    latches[3].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
-      triples[3].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,deleted));
+   for (vector<Triple>::const_iterator iter=uniqueTriples.begin(),limit=uniqueTriples.end();iter!=limit;++iter){
+	  // check whether we inserted the same triple previously
+	  if (~deleted){
+		 set<VersionedTriple>::iterator lookup = triples[3].find(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,~created,~deleted));
+		 if (lookup != triples[3].end()){
+		    triples[3].erase(lookup);
+		   	continue;
+		 }
+	  }
+	  triples[3].insert(VersionedTriple((*iter).object,(*iter).subject,(*iter).predicate,created,deleted));
+   }
    latches[3].unlock();
    // PSO
    latches[4].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
+   for (vector<Triple>::const_iterator iter=uniqueTriples.begin(),limit=uniqueTriples.end();iter!=limit;++iter){
+	  // check whether we inserted the same triple previously
+	  if (~deleted){
+		 set<VersionedTriple>::iterator lookup = triples[4].find(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,~created,~deleted));
+		 if (lookup != triples[4].end()){
+		    triples[4].erase(lookup);
+		   	continue;
+		 }
+	  }
       triples[4].insert(VersionedTriple((*iter).predicate,(*iter).subject,(*iter).object,created,deleted));
+   }
    latches[4].unlock();
    // POS
    latches[5].lockExclusive();
-   for (vector<Triple>::const_iterator iter=mewTriples.begin(),limit=mewTriples.end();iter!=limit;++iter)
+   for (vector<Triple>::const_iterator iter=uniqueTriples.begin(),limit=uniqueTriples.end();iter!=limit;++iter){
+	  // check whether we inserted the same triple previously
+	  if (~deleted){
+		 set<VersionedTriple>::iterator lookup = triples[5].find(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,~created,~deleted));
+		 if (lookup != triples[5].end()){
+		    triples[5].erase(lookup);
+		   	continue;
+		 }
+	  }
       triples[5].insert(VersionedTriple((*iter).predicate,(*iter).object,(*iter).subject,created,deleted));
+   }
    latches[5].unlock();
 
+   // refresh the tmp dictionary
+   tmpdict.refresh();
 }
 //---------------------------------------------------------------------------
 void DifferentialIndex::mapLiterals(const std::vector<Literal>& literals,std::vector<unsigned>& ids)

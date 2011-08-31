@@ -2,7 +2,7 @@
 #define H_rts_operator_DijkstraScan
 //---------------------------------------------------------------------------
 // RDF-3X
-// (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
+// (c) 2011 Thomas Neumann, Andrey Gubichev. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
 //
 // This work is licensed under the Creative Commons
 // Attribution-Noncommercial-Share Alike 3.0 Unported License. To view a copy

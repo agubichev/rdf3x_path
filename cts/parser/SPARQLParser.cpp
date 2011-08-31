@@ -147,8 +147,11 @@ void SPARQLParser::parseProjection()
    // Parse the projection
 {
    // Parse the projection
-   if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("select")))
-      throw ParserException("'select' expected");
+   if ((lexer.getNext()!=SPARQLLexer::Identifier)&&((!lexer.isKeyword("select"))||(!lexer.isKeyword("describe"))))
+      throw ParserException("'select' or 'describe' expected");
+
+   if (lexer.isKeyword("select")) queryForm=Select; else
+   if (lexer.isKeyword("describe")) queryForm=Describe;
 
    // Parse modifiers, if any
    {

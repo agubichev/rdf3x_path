@@ -233,7 +233,8 @@ unsigned ResultsPrinter::first()
 		  }
 	  }
 	  else {
-
+		  // should not happen
+		  return 0;
 	  }
    }
 

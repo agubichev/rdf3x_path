@@ -30,7 +30,7 @@ void DijkstraScan::print(PlanPrinter& out)
 }
 //---------------------------------------------------------------------------
 DijkstraScan::DijkstraScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,VectorRegister* value2,bool bound2,Register* value3,bool bound3,double expectedOutputCardinality,Register* pathnode,Operator* subplan,QueryGraph::Filter* pathfilter)
-   : Operator(expectedOutputCardinality),dict(db.getDictionary()),value1(value1),value2(value2),value3(value3),bound1(bound1),bound2(bound2),bound3(bound3),order(order),facts(db.getFacts(order)),pathfilter(pathfilter),pathnode(pathnode),subplan(subplan)
+   : Operator(expectedOutputCardinality),value1(value1),value3(value3),value2(value2),bound1(bound1),bound2(bound2),bound3(bound3),facts(db.getFacts(order)),order(order),pathfilter(pathfilter),dict(db.getDictionary()),subplan(subplan),pathnode(pathnode)
    // Constructor
 {
 }

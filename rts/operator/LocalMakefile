@@ -20,5 +20,5 @@ src_rts_operator:=					\
 	rts/operator/TableFunction.cpp			\
 	rts/operator/Union.cpp				\
 	rts/operator/DijkstraScan.cpp		\
-	rts/operator/FastDijkstraScan.cpp
-	
+	rts/operator/FastDijkstraScan.cpp   \
+	rts/operator/DescribeScan.cpp

@@ -8,7 +8,7 @@
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
 #include "rts/operator/FastDijkstraScan.hpp"
-
+#include "rts/operator/DescribeScan.hpp"
 #include "rts/operator/DijkstraScan.hpp"
 #include "rts/operator/IndexScan.hpp"
 #include "rts/operator/MergeJoin.hpp"
@@ -159,7 +159,6 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject);
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,1,node,predicate,constPredicate);
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
-
    // And return the operator
    if (runtime.hasDifferentialIndex())
       return runtime.getDifferentialIndex().createScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,plan->cardinality);
@@ -375,7 +374,6 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left,pathfilter);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
-
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
@@ -789,13 +787,13 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
    // Allocate registers for all relations
    MapRegister registers;
    map<unsigned,set<unsigned> > registerClasses;
-   map<unsigned, set<unsigned> > pathRegisterClasses;
 
    pair<unsigned,unsigned> p=allocateRegisters(registers,registerClasses,query.getQuery(),0,0);
    unsigned registerCount=p.first;
    unsigned unboundVariable=registerCount;
+   unsigned describeVars=query.getQueryForm()==QueryGraph::Describe? unboundVariable+3:unboundVariable;
    runtime.allocateVectorRegisters(p.second);
-   runtime.allocateRegisters(unboundVariable+1);
+   runtime.allocateRegisters(describeVars+1);
 
    // Prepare domain information for join attributes
    {
@@ -875,6 +873,12 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
             output.valueoutput.push_back(runtime.getRegister(unboundVariable));
          }
       }
+      // prepare registers (s,p,o) for the result of the DESCRIBE operator
+      if (query.getQueryForm()==QueryGraph::Describe){
+          output.valueoutput.push_back(runtime.getRegister(unboundVariable+1));
+          output.valueoutput.push_back(runtime.getRegister(unboundVariable+2));
+          output.valueoutput.push_back(runtime.getRegister(unboundVariable+3));
+      }
    }
 
    return tree;
@@ -898,8 +902,18 @@ Operator* CodeGen::translate(Runtime& runtime,const QueryGraph& query,Plan* plan
       case QueryGraph::NoDuplicates: duplicateHandling=ResultsPrinter::ReduceDuplicates; break;
       case QueryGraph::ShowDuplicates: duplicateHandling=ResultsPrinter::ShowDuplicates; break;
    }
-   tree=new ResultsPrinter(runtime,tree,output,duplicateHandling,query.getLimit(),silent);
-
+   // Add new registers, since we want to return all the tuples that contain the URI
+   if (query.getQueryForm()==QueryGraph::Describe){
+	   Output descrOutput;
+	   unsigned regSize=output.valueoutput.size();
+	   for (unsigned i=0; i < 3; i++) {
+		   descrOutput.valueoutput.push_back(output.valueoutput[regSize-(3-i)]);
+		   descrOutput.order.push_back(0);
+	   }
+	   tree=new DescribeScan(runtime.getDatabase(),tree,output,output.valueoutput[regSize-3],output.valueoutput[regSize-2],output.valueoutput[regSize-1],0);
+	   tree=new ResultsPrinter(runtime,tree,descrOutput,duplicateHandling,query.getLimit(),silent);
+   } else
+	   tree=new ResultsPrinter(runtime,tree,output,duplicateHandling,query.getLimit(),silent);
    return tree;
 }
 //---------------------------------------------------------------------------

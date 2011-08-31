@@ -106,6 +106,8 @@ class SPARQLParser
    };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };
+   /// The query forms
+   enum QueryForm{ Select, Construct, Ask, Describe};
    /// Sort order
    struct Order {
       /// Variable id
@@ -130,6 +132,8 @@ class SPARQLParser
 
    /// The projection modifier
    ProjectionModifier projectionModifier;
+   // The query form
+   QueryForm queryForm;
    /// The projection clause
    std::vector<unsigned> projection;
    /// The path projection
@@ -236,6 +240,8 @@ class SPARQLParser
 
    /// The projection modifier
    ProjectionModifier getProjectionModifier() const { return projectionModifier; }
+   /// The query form
+   QueryForm getQueryForm() const {return queryForm; }
    /// The size limit
    unsigned getLimit() const { return limit; }
 };
