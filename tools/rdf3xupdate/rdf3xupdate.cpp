@@ -76,7 +76,7 @@ int main(int argc,char* argv[])
       for (int index=indexStart;index<argc;index++) {
          ifstream in(argv[index]);
          if (!in.is_open()) {
-            cerr << "unable top open " << argv[index] << endl;
+            cerr << "unable to open " << argv[index] << endl;
             return 1;
          }
   	   if (strcmp(argv[2],"delete")==0)

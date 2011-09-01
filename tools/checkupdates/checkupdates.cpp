@@ -252,8 +252,6 @@ void RDF3XDriver::loadAllDataset(const char* input)
     while (true) {
         if (!parser.parse(subject,predicate,object,objectType,objectSubType))
             break;
-        //  bulk.insert(subject,predicate,object,objectType,objectSubType);
-
         allTriples.push_back(Triple(subject,predicate,object,objectType,objectSubType));
     }
 }
@@ -310,10 +308,7 @@ void RDF3XDriver::checkUpdates()
 {
     cout<<"testing the updates..."<<endl;
     for (vector<Triple>::iterator it = insertedTriples.begin(); it != insertedTriples.end(); it++) {
-       // cout<<"triple ("<<it->subject<<", "<<it->predicate<<", "<<it->object<<")";
-
         assert(findTriple(*it, db, *diff));
-       // cout<<" OK"<<endl;
     }
     cout<<"updates OK"<<endl;
 }
