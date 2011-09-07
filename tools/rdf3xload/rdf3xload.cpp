@@ -1393,14 +1393,8 @@ int main(int argc,char* argv[])
             cerr << "Unable to open " << argv[2] << endl;
             return 1;
          }
-//         tmpName<<argv[index]<<"_tmp.n3";
-//         ofstream out(tmpName.str().c_str());
-//         if (!sortInput(in,out,rawFacts))
-//        	 return 1;
-//         ifstream sortedin(tmpName.str().c_str());
          if (!parse(in,argv[index],lookup,rawFacts,rawStrings,subTypes))
             return 1;
-//         remove(tmpName.str().c_str());
       }
    } else {
       StringLookup lookup;
@@ -1418,8 +1412,6 @@ int main(int argc,char* argv[])
    TempFile newFacts(argv[1]);
    IdStatistics stat;
    resolveIds(rawFacts,stringIds,facts,stat);
-  // renameIds(stringIds,facts,newFacts,stringTable,newStringTable,stat);
-//   renameIdsBySorting(stringIds,facts,newFacts,stringTable,newStringTable,stat);
 
 
    // And start the load
