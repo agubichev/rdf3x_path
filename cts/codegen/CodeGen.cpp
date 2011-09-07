@@ -101,7 +101,6 @@ static Operator* translateDijkstraScan(Runtime& runtime,const map<unsigned,Regis
 // Translate a path scan into an operator tree
 {
 	const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
-	cerr<<"dijkstra node: "<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
 
 	// plan that computes start/stop of the scan
 	Operator* subplan=0;
@@ -109,29 +108,14 @@ static Operator* translateDijkstraScan(Runtime& runtime,const map<unsigned,Regis
 	Database::DataOrder order=static_cast<Database::DataOrder>(plan->opArg);
 
 	if (plan->left){
-		cerr<<"translating: "<<plan->left->op<<" "<<static_cast<Database::DataOrder>(plan->opArg)<<endl;
-
-		if (order==Database::Order_Subject_Predicate_Object){
-
-		}
-		else if (order==Database::Order_Object_Predicate_Subject){
-			cerr<<"projection : "<<node.object<<endl;
+		 if (order==Database::Order_Object_Predicate_Subject){
 			set<unsigned> projection;
 			projection.insert(node.object);
 			subplan=translatePlan(runtime,context,projection,bindings,registers,plan->left,pathfilter);
-//			cerr<<bindings.valuebinding.count(node.object)<<endl;
 			pathnode=bindings.valuebinding[node.object];
-//			if (subplan->first()) do{
-//				cerr<<pathnode->value<<endl;
-//			} while (subplan->next());
 		}
 	}
 
-//	Operator* subplan=translatePlan(runtime,context,projection,bindings,registers,plan->left,pathfilter);
-
-//	if (subplan->first()){
-
-//	}
 	// Initialize the registers
 	bool constSubject,constPredicate,constObject;
 	Register* subject,*object;
@@ -355,18 +339,10 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
 {
    // Get the join variables (if any)
    set<unsigned> joinVariables,newProjection=projection;
-   const QueryGraph::Node& node1=*reinterpret_cast<QueryGraph::Node*>(plan->left->right);
-   const QueryGraph::Node& node2=*reinterpret_cast<QueryGraph::Node*>(plan->right->right);
-   cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
    getJoinVariables(context,joinVariables,plan->left,plan->right);
    newProjection.insert(joinVariables.begin(),joinVariables.end());
    assert(!joinVariables.empty());
    unsigned joinOn=plan->opArg;
-   cerr<<"join vars:";
-   for (set<unsigned>::iterator it=joinVariables.begin(); it!=joinVariables.end(); it++)
-	   cerr<<*it<<" ";
-   cerr<<endl;
-   cerr<<"join on: "<<joinOn<<endl;
    assert(joinVariables.count(joinOn));
 
    // Build the input trees
@@ -832,7 +808,6 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
       // Construct the projection
       set<unsigned> projection;
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter){
-    	 cerr<<"proj: "<<*iter<<endl;
          projection.insert(*iter);
       }
 

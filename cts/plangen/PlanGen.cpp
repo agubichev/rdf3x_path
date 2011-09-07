@@ -101,13 +101,6 @@ void PlanGen::addPlan(Problem* problem,Plan* plan)
    // Add the plan to the problem set
    plan->next=problem->plans;
    problem->plans=plan;
-
-	cerr<<"plan after adding: "<<problem->plans->op<<" "<<endl;
-   if (problem->plans->op==9&&problem->plans->left)
-		   cerr<<problem->plans->left->op<<endl;
-   if (problem->plans->op==9&&problem->plans->left->left)
-	   cerr<<problem->plans->left->left->op<<endl;
-
 }
 //---------------------------------------------------------------------------
 static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query,Plan* plan,unsigned value1,unsigned value2,unsigned value3)
@@ -156,12 +149,8 @@ static Plan* buildFilters(PlanContainer& plans,const QueryGraph::SubQuery& query
 static Plan* buildPathFilters(PlanContainer& plans,const QueryGraph::SubQuery& query,Plan* plan,unsigned pathvar){
    set<unsigned> allAttributes;
    allAttributes.insert(pathvar);
-   cerr<<"path attr: "<<pathvar<<endl;
-   cerr<<"build path filters: "<<query.pathfilter.size()<<endl;
    for (vector<QueryGraph::Filter>::const_iterator iter=query.pathfilter.begin(),limit=query.pathfilter.end();iter!=limit;++iter){
-	  cerr<<"filter: "<<iter->type<<" "<<iter->arg1->id<<" "<<iter->arg2->value<<endl;
       if ((*iter).isApplicable(allAttributes)) {
-    	 cerr<<"applicable"<<endl;
          Plan* p2=plans.alloc();
          p2->op=Plan::PathFilter;
          p2->opArg=(*iter).id;
@@ -217,8 +206,6 @@ void PlanGen::buildDijkstraScan(const QueryGraph::SubQuery& query,Database::Data
 		db->getPathSelectivity().lookupSelectivity(obj,PathSelectivitySegment::Backward,selectivity);
 	}
 
-	cerr<<"selectivity: "<<selectivity<<endl;
-	plan->cardinality=selectivity;
     unsigned pages=1+static_cast<unsigned>(db->getFacts(order).getPages()*(static_cast<double>(selectivity)/static_cast<double>(db->getFacts(order).getCardinality())));
 	plan->costs=Costs::seekBtree()+Costs::scan(pages);
 
@@ -245,7 +232,6 @@ static Plan* copyPlan(Plan* plan, PlanContainer* plans){
 //---------------------------------------------------------------------------
 void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem* result,unsigned predicate,unsigned subj,unsigned obj)
 {
-	cerr<<"subj obj: "<<subj<<" "<<obj<<endl;
 	Database::DataOrder order;
 
 	// two queries that define start/stop of the scan
@@ -255,20 +241,17 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
 	for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter) {
 	   const QueryGraph::Node& n=*iter;
 	   /// hack
-	   cerr<<" query: "<<n.subject<<" "<<n.predicate<<" "<<n.object<<endl;
 	   if (n.constObject){
 		   //check if it corresponds to our path triple
 		   if (n.subject==subj){
 			   QueryGraph::Node newNode=n;
 			   newNode.usedInDijkstraInit=false;
 			   subqueryStart.nodes.push_back(newNode);
-			   cerr<<"found binding for "<<n.subject<<" "<<n.predicate<<" "<<n.object<<" with subj (1) "<<endl;
 		   }
 		   else if (n.subject==obj){
 			   QueryGraph::Node newNode=n;
 			   newNode.usedInDijkstraInit=false;
 			   subqueryStop.nodes.push_back(newNode);
-			   cerr<<"found binding for "<<n.subject<<" "<<n.predicate<<" "<<n.object<<" with obj (1) "<<endl;
 		   }
 	   }
 	   if (n.constSubject){
@@ -277,13 +260,11 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
 			   QueryGraph::Node newNode=n;
 			   newNode.usedInDijkstraInit=false;
 			   subqueryStart.nodes.push_back(newNode);
-			   cerr<<"found binding for "<<n.subject<<" "<<n.predicate<<" "<<n.object<<" with subj (2) "<<endl;
 		   }
 		   else if (n.object==obj){
 			   QueryGraph::Node newNode=n;
 			   newNode.usedInDijkstraInit=false;
 			   subqueryStop.nodes.push_back(newNode);
-			   cerr<<"found binding for "<<n.subject<<" "<<n.predicate<<" "<<n.object<<" with obj (2) "<<endl;
 		   }
 	   }
 	}
@@ -303,16 +284,12 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
 	if (subplanStart&&subplanStop){
 		subplan=(subplanStart->cardinality<subplanStop->cardinality)?subplanStart:subplanStop;
 		order=(subplanStart->cardinality<subplanStop->cardinality)?Database::Order_Subject_Predicate_Object:Database::Order_Object_Predicate_Subject;
-
-		cerr<<"both are valid"<<endl;
 	}
 	else if (subplanStart){
-		cerr<<"start is valid"<<endl;
 		subplan=subplanStart;
 		order=Database::Order_Subject_Predicate_Object;
 	}
 	else if (subplanStop){
-		cerr<<"stop is valid"<<endl;
 		subplan=subplanStop;
 		order=Database::Order_Object_Predicate_Subject;
 	}
@@ -327,38 +304,11 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
 	plan->cardinality=~0u;
 	plan->costs=~0u;
 
-    cerr<<"subgraph nodes size: "<<subgraphStop.getQuery().nodes.size()<<" "<<subgraphStop.getQuery().edges.size()<<endl;
-
     // Apply filters
 	plan=buildPathFilters(plans,query,plan,predicate);
-	{
-//	Plan* test=plan->left;
-//	cerr<<"TEST: "<<test->op<<endl;
-//	cerr<<"TEST: "<<test->left->op<<endl;
-//	test=test->left;
-//	const QueryGraph::Node& node1=*reinterpret_cast<QueryGraph::Node*>(test->left->right);
-//	const QueryGraph::Node& node2=*reinterpret_cast<QueryGraph::Node*>(test->right->right);
-
-//  cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
-	}
 
     // And store it
     addPlan(result,plan);
-
-	{
-/*
-    Plan* test=result->plans->left;
-    cerr<<"AFTER adding to results"<<endl;
-	cerr<<"TEST: "<<test->op<<endl;
-	cerr<<"TEST: "<<test->left->op<<endl;
-	const QueryGraph::Node& node3=*reinterpret_cast<QueryGraph::Node*>(test->left->right);
-	cerr<<"dijkstra node: "<<node3.subject<<" "<<node3.predicate<<" "<<node3.object<<endl;
-	test=test->left;
-	const QueryGraph::Node& node1=*reinterpret_cast<QueryGraph::Node*>(test->left->right);
-	const QueryGraph::Node& node2=*reinterpret_cast<QueryGraph::Node*>(test->right->right);
-	cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
-*/
-	}
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C)
@@ -579,21 +529,8 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
 			   buildIndexScan(query,Database::Order_Predicate_Object_Subject,result,p,pc,o,oc,s,sc);
 	   }
    }
-   if (node.pathTriple){
-/*
-	   cerr<<"plan before updating pointers: "<<result->plans->op<<" "<<endl;
-		Plan* test=result->plans->left;
-		cerr<<"TEST: "<<test->op<<endl;
-		cerr<<"TEST: "<<test->left->op<<endl;
-		test=test->left;
-		const QueryGraph::Node& node1=*reinterpret_cast<QueryGraph::Node*>(test->left->right);
-		const QueryGraph::Node& node2=*reinterpret_cast<QueryGraph::Node*>(test->right->right);
-		cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
-*/
-   }
    // Update the child pointers as info for the code generation
    for (Plan* iter=result->plans;iter;iter=iter->next) {
-	  cerr<<"aa"<<endl;
       Plan* iter2=iter;
       while (iter2->op==Plan::Filter)
          iter2=iter2->left;
@@ -608,23 +545,9 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
     		 if (it->subject==node.subject&&it->predicate==node.predicate&&it->object==node.object)
     			 ind=it-fullQuery->getQuery().nodes.begin();
     	 }
-    	 cerr<<"IND: "<<ind<<endl;
     	 iter2->left=static_cast<Plan*>(0)+id;
     	 iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&(fullQuery->getQuery().nodes[ind])));
       }
-   }
-
-   if (node.pathTriple){
-/*
-	   cerr<<"plan after updating pointers: "<<result->plans->op<<" "<<endl;
-		Plan* test=result->plans->left;
-		cerr<<"TEST: "<<test->op<<endl;
-		cerr<<"TEST: "<<test->left->op<<endl;
-		test=test->left;
-		const QueryGraph::Node& node1=*reinterpret_cast<QueryGraph::Node*>(test->left->right);
-		const QueryGraph::Node& node2=*reinterpret_cast<QueryGraph::Node*>(test->right->right);
-		cerr<<"nodes to join: "<<node1.subject<<" "<<node1.predicate<<" "<<node1.object<<"; "<<node2.subject<<" "<<node2.predicate<<" "<<node2.object<<endl;
-*/
    }
 
    return result;
@@ -886,17 +809,14 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    if ((query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded)>BitSet::maxWidth)
       return 0;
 
-   cerr<<"translating a query: "<<query.edges.size()<<" "<<query.nodes.size()<<" "<<query.filters.size()<<" "<<query.pathfilter.size()<<endl;
    // Seed the DP table with scans
    vector<Problem*> dpTable;
    dpTable.resize(query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded);
    Problem* last=0;
    unsigned id=0;
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter,++id) {
-	  cerr<<"node: "<<iter->subject<<" "<<iter->predicate<<" "<<iter->object<<endl;
 	  if (iter->usedInDijkstraInit){
 		  // we'll take care about this triple inside Dijkstra init
-		  cerr<<"skip it"<<endl;
 		  dpTable.resize(dpTable.size()-1);
 		  continue;
 	  }
@@ -951,11 +871,9 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
       last=problem;
    }
 
-   cerr<<"possible joins"<<endl;
    // Construct the join info
    vector<JoinDescription> joins;
    for (vector<QueryGraph::Edge>::const_iterator iter=query.edges.begin(),limit=query.edges.end();iter!=limit;++iter){
-	  cerr<<"edge: "<<iter->from<<" "<<iter->to<<endl;
       joins.push_back(buildJoinInfo(query,*iter));
    }
    id=functionIds;
@@ -993,7 +911,6 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
 
    // Build larger join trees
    vector<unsigned> joinOrderings;
-  // cerr<<"dbTable size: "<<dpTable.size()<<" "<<dpTable.back()<<endl;
    for (unsigned index=1;index<dpTable.size();index++) {
       map<BitSet,Problem*> lookup;
       for (unsigned index2=0;index2<index;index2++) {
@@ -1068,7 +985,6 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                               if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                               p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
                               p->ordering=leftPlan->ordering;
-                              cerr<<"ordering for a join: "<<p->ordering<<" "<<dpTable.back()<<endl;
                               addPlan(problem,p);
                               break;
                            }
@@ -1118,7 +1034,6 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    }
    // Extract the best plan
    if (dpTable.empty()||(!dpTable.back())){
-	  cerr<<"table empty "<<dpTable.empty()<<" "<<!dpTable.back()<<endl;
       return 0;
    }
    Plan* plan=dpTable.back()->plans;
@@ -1126,8 +1041,6 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
       return 0;
    }
 
-
-   //cerr<<"plan: "<<plan->op<<", right: "<<plan->right->op<<", left: "<<plan->left->op<<endl;
    // Add all remaining filters
    set<const QueryGraph::Filter*> appliedFilters;
    findFilters(plan,appliedFilters);
@@ -1167,7 +1080,6 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       if ((!best)||(iter->costs<best->costs)||((iter->costs==best->costs)&&(iter->cardinality<best->cardinality)))
          best=iter;
    if (!best){
-	   cerr<<"not best: returning null"<<endl;
       return 0;
    }
    // Aggregate, if required

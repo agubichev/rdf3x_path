@@ -120,7 +120,6 @@ unsigned ResultsPrinter::first()
    map<unsigned,CacheEntry> stringCache;
    unsigned minCount=(duplicateHandling==ShowDuplicates)?2:1;
    unsigned entryCount=0;
-   Timestamp t1;
    do {
       if (count<minCount) continue;
       results.push_back(count);
@@ -139,10 +138,6 @@ unsigned ResultsPrinter::first()
       }
       if ((++entryCount)>=this->limit) break;
    } while ((count=input->next())!=0);
-
-   Timestamp t2;
-   cerr<<"time for computing: "<<t2-t1<<" ms"<<endl;
-   cerr<<"string cache size: "<<stringCache.size()<<endl;
 
    // Lookup the strings
    set<unsigned> subTypes;
@@ -166,8 +161,6 @@ unsigned ResultsPrinter::first()
          diffIndex->lookupById(*iter,c.start,c.stop,c.type,c.subType); else
          dictionary.lookupById(*iter,c.start,c.stop,c.type,c.subType);
    }
-   Timestamp t3;
-   cerr<<"looking up results: "<<t3-t2<<" ms"<<endl;
 
    // Skip printing the results?
    if (silent)
