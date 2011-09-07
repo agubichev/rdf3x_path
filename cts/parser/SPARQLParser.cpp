@@ -131,7 +131,7 @@ void SPARQLParser::parsePrefix()
          if (lexer.getNext()!=SPARQLLexer::IRI)
             throw ParserException("IRI expected");
          string iri=lexer.getIRIValue();
-
+         cerr<<"prefix: "<<iri<<endl;
          // Register the new prefix
          if (prefixes.count(name))
             throw ParserException("duplicate prefix '"+name+"'");
@@ -231,8 +231,19 @@ void SPARQLParser::parseRDFLiteral(std::string& value,Element::SubType& subType,
       if (token==SPARQLLexer::IRI) {
          subType=Element::CustomType;
          valueType=lexer.getIRIValue();
+      } else if (token==SPARQLLexer::Identifier){
+    	  // prefix::value
+          string prefix=lexer.getTokenValue();
+          if (lexer.getNext()!=SPARQLLexer::Colon)
+             throw ParserException("':' expected after '"+prefix+"'");
+          if (!prefixes.count(prefix))
+             throw ParserException("unknown prefix '"+prefix+"'");
+          if (lexer.getNext()!=SPARQLLexer::Identifier)
+             throw ParserException("identifier expected after ':'");
+          subType=Element::CustomType;
+          valueType=prefixes[prefix]+lexer.getIRIValue();
       } else {
-         throw ParserException("type URI expeted after '^^'");
+         throw ParserException("type URI expected after '^^'");
       }
    } else {
       lexer.unget(token);
@@ -812,6 +823,8 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
    if (token==SPARQLLexer::Variable) {
       result.type=Element::Variable;
       result.id=nameVariable(lexer.getTokenValue());
+      cerr<<"VARIABLE"<<endl;
+
    } else if (token==SPARQLLexer::PathVariable){
 	  result.type=Element::PathVariable;
 	  result.id=nameVariable(lexer.getTokenValue());
@@ -819,9 +832,11 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
       result.type=Element::Literal;
       lexer.unget(token);
       parseRDFLiteral(result.value,result.subType,result.subTypeValue);
+      cerr<<"LITERAL"<<endl;
    } else if (token==SPARQLLexer::IRI) {
       result.type=Element::IRI;
       result.value=lexer.getIRIValue();
+      cerr<<"IRI"<<endl;
    } else if (token==SPARQLLexer::Anon) {
       result.type=Element::Variable;
       result.id=variableCount++;
@@ -847,6 +862,7 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
       result.value=lexer.getTokenValue();
    } else if (token==SPARQLLexer::Identifier) {
       string prefix=lexer.getTokenValue();
+      cerr<<"ID"<<endl;
       // Handle the keyword 'a'
       if (prefix=="a") {
          result.type=Element::IRI;
@@ -861,6 +877,8 @@ SPARQLParser::Element SPARQLParser::parsePatternElement(PatternGroup& group,map<
             throw ParserException("identifier expected after ':'");
          result.type=Element::IRI;
          result.value=prefixes[prefix]+lexer.getIRIValue();
+         cerr<<"prefix: "<<prefixes[prefix]<<endl;
+         cerr<<result.value<<endl;
       }
    } else {
       throw ParserException("invalid pattern element");
@@ -910,7 +928,6 @@ void SPARQLParser::parseGraphPattern(PatternGroup& group)
          else
         	 parsePathFilter(group,localVars);
     	 cerr<<"parsed the filter"<<endl;
-
          continue;
       } else {
          // Error while parsing, let our caller handle it
@@ -972,6 +989,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
             	 lexer.unget(token);
          } else{
             lexer.unget(token);
+            cerr<<"parse graph pattern"<<endl;
             parseGraphPattern(group);
          }
       } else if (token==SPARQLLexer::RCurly) {
@@ -985,7 +1003,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
 void SPARQLParser::parseWhere()
    // Parse the where part if any
 {
-	cerr<<"parsing where"<<endl;
+   cerr<<"parsing where"<<endl;
    if ((lexer.getNext()!=SPARQLLexer::Identifier)||(!lexer.isKeyword("where")))
       throw ParserException("'where' expected");
    if (lexer.getNext()!=SPARQLLexer::LCurly)
