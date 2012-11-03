@@ -387,6 +387,7 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
       // Encode the entries
       QueryGraph::Node node;
       node.pathTriple = false;
+      node.usedInDijkstraInit=false;
       if ((!encode(dict,diffIndex,(*iter).subject,node.subject,node.constSubject))||
           (!encode(dict,diffIndex,(*iter).predicate,node.predicate,node.constPredicate))||
           (!encode(dict,diffIndex,(*iter).object,node.object,node.constObject))) {
