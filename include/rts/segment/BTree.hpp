@@ -113,7 +113,7 @@ template <class T> template <class V> bool BTree<T>::findLeaf(BufferReference& r
    /// Navigate to a leaf node
 {
    // Traverse the B-Tree
-   ref=readShared(T::getRootPage());
+   ref=this->readShared(T::getRootPage());
    while (true) {
       const unsigned char* page=static_cast<const unsigned char*>(ref.getPage());
       // Inner node?
@@ -261,7 +261,7 @@ template <class T> template <class S> void BTree<T>::performBulkload(S& source)
    }
 
    // Remember the index root
-   setRootPage(boundaries.back().second);
+   this->setRootPage(boundaries.back().second);
 }
 //---------------------------------------------------------------------------
 /// Namespace with log actin helpers
