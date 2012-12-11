@@ -181,7 +181,7 @@ static bool encodeTernaryFilter(QueryGraph::Filter::Type type,DictionarySegment&
    return encodeFilter(dict,diffIndex,group,*input.arg1,*output.arg1)&&encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&((!input.arg3)||encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3));
 }
 //---------------------------------------------------------------------------
-static bool encodeLengthFilter(QueryGraph::Filter::Type type,DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output){
+/*static bool encodeLengthFilter(QueryGraph::Filter::Type type,DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output){
   // Encode a (len(??path)<const) operator. We do not use it at the moment
    output.type=type;
    output.arg1=new QueryGraph::Filter();
@@ -201,6 +201,7 @@ static bool encodeLengthFilter(QueryGraph::Filter::Type type,DictionarySegment& 
    output.arg3=new QueryGraph::Filter();
    return encodeFilter(dict,diffIndex,group,*input.arg2,*output.arg2)&&encodeFilter(dict,diffIndex,group,*input.arg3,*output.arg3);
 }
+*/
 //---------------------------------------------------------------------------
 static bool encodeFilter(DictionarySegment& dict,DifferentialIndex* diffIndex,const SPARQLParser::PatternGroup& group,const SPARQLParser::Filter& input,QueryGraph::Filter& output)
    // Encode an element for the query graph
@@ -401,6 +402,7 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
     		  unboundedPath.push_back(node);
       }
       output.nodes.push_back(node);
+      cout<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
    }
 
    // find the triples that help refining the start/stop of unbounded Dijkstra scan
@@ -435,6 +437,26 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
          // The filter variable is not bound. This will produce an empty result
          return false;
       }
+   }
+
+   // check if we can re-write the query: FILTER(?var1 = ?var2)
+   for (vector<QueryGraph::Filter>::iterator iter=output.filters.begin(),limit=output.filters.end();iter!=limit;++iter){
+	   if (iter->type==QueryGraph::Filter::Equal && iter->arg1->type==QueryGraph::Filter::Variable &&  iter->arg2->type==QueryGraph::Filter::Variable){
+		   cout<<"ID: "<<iter->id<<endl;
+		   cout<<"args 1: "<<iter->arg1->type<<", "<<iter->arg1->id<<endl;
+		   cout<<"args 2: "<<iter->arg2->type<<", "<<iter->arg2->id<<endl;
+		   unsigned id1 = iter->arg1->id, id2 = iter->arg2->id;
+		   iter->skip=true;
+		   for (vector<QueryGraph::Node>::iterator iter_node=output.nodes.begin(),limit_node=output.nodes.end();iter_node!=limit_node;++iter_node) {
+			   if (iter_node->subject == id2 && !iter_node->constSubject)
+				   iter_node->subject = id1;
+			   if (iter_node->predicate == id2 && !iter_node->constPredicate)
+				   iter_node->predicate=id1;
+			   if (iter_node->object == id2 && !iter_node->constObject)
+				   iter_node->object = id1;
+			   cout<<iter_node->subject<<" "<<iter_node->predicate<<" "<<iter_node->object<<endl;
+		   }
+	   }
    }
 
    for (std::vector<SPARQLParser::Filter>::const_iterator iter=group.pathfilters.begin(),limit=group.pathfilters.end();iter!=limit;++iter){
@@ -512,6 +534,7 @@ void SemanticAnalysis::transform(const SPARQLParser& input,QueryGraph& output)
    switch (input.getQueryForm()){
       case SPARQLParser::Select: output.setQueryForm(QueryGraph::Select); break;
       case SPARQLParser::Describe: output.setQueryForm(QueryGraph::Describe); break;
+      case SPARQLParser::Ask: case SPARQLParser::Construct: break;
    }
 
    // Order by clause

@@ -760,6 +760,8 @@ void SPARQLParser::parseFilter(PatternGroup& group,map<string,unsigned>& localVa
 {
    Filter* entry=parseConstraint(localVars);
    group.filters.push_back(*entry);
+   cerr<<"filter: "<<entry->type<<endl;
+   cerr<<"filter args: "<<entry->arg1->type<<" "<<entry->arg2->type<<endl;
    delete entry;
 }
 //---------------------------------------------------------------------------
@@ -970,6 +972,9 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
          if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("filter"))) {
             map<string,unsigned> localVars;
             parseFilter(group,localVars);
+            token=lexer.getNext();
+            if (token!=SPARQLLexer::Dot)
+           	     lexer.unget(token);
          } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("pathfilter"))) {
         	 map<string,unsigned> localVars;
         	 parsePathFilter(group,localVars);

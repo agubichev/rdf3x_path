@@ -69,6 +69,8 @@ class QueryGraph
       unsigned id;
       /// The raw value (for constants)
       std::string value;
+      /// Should we skip this filter? (in case we already used it to re-write the query)
+      bool skip;
 
       /// Constructor
       Filter();

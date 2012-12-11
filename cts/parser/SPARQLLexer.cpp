@@ -57,7 +57,6 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case ';': return Semicolon;
          case ',': return Comma;
          case '.': return Dot;
-         case '_': return Underscore;
          case '{': return LCurly;
          case '}': return RCurly;
          case '(': return LParen;
@@ -68,6 +67,7 @@ SPARQLLexer::Token SPARQLLexer::getNext()
          case '*': return Mul;
          case '/': return Div;
          case '=': return Equal;
+         case '_': return Underscore;
          // Not equal
          case '!':
             if ((pos==input.end())||((*pos)!='='))
@@ -218,7 +218,8 @@ SPARQLLexer::Token SPARQLLexer::getNext()
             --pos;
             while (pos!=input.end()) {
                char c=*pos;
-               if (((c>='0')&&(c<='9'))||((c>='A')&&(c<='Z'))||((c>='a')&&(c<='z'))) {
+               // allow underscore in the identifier
+               if (((c>='0')&&(c<='9'))||((c>='A')&&(c<='Z'))||((c>='a')&&(c<='z'))||(c=='_')) {
                   ++pos;
                } else break;
             }

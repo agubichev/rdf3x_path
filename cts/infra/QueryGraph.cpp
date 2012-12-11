@@ -52,13 +52,13 @@ QueryGraph::Edge::~Edge()
 }
 //---------------------------------------------------------------------------
 QueryGraph::Filter::Filter()
-   : arg1(0),arg2(0),arg3(0),id(~0u)
+   : arg1(0),arg2(0),arg3(0),id(~0u),skip(false)
    // Constructor
 {
 }
 //---------------------------------------------------------------------------
 QueryGraph::Filter::Filter(const Filter& other)
-   : type(other.type),arg1(other.arg1?new Filter(*other.arg1):0),arg2(other.arg2?new Filter(*other.arg2):0),arg3(other.arg3?new Filter(*other.arg3):0),id(other.id),value(other.value)
+   : type(other.type),arg1(other.arg1?new Filter(*other.arg1):0),arg2(other.arg2?new Filter(*other.arg2):0),arg3(other.arg3?new Filter(*other.arg3):0),id(other.id),value(other.value),skip(other.skip)
    // Copy-Constructor
 {
 }

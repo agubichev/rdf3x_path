@@ -1044,20 +1044,22 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    // Add all remaining filters
    set<const QueryGraph::Filter*> appliedFilters;
    findFilters(plan,appliedFilters);
-   for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter)
-      if (!appliedFilters.count(&(*iter))) {
+   cout<<"applied filters: "<<appliedFilters.size()<<endl;
+   for (vector<QueryGraph::Filter>::const_iterator iter=query.filters.begin(),limit=query.filters.end();iter!=limit;++iter){
+      if (!appliedFilters.count(&(*iter)) && !iter->skip) {
          Plan* p=plans.alloc();
          p->op=Plan::Filter;
          p->opArg=0;
          p->left=plan;
          p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
-	 p->next=0;
+	     p->next=0;
          p->cardinality=plan->cardinality; // XXX real computation
          p->costs=plan->costs;
          p->ordering=plan->ordering;
          plan=p;
       }
-
+      cerr<<"skip: "<<iter->skip<<endl;
+   }
    // Return the complete plan
    return plan;
 }
