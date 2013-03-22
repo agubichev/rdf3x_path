@@ -402,7 +402,6 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
     		  unboundedPath.push_back(node);
       }
       output.nodes.push_back(node);
-      cout<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
    }
 
    // find the triples that help refining the start/stop of unbounded Dijkstra scan

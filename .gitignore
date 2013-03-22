@@ -2,4 +2,6 @@
 /rdf3x.qws
 /lineeditor
 /include/lineeditor
-
+.cproject
+.project
+*.txt

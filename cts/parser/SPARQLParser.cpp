@@ -760,8 +760,6 @@ void SPARQLParser::parseFilter(PatternGroup& group,map<string,unsigned>& localVa
 {
    Filter* entry=parseConstraint(localVars);
    group.filters.push_back(*entry);
-   cerr<<"filter: "<<entry->type<<endl;
-   cerr<<"filter args: "<<entry->arg1->type<<" "<<entry->arg2->type<<endl;
    delete entry;
 }
 //---------------------------------------------------------------------------
