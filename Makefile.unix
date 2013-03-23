@@ -1,7 +1,7 @@
 SYS:=$(shell uname)
 
 CXX:=g++
-CXXFLAGS:=-g -O3 -Wall -Wextra
+CXXFLAGS:=-g -O3 -Wall -Wextra -std=c++11
 ifeq ($(USER),neumann)
 CXXFLAGS:=$(CXXFLAGS) -Werror
 endif

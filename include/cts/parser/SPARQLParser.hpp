@@ -33,10 +33,19 @@ class SPARQLParser
       /// Destructor
       ~ParserException();
    };
+
+   /// A Step in a Regular Path expression
+   struct Step{
+   	// modifier of the regexp: none or * or +
+   	enum Modifier {None, Mul, Add};
+   	Modifier modifier;
+   	// edge label
+   	std::string label;
+   };
    /// An element in a graph pattern
    struct Element {
       /// Possible types
-      enum Type { Variable, PathVariable, Literal, IRI };
+      enum Type { Variable, PathVariable, Literal, IRI, PropertyPath };
       /// Possible sub-types for literals
       enum SubType { None, CustomLanguage, CustomType };
       /// The type
@@ -49,6 +58,8 @@ class SPARQLParser
       std::string value;
       /// The id for variables
       unsigned id;
+      /// The property path
+      std::vector<Step> path;
    };
    /// A graph pattern
    struct Pattern {
@@ -179,13 +190,15 @@ class SPARQLParser
    /// Parse a "Constraint" production
    Filter* parseConstraint(std::map<std::string,unsigned>& localVars);
    /// Parse a "contains" path production
-   void parseContains(std::auto_ptr<Filter>& result, std::map<std::string,unsigned>& localVars);
+   void parseContains(std::unique_ptr<Filter>& result, std::map<std::string,unsigned>& localVars);
    /// Parse a filter condition
    void parseFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse a path filter condition
    void parsePathFilter(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    /// Parse an entry in a pattern
    Element parsePatternElement(PatternGroup& group,std::map<std::string,unsigned>& localVars);
+   /// Parse a predicate entry in a pattern
+   Element parsePropertyPath(SPARQLParser::Element& start);
    /// Parse blank node patterns
    Element parseBlankNode(PatternGroup& group,std::map<std::string,unsigned>& localVars);
    // Parse a graph pattern
