@@ -1,0 +1,25 @@
+Suppose that the property path matching is an operator of a form RegPath(?s, ?o, <path>), where ?s and/or ?o may be constants.
+
+
+Then, the query 
+
+select * where {<a> locatedIn* ?b. ?b <hasName> <name>}
+
+can be translated into the expression
+RegPath(<a>, ?b, <locatedIn>*) JOIN IndexScan(?b <hasName> <name>)
+
+----------------------------
+
+On the other hand, the query
+
+select * where {?a <property1> <p1>. ?a locatedIn* ?b. ?b <hasName> <name>}
+
+may be  translated into two different expressions
+
+RegPath(IndexScan(?a <property> <p1>), ?b, locatedIn*) JOIN IndexScan(?b, <hasName> <name>) 
+
+ or 
+
+RegPath(IndexScan(?a <property1> <p1>), IndexScan(?b <hasName> <name>), locatedIn*)
+in the latter case the RegPath operator serves as a join
+
