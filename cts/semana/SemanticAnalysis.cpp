@@ -113,6 +113,8 @@ static bool encode(DictionarySegment& dict,DifferentialIndex* diffIndex,const SP
             constant=true;
             return true;
          } else return false;
+      case SPARQLParser::Element::PropertyPath:
+      	return true;
    }
    return false;
 }
@@ -384,11 +386,13 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
 
    vector<QueryGraph::Node> unboundedPath;
    // Encode all patterns
+   unsigned additionalVariables=group.patterns.size()*3;
    for (std::vector<SPARQLParser::Pattern>::const_iterator iter=group.patterns.begin(),limit=group.patterns.end();iter!=limit;++iter) {
       // Encode the entries
       QueryGraph::Node node;
       node.pathTriple = false;
       node.usedInDijkstraInit=false;
+      node.propertyPath=false;
       if ((!encode(dict,diffIndex,(*iter).subject,node.subject,node.constSubject))||
           (!encode(dict,diffIndex,(*iter).predicate,node.predicate,node.constPredicate))||
           (!encode(dict,diffIndex,(*iter).object,node.object,node.constObject))) {
@@ -401,8 +405,50 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
     	  if (!node.constObject&&!node.constSubject)
     		  unboundedPath.push_back(node);
       }
+
+      if (iter->predicate.type==SPARQLParser::Element::PropertyPath){
+      	node.propertyPath=true;
+      	unsigned lastObject=node.object;
+      	bool lastObjectConst=node.constObject;
+         if (!lookup(dict,diffIndex,iter->predicate.path[0].label,Type::URI,0,node.predicate)) return false;
+         node.constPredicate=true;
+         // get the modifier
+         switch (iter->predicate.path[0].modifier){
+         	case SPARQLParser::Step::Add: node.pathmod=QueryGraph::Node::Add; break;
+         	case SPARQLParser::Step::Mul: node.pathmod=QueryGraph::Node::Mul; break;
+         	default: node.propertyPath=false; break;
+         }
+
+         for (unsigned i=1; i < iter->predicate.path.size(); i++){
+         	//finish this node
+         	node.object=additionalVariables++;
+         	node.constObject=false;
+         	output.nodes.push_back(node);
+         	//start new node
+         	node.subject=node.object;
+         	node.constSubject=false;
+         	if (!lookup(dict,diffIndex,iter->predicate.path[i].label,Type::URI,0,node.predicate)) return false;
+         	node.constPredicate=true;
+         	node.pathTriple=false;
+         	node.usedInDijkstraInit=false;
+         	node.propertyPath=true;
+            switch (iter->predicate.path[i].modifier){
+            	case SPARQLParser::Step::Add: node.pathmod=QueryGraph::Node::Add; break;
+            	case SPARQLParser::Step::Mul: node.pathmod=QueryGraph::Node::Mul; break;
+            	default: node.propertyPath=false; break;
+            }
+         }
+         node.object=lastObject;
+         node.constObject=lastObjectConst;
+      }
       output.nodes.push_back(node);
    }
+
+   for (auto n:output.nodes){
+   	cerr<<n.subject<<" ("<<(n.constSubject)<<") "<<n.predicate<<" ("<<n.constPredicate<<") "<<n.object<<" ("<<n.constObject<<") "<<endl;
+   	cerr<<"     propertyPath? "<<n.propertyPath<<" "<<n.pathmod<<endl;
+   }
+
 
    // find the triples that help refining the start/stop of unbounded Dijkstra scan
    for (std::vector<QueryGraph::Node>::iterator iter=unboundedPath.begin(); iter!=unboundedPath.end(); iter++){
@@ -441,9 +487,6 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
    // check if we can re-write the query: FILTER(?var1 = ?var2)
    for (vector<QueryGraph::Filter>::iterator iter=output.filters.begin(),limit=output.filters.end();iter!=limit;++iter){
 	   if (iter->type==QueryGraph::Filter::Equal && iter->arg1->type==QueryGraph::Filter::Variable &&  iter->arg2->type==QueryGraph::Filter::Variable){
-		   cout<<"ID: "<<iter->id<<endl;
-		   cout<<"args 1: "<<iter->arg1->type<<", "<<iter->arg1->id<<endl;
-		   cout<<"args 2: "<<iter->arg2->type<<", "<<iter->arg2->id<<endl;
 		   unsigned id1 = iter->arg1->id, id2 = iter->arg2->id;
 		   iter->skip=true;
 		   for (vector<QueryGraph::Node>::iterator iter_node=output.nodes.begin(),limit_node=output.nodes.end();iter_node!=limit_node;++iter_node) {
@@ -453,7 +496,6 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
 				   iter_node->predicate=id1;
 			   if (iter_node->object == id2 && !iter_node->constObject)
 				   iter_node->object = id1;
-			   cout<<iter_node->subject<<" "<<iter_node->predicate<<" "<<iter_node->object<<endl;
 		   }
 	   }
    }

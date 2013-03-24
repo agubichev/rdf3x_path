@@ -35,6 +35,12 @@ class QueryGraph
       /// Does the triple contains a path predicate?
       bool pathTriple;
 
+      /// Does the triple contain the property path expression?
+      bool propertyPath;
+      /// Modifier of the property path expression
+      enum PathModifier{Mul, Add };
+      PathModifier pathmod;
+
       /// Do we use this triple to initialize the Dijkstra scan?
       bool usedInDijkstraInit;
 
