@@ -119,6 +119,10 @@ static void runQuery(Database& db,const string& query,bool explain)
    if (explain) {
       DebugPlanPrinter out(runtime,false);
       operatorTree->print(out);
+      if (operatorTree->first()) {
+         while (operatorTree->next()) ;
+      }
+
    } else {
       // Else execute it
       if (operatorTree->first()) {

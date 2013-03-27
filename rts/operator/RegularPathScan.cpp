@@ -28,11 +28,13 @@ void RegularPathScan::print(PlanPrinter& out)
    out.beginOperator("RegularPathScan",expectedOutputCardinality,observedOutputCardinality);
    out.addScanAnnotation(value1,bound1);
    out.addScanAnnotation(value3,bound3);
+   if (left) left->print(out);
+   if (right) right->print(out);
    out.endOperator();
 }
 //---------------------------------------------------------------------------
 RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value3,bool bound3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate)
-   : Operator(expectedOutputCardinality),value1(value1),value3(value3),bound1(bound1),bound3(bound3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary())
+   : Operator(expectedOutputCardinality),value1(value1),value3(value3),bound1(bound1),bound3(bound3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),left(0),right(0)
    // Constructor
 {
 }
@@ -40,15 +42,27 @@ RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register
 RegularPathScan::~RegularPathScan()
    // Destructor
 {
+	if (left)
+		delete left;
+	if (right)
+		delete right;
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::first()
 {
-	return 0;
+	cerr<<"first"<<endl;
+	if (left&&left->first()){
+		cerr<<"aa"<<endl;
+		cerr<<"bound1 bound3 "<<bound1<<" "<<bound3<<endl;
+		cerr<<value1->value<<" "<<value3->value<<endl;
+	}
+	return next();
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::next()
 {
+	//if (left)
+
 	return 0;
 }
 //---------------------------------------------------------------------------
@@ -78,4 +92,12 @@ RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,
    RegularPathScan* result = new RegularPathScan(db,order,value1,bound1,value3,bound3,expectedOutputCardinality,pathmode,predicate);
    return result;
 }
+
+void RegularPathScan::setLeftInput(Operator* left){
+	this->left=left;
+}
+void RegularPathScan::setRightInput(Operator* right){
+	this->right=right;
+}
+
 

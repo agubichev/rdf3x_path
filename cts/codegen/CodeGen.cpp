@@ -162,6 +162,7 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject);
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,1,node,predicate,constPredicate);
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
+   cerr<<"size of binding: "<<bindings.valuebinding.size()<<endl;
    // And return the operator
    if (runtime.hasDifferentialIndex())
       return runtime.getDifferentialIndex().createScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,plan->cardinality);
@@ -379,6 +380,21 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
+   Operator* result = 0;
+   cerr<<"left binding: ";
+   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
+   cerr<<endl;
+   cerr<<"right binding: ";
+   for (auto t:rightBindings.valuebinding) cerr<<t.first<<" ";
+   cerr<<endl;
+
+   if (plan->left->op==Plan::RegularPath){
+   	result=leftTree;
+   	dynamic_cast<RegularPathScan*>(result)->setLeftInput(rightTree);
+   } else if (plan->right->op==Plan::RegularPath){
+   	result=rightTree;
+   	dynamic_cast<RegularPathScan*>(result)->setLeftInput(leftTree);
+   } else {
 //   cerr<<"join on: "<<joinOn<<endl;
 //   cerr<<"left binding: ";
 //   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
@@ -387,21 +403,21 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
 //   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
 //   cerr<<endl;
 
-   // Prepare the tails
-   vector<Register*> leftTail,rightTail;
-   for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
-      if ((*iter).first!=joinOn)
-         leftTail.push_back((*iter).second);
-   for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
-      if ((*iter).first!=joinOn)
-         rightTail.push_back((*iter).second);
+   	// Prepare the tails
+   	vector<Register*> leftTail,rightTail;
+   	for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
+   		if ((*iter).first!=joinOn)
+   			leftTail.push_back((*iter).second);
+   	for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
+   		if ((*iter).first!=joinOn)
+   			rightTail.push_back((*iter).second);
 
-   // Build the operator
-   Operator* result=new MergeJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,plan->cardinality);
+   	// Build the operator
+   	result=new MergeJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,plan->cardinality);
 
-   // And apply additional selections if necessary
-   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
-
+   	// And apply additional selections if necessary
+   	result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
+   }
    return result;
 }
 //---------------------------------------------------------------------------

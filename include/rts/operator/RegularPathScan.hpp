@@ -34,11 +34,12 @@ class RegularPathScan : public Operator
    Modifier pathmode;
    /// Predicate from the regular expression
    unsigned predicate;
-
    /// The data order
    Database::DataOrder order;
    /// DB dictionary
    DictionarySegment dict;
+   /// Operator-input
+   Operator* left, *right;
 
    /// Constructor
    RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value3,bool bound3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
@@ -63,6 +64,10 @@ class RegularPathScan : public Operator
    void addMergeHint(Register* /*reg1*/,Register* /*reg2*/){};
    /// Register parts of the tree that can be executed asynchronous
    void getAsyncInputCandidates(Scheduler& /*scheduler*/){};
+
+   /// Register the input operator
+   void setLeftInput(Operator* left);
+   void setRightInput(Operator* right);
 
    /// Create a suitable operator
    static RegularPathScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
