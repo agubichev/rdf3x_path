@@ -231,7 +231,7 @@ static Plan* copyPlan(Plan* plan, PlanContainer* plans){
 //---------------------------------------------------------------------------
 void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem* result,unsigned predicate,unsigned subj,unsigned obj)
 {
-	Database::DataOrder order;
+	Database::DataOrder order=Database::Order_Subject_Predicate_Object;
 
 	// two queries that define start/stop of the scan
 	QueryGraph subgraphStart, subgraphStop;
@@ -306,8 +306,31 @@ void PlanGen::buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem
     // Apply filters
 	plan=buildPathFilters(plans,query,plan,predicate);
 
-    // And store it
-    addPlan(result,plan);
+   // And store it
+   addPlan(result,plan);
+}
+//---------------------------------------------------------------------------
+void PlanGen::buildRegularPath(const QueryGraph::SubQuery& query,Problem* result,unsigned value1,unsigned value3)
+// Build a regular path scan
+{
+	// New plan
+	Plan* plan=plans.alloc();
+	plan->op=Plan::RegularPath;
+	plan->right=0;
+	plan->next=0;
+	plan->cardinality=~0u/2;
+	plan->costs=~0u/2;
+
+	if (!~value3){
+		plan->opArg=Database::Order_Object_Predicate_Subject;
+	}
+	else if (!~value1){
+		plan->opArg=Database::Order_Subject_Predicate_Object;
+	}
+   plan=buildFilters(plans,query,plan,value1,~0u,value3);
+
+   // Store it
+   addPlan(result,plan);
 }
 //---------------------------------------------------------------------------
 void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned value1,unsigned value1C,unsigned value2,unsigned value2C,unsigned value3,unsigned value3C)
@@ -491,7 +514,9 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
 		   buildUnfixedDijkstraScan(query,result,p,node.subject,node.object);
 	   }
    }
-   else {
+   else if (node.propertyPath){
+   	buildRegularPath(query,result,s,o);
+   } else {
 	   // Build all relevant scans
 	   if ((unusedSubject+unusedPredicate+unusedObject)>=2) {
 		   if (!unusedSubject) {
@@ -545,6 +570,9 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
     			 ind=it-fullQuery->getQuery().nodes.begin();
     	 }
     	 iter2->left=static_cast<Plan*>(0)+id;
+//    	 cerr<<"left ID: "<<id<<endl;
+//    	 cerr<<"right NODE: "<<fullQuery->getQuery().nodes[ind].predicate<<endl;
+//    	 cerr<<"order: " <<iter->opArg<<" "<<iter->ordering<<endl;
     	 iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&(fullQuery->getQuery().nodes[ind])));
       }
    }
@@ -778,6 +806,7 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
       case Plan::AggregatedIndexScan:
       case Plan::FullyAggregatedIndexScan:
       case Plan::DijkstraScan:
+      case Plan::RegularPath:
       case Plan::Singleton:
          // We reached a leaf.
          break;
@@ -1095,6 +1124,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       best=p;
    }
 
+//   best->print(0);
    return best;
 }
 //---------------------------------------------------------------------------

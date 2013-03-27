@@ -1,5 +1,6 @@
 #include "cts/infra/QueryGraph.hpp"
 #include <set>
+#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -193,20 +194,20 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
    vector<unsigned> common;
    for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++){
-    	 if (subQuery.nodes[index2].usedInDijkstraInit)
-    		 continue;
+    	   if (subQuery.nodes[index2].usedInDijkstraInit)
+    		   continue;
          if (intersects(patternBindings[index],patternBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(index,index2,common));
       }
       for (unsigned index2=0,limit2=optionalBindings.size();index2<limit2;index2++){
-     	 if (subQuery.nodes[index2].usedInDijkstraInit)
-     		 continue;
+     	   if (subQuery.nodes[index2].usedInDijkstraInit)
+     		   continue;
          if (intersects(patternBindings[index],optionalBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(index,optionalOfs+index2,common));
       }
       for (unsigned index2=0,limit2=unionBindings.size();index2<limit2;index2++){
-     	 if (subQuery.nodes[index2].usedInDijkstraInit)
-     		 continue;
+     	   if (subQuery.nodes[index2].usedInDijkstraInit)
+     		   continue;
          if (intersects(patternBindings[index],unionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(index,unionOfs+index2,common));
       }

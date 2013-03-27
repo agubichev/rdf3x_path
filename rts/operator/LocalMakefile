@@ -21,4 +21,5 @@ src_rts_operator:=					\
 	rts/operator/Union.cpp				\
 	rts/operator/DijkstraScan.cpp		\
 	rts/operator/FastDijkstraScan.cpp   \
-	rts/operator/DescribeScan.cpp
+	rts/operator/DescribeScan.cpp			\
+	rts/operator/RegularPathScan.cpp

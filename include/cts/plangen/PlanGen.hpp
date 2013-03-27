@@ -56,6 +56,8 @@ class PlanGen
    void buildDijkstraScan(const QueryGraph::SubQuery& query,Database::DataOrder order,Problem* result,unsigned predicate,unsigned subj,unsigned obj);
    /// Generate a Dijkstra scan with unknown start and end
    void buildUnfixedDijkstraScan(const QueryGraph::SubQuery& query,Problem* result,unsigned predicate,unsigned subj,unsigned obj);
+   /// Generate a Regular Path query
+   void buildRegularPath(const QueryGraph::SubQuery& query,Problem* result,unsigned value1,unsigned value3);
    /// Generate base table accesses
    Problem* buildScan(const QueryGraph::SubQuery& query,const QueryGraph::Node& node,unsigned id);
    /// Build the informaion about a join

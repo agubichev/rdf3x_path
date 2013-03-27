@@ -8,6 +8,7 @@
 #include "rts/operator/HashGroupify.hpp"
 #include "rts/operator/HashJoin.hpp"
 #include "rts/operator/FastDijkstraScan.hpp"
+#include "rts/operator/RegularPathScan.hpp"
 #include "rts/operator/DescribeScan.hpp"
 #include "rts/operator/DijkstraScan.hpp"
 #include "rts/operator/IndexScan.hpp"
@@ -132,6 +133,24 @@ static Operator* translateDijkstraScan(Runtime& runtime,const map<unsigned,Regis
 		    plan->cardinality,pathnode,subplan,pathfilter);
 }
 //---------------------------------------------------------------------------
+static Operator* translateRegularPathScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* /*pathfilter*/)
+// Translate a reachability check into an operator tree
+{
+   const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
+   // Initialize the registers
+   bool constSubject,constObject;
+   Register* subject,*object;
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject);
+   resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
+   RegularPathScan::Modifier mod=RegularPathScan::Add;
+   if (node.pathmod==QueryGraph::Node::Mul){
+   	mod=RegularPathScan::Mul;
+   }
+   // Construct the operator
+   return RegularPathScan::create(runtime.getDatabase(),static_cast<Database::DataOrder>(plan->opArg),
+   										subject,constSubject,object,constObject,plan->cardinality,mod,node.predicate);
+}
+//---------------------------------------------------------------------------
 static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* /*pathfilter*/)
    // Translate an index scan into an operator tree
 {
@@ -206,7 +225,8 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
       case Plan::IndexScan:
       case Plan::AggregatedIndexScan:
       case Plan::FullyAggregatedIndexScan:
-      case Plan::DijkstraScan: {
+      case Plan::DijkstraScan:
+      case Plan::RegularPath:{
          const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right);
          if ((!node.constSubject)&&(!context.count(node.subject)))
             variables.insert(node.subject);
@@ -248,6 +268,14 @@ static void getJoinVariables(const map<unsigned,Register*>& context,set<unsigned
    set<unsigned> leftVariables,rightVariables;
    collectVariables(context,leftVariables,left);
    collectVariables(context,rightVariables,right);
+
+//   cerr<<"left vars: ";
+//   for (auto t: leftVariables) cerr<<t<<" ";
+//   cerr<<endl;
+//
+//   cerr<<"right vars: ";
+//   for (auto t: rightVariables) cerr<<t<<" ";
+//   cerr<<endl;
 
    // Find common ones
    if (leftVariables.size()<rightVariables.size()) {
@@ -350,6 +378,14 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left,pathfilter);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
+
+//   cerr<<"join on: "<<joinOn<<endl;
+//   cerr<<"left binding: ";
+//   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
+//   cerr<<endl;
+//   cerr<<"right binding: ";
+//   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
+//   cerr<<endl;
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
@@ -703,6 +739,7 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::AggregatedIndexScan: result=translateAggregatedIndexScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
       case Plan::FullyAggregatedIndexScan: result=translateFullyAggregatedIndexScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
       case Plan::DijkstraScan: result = translateDijkstraScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
+      case Plan::RegularPath: result=translateRegularPathScan(runtime,context,projection,bindings,registers,plan,pathfilter); break;
       case Plan::NestedLoopJoin: result=translateNestedLoopJoin(runtime,context,projection,bindings,registers,plan,pathfilter); break;
       case Plan::MergeJoin: result=translateMergeJoin(runtime,context,projection,bindings,registers,plan,pathfilter); break;
       case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan,pathfilter); break;

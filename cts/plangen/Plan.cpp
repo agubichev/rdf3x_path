@@ -48,6 +48,7 @@ void Plan::print(unsigned indent) const
       case Singleton: cout << "Singleton"; break;
       case DijkstraScan: cout<<"DijkstraScan"; break;
       case PathFilter: cout<<"PathFilter"; break;
+      case RegularPath: cout<<"RegularPath"; break;
    }
    cout << " cardinality=" << cardinality << " costs=" << costs << endl;
    switch (op) {
@@ -65,6 +66,7 @@ void Plan::print(unsigned indent) const
       case TableFunction: left->print(indent+1); break;
       case Singleton: break;
       case PathFilter: break;
+      case RegularPath: break;
    }
 }
 //---------------------------------------------------------------------------
