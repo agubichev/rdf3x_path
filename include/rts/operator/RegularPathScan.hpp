@@ -41,7 +41,9 @@ class RegularPathScan : public Operator
    DictionarySegment dict;
    /// Operator-input
    Operator* left, *right;
-   std::map<unsigned,Register*> leftBinding;
+   Register* leftSource,*rightSource;
+
+   std::vector<Register*> leftBinding,rightBinding;
 
 
    /// Constructor
@@ -72,7 +74,11 @@ class RegularPathScan : public Operator
    void setLeftInput(Operator* left);
    void setRightInput(Operator* right);
 
-   void setLeftBinding(std::map<unsigned,Register*>& leftBinding);
+   // set the source nodes defined by the subplans
+   void setLeftSource(Register* left);
+   void setRightRource(Register* right);
+   // set the "other" nodes, carried out from the subplans
+   void setLeftBinding(std::vector<Register*>& leftBinding);
 
 
    /// Create a suitable operator

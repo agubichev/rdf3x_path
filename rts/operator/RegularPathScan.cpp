@@ -34,7 +34,7 @@ void RegularPathScan::print(PlanPrinter& out)
 }
 //---------------------------------------------------------------------------
 RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value3,bool bound3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate)
-   : Operator(expectedOutputCardinality),value1(value1),value3(value3),bound1(bound1),bound3(bound3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),left(0),right(0)
+   : Operator(expectedOutputCardinality),value1(value1),value3(value3),bound1(bound1),bound3(bound3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),left(0),right(0),leftSource(0),rightSource(0)
    // Constructor
 {
 }
@@ -52,10 +52,9 @@ unsigned RegularPathScan::first()
 {
 	cerr<<"first"<<endl;
 	if (left&&left->first()){
-		cerr<<"bound1 bound3 "<<bound1<<" "<<bound3<<endl;
-		cerr<<value1->value<<" "<<value3->value<<endl;
 		for (auto t:leftBinding)
-			cerr<<t.first<<" "<<t.second->value<<endl;
+			cerr<<t->value<<endl;
+		cerr<<leftSource->value<<endl;
 	}
 	return next();
 }
@@ -65,8 +64,10 @@ unsigned RegularPathScan::next()
 	if (left){
 		while (left->next()){
 			for (auto t:leftBinding)
-				cerr<<t.first<<" "<<t.second->value<<endl;
-			cerr<<value3->value<<endl;
+				cerr<<t->value<<" ";
+			cerr<<leftSource->value<<endl;
+			// HACK
+			this->value3->value=leftBinding[0]->value;
 			return 1;
 		}
 	}
@@ -109,8 +110,16 @@ void RegularPathScan::setRightInput(Operator* right){
 	this->right=right;
 }
 
-void RegularPathScan::setLeftBinding(std::map<unsigned,Register*>& leftBinding){
+void RegularPathScan::setLeftBinding(std::vector<Register*>& leftBinding){
 	this->leftBinding=leftBinding;
 }
+
+void RegularPathScan::setLeftSource(Register* left){
+	this->leftSource=left;
+	// hack!
+	//this->value3=leftBinding[1];
+//	this->value3=left;
+}
+
 
 

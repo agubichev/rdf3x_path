@@ -388,31 +388,25 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    for (auto t:rightBindings.valuebinding) cerr<<t.first<<" ";
    cerr<<endl;
 
+	// Prepare the tails
+	vector<Register*> leftTail,rightTail;
+	for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
+		if ((*iter).first!=joinOn)
+			leftTail.push_back((*iter).second);
+	for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
+		if ((*iter).first!=joinOn)
+			rightTail.push_back((*iter).second);
+
    if (plan->left->op==Plan::RegularPath){
    	result=leftTree;
-   	dynamic_cast<RegularPathScan*>(result)->setLeftInput(rightTree);
-   	dynamic_cast<RegularPathScan*>(result)->setLeftBinding(rightBindings.valuebinding);
+   	RegularPathScan* regularResult = dynamic_cast<RegularPathScan*>(result);
+   	regularResult->setLeftInput(rightTree);
+   	regularResult->setLeftBinding(rightTail);
+   	regularResult->setLeftSource(rightBindings.valuebinding[joinOn]);
    } else if (plan->right->op==Plan::RegularPath){
    	result=rightTree;
    	dynamic_cast<RegularPathScan*>(result)->setLeftInput(leftTree);
    } else {
-//   cerr<<"join on: "<<joinOn<<endl;
-//   cerr<<"left binding: ";
-//   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
-//   cerr<<endl;
-//   cerr<<"right binding: ";
-//   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
-//   cerr<<endl;
-
-   	// Prepare the tails
-   	vector<Register*> leftTail,rightTail;
-   	for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
-   		if ((*iter).first!=joinOn)
-   			leftTail.push_back((*iter).second);
-   	for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
-   		if ((*iter).first!=joinOn)
-   			rightTail.push_back((*iter).second);
-
    	// Build the operator
    	result=new MergeJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,plan->cardinality);
 
@@ -891,7 +885,7 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
       // Remember the output registers
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter){
          if (bindings.valuebinding.count(*iter)){
-        	output.order.push_back(0);
+         	output.order.push_back(0);
             output.valueoutput.push_back(bindings.valuebinding[*iter]);
          }
          else if (bindings.pathbinding.count(*iter)) {
