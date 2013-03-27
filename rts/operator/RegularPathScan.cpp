@@ -52,16 +52,24 @@ unsigned RegularPathScan::first()
 {
 	cerr<<"first"<<endl;
 	if (left&&left->first()){
-		cerr<<"aa"<<endl;
 		cerr<<"bound1 bound3 "<<bound1<<" "<<bound3<<endl;
 		cerr<<value1->value<<" "<<value3->value<<endl;
+		for (auto t:leftBinding)
+			cerr<<t.first<<" "<<t.second->value<<endl;
 	}
 	return next();
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::next()
 {
-	//if (left)
+	if (left){
+		while (left->next()){
+			for (auto t:leftBinding)
+				cerr<<t.first<<" "<<t.second->value<<endl;
+			cerr<<value3->value<<endl;
+			return 1;
+		}
+	}
 
 	return 0;
 }
@@ -96,8 +104,13 @@ RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,
 void RegularPathScan::setLeftInput(Operator* left){
 	this->left=left;
 }
+
 void RegularPathScan::setRightInput(Operator* right){
 	this->right=right;
+}
+
+void RegularPathScan::setLeftBinding(std::map<unsigned,Register*>& leftBinding){
+	this->leftBinding=leftBinding;
 }
 
 

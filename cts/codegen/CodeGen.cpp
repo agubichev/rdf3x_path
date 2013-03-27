@@ -391,6 +391,7 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    if (plan->left->op==Plan::RegularPath){
    	result=leftTree;
    	dynamic_cast<RegularPathScan*>(result)->setLeftInput(rightTree);
+   	dynamic_cast<RegularPathScan*>(result)->setLeftBinding(rightBindings.valuebinding);
    } else if (plan->right->op==Plan::RegularPath){
    	result=rightTree;
    	dynamic_cast<RegularPathScan*>(result)->setLeftInput(leftTree);
