@@ -1,0 +1,55 @@
+predicate: http://yago-knowledge.org/resource/isAffiliatedTo
+   nodes: 165890
+   edges: 493085
+   time to build the graph: 965 ms
+   time to construct ferrari: 329 ms
+predicate: http://yago-knowledge.org/resource/owns
+   nodes: 32451
+   edges: 26540
+   time to build the graph: 119 ms
+   time to construct ferrari: 32 ms
+predicate: http://yago-knowledge.org/resource/created
+   nodes: 283226
+   edges: 277067
+   time to build the graph: 1632 ms
+   time to construct ferrari: 340 ms
+predicate: http://yago-knowledge.org/resource/isLocatedIn
+   nodes: 679216
+   edges: 1244656
+   time to build the graph: 3348 ms
+   time to construct ferrari: 1495 ms
+predicate: http://yago-knowledge.org/resource/hasChild
+   nodes: 19389
+   edges: 17260
+   time to build the graph: 66 ms
+   time to construct ferrari: 22 ms
+predicate: http://yago-knowledge.org/resource/influences
+   nodes: 13753
+   edges: 24229
+   time to build the graph: 59 ms
+   time to construct ferrari: 22 ms
+predicate: http://yago-knowledge.org/resource/isConnectedTo
+   nodes: 4370
+   edges: 9164
+   time to build the graph: 34 ms
+   time to construct ferrari: 6 ms
+predicate: http://yago-knowledge.org/resource/isMarriedTo
+   nodes: 9970
+   edges: 4
+   time to build the graph: 71 ms
+   time to construct ferrari: 8 ms
+predicate: http://yago-knowledge.org/resource/dealsWith
+   nodes: 140
+   edges: 500
+   time to build the graph: 0 ms
+   time to construct ferrari: 1 ms
+predicate: http://yago-knowledge.org/resource/hasAcademicAdvisor
+   nodes: 4260
+   edges: 3238
+   time to build the graph: 11 ms
+   time to construct ferrari: 3 ms
+predicate: http://www.w3.org/2000/01/rdf-schema#subClassOf
+   nodes: 5066901
+   edges: 5496932
+   time to build the graph: 19034 ms
+   time to construct ferrari: 6568 ms
