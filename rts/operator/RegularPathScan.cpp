@@ -224,5 +224,4 @@ void RegularPathScan::setFirstSource(Register* r){
 void RegularPathScan::setSecondSource(Register* r){
 	this->secondSource=r;
 }
-
 //---------------------------------------------------------------------------

@@ -9,12 +9,19 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/PlanPrinter.hpp"
+#include "rts/ferrari/Graph.h"
+#include "rts/ferrari/Index.h"
+#include "rts/ferrari/IntervalList.h"
+#include "rts/segment/FactsSegment.hpp"
+#include "rts/segment/FullyAggregatedFactsSegment.hpp"
 #ifdef CONFIG_LINEEDITOR
 #include "lineeditor/LineInput.hpp"
 #endif
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <vector>
+#include <algorithm>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -133,6 +140,39 @@ static void runQuery(Database& db,const string& query,bool explain)
    delete operatorTree;
 }
 //---------------------------------------------------------------------------
+static void prepareFerrari(Database& db){
+   vector<Graph*> graphs;
+   unsigned nodeCount=0;
+   {
+      FullyAggregatedFactsSegment::Scan scan;
+      if (scan.first(db.getFullyAggregatedFacts(Database::Order_Subject_Predicate_Object))) do {
+      	if (scan.getValue1()>nodeCount)
+      		nodeCount=scan.getValue1();
+      } while (scan.next());
+   }
+   nodeCount++;
+   cerr<<"nodes: "<<nodeCount<<endl;
+   {
+      FactsSegment::Scan scan;
+      unsigned current=~0u;
+      vector<pair<unsigned,unsigned> > edge_list;
+      if (scan.first(db.getFacts(Database::Order_Predicate_Subject_Object),0,0,0)) do {
+         // A new node?
+         if (scan.getValue1()!=current) {
+         	// add new Graph
+         	if (~current){
+            	cerr<<edge_list.size()<<endl;
+            	Graph* g = new Graph(edge_list, nodeCount);
+            	graphs.push_back(g);
+         	}
+            current=scan.getValue1();
+         	edge_list.clear();
+         }
+         edge_list.push_back({scan.getValue2(),scan.getValue3()});
+      } while (scan.next());
+   }
+}
+//---------------------------------------------------------------------------
 int main(int argc,char* argv[])
 {
    // Warn first
@@ -155,6 +195,8 @@ int main(int argc,char* argv[])
       cerr << "unable to open database " << argv[1] << endl;
       return 1;
    }
+
+   prepareFerrari(db);
 
    // Execute a single query?
    if (argc==3) {

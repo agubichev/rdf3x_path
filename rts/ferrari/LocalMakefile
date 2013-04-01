@@ -1,0 +1,4 @@
+src_rts_ferrari:=					\
+	rts/ferrari/Graph.cpp			\
+	rts/ferrari/Index.cpp		\
+	rts/ferrari/IntervalList.cpp			
