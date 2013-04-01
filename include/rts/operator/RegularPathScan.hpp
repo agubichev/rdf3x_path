@@ -16,6 +16,7 @@
 #include "rts/runtime/Runtime.hpp"
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "infra/util/VarPool.hpp"
 #include <vector>
 #include <map>
 //---------------------------------------------------------------------------
@@ -29,8 +30,9 @@ class RegularPathScan : public Operator
    private:
    /// The registers for the different parts of the triple
    Register* value1,*value3;
-   /// The different boundings
+   /// The bounds
    bool bound1,bound3;
+   bool const1,const3;
    /// Regular expression
    Modifier pathmode;
    /// Predicate from the regular expression
@@ -40,27 +42,45 @@ class RegularPathScan : public Operator
    /// DB dictionary
    DictionarySegment dict;
    /// Operator-input
-   Operator* left, *right;
-   Register* leftSource,*rightSource;
+   Operator* op1, *op2;
+   Register* firstSource,*secondSource;
 
-   std::vector<Register*> leftBinding,rightBinding;
+   std::vector<Register*> firstBinding,secondBinding;
 
+   /// An entry to store the elements of one of the subtrees
+   struct Entry {
+      /// The key
+      unsigned key;
+      /// The count
+      unsigned count;
+      /// Further values
+      unsigned values[];
+   };
+   /// The pool of  entries
+   VarPool<Entry>* entryPool;
+   // store the results of one of the subtrees
+   std::vector<Entry*> storage;
+   decltype(storage.begin()) storageIterator;
+   // number of elements returned by the right subtree (probe)
+   unsigned rightCount;
+   //
+   void buildStorage();
 
+   //implementations
+   class RPConstant;
+   class RPBounded;
    /// Constructor
-   RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value3,bool bound3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
+   RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
 
-   // Implementations
-   //class RegularPathPrefix;
-   //class RegularPathJoin;
 
    public:
    /// Destructor
    ~RegularPathScan();
 
    /// Produce the first tuple
-   unsigned first();
+   virtual unsigned first();
    /// Produce the next tuple
-   unsigned next();
+   virtual unsigned next();
 
    /// Print the operator tree. Debugging only.
    void print(PlanPrinter& out);
@@ -71,16 +91,17 @@ class RegularPathScan : public Operator
    void getAsyncInputCandidates(Scheduler& /*scheduler*/){};
 
    /// Register the input operator
-   void setLeftInput(Operator* left);
-   void setRightInput(Operator* right);
+   void setFirstInput(Operator* left);
+   void setSecondInput(Operator* right);
 
    // set the source nodes defined by the subplans
-   void setLeftSource(Register* left);
-   void setRightRource(Register* right);
+   void setFirstSource(Register* left);
+   void setSecondSource(Register* right);
    // set the "other" nodes, carried out from the subplans
-   void setLeftBinding(std::vector<Register*>& leftBinding);
+   void setFirstBinding(std::vector<Register*>& firstBinding);
+   void setSecondBinding(std::vector<Register*>& secondBinding);
 
-
+   bool isFirstInputSet();
    /// Create a suitable operator
    static RegularPathScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
 };

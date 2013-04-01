@@ -13,7 +13,7 @@
 using namespace std;
 //---------------------------------------------------------------------------
 // RDF-3X
-// (c) 2013 Andrey  Gubichev, Thomas Neumann.
+// (c) 2013 Andrey Gubichev
 //
 // This work is licensed under the Creative Commons
 // Attribution-Noncommercial-Share Alike 3.0 Unported License. To view a copy
@@ -26,52 +26,133 @@ void RegularPathScan::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
    out.beginOperator("RegularPathScan",expectedOutputCardinality,observedOutputCardinality);
-   out.addScanAnnotation(value1,bound1);
-   out.addScanAnnotation(value3,bound3);
-   if (left) left->print(out);
-   if (right) right->print(out);
+   out.addScanAnnotation(value1,const1);
+   out.addScanAnnotation(value3,const3);
+   if (op1) op1->print(out);
+   if (op2) op2->print(out);
    out.endOperator();
 }
 //---------------------------------------------------------------------------
-RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool bound1,Register* value3,bool bound3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate)
-   : Operator(expectedOutputCardinality),value1(value1),value3(value3),bound1(bound1),bound3(bound3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),left(0),right(0),leftSource(0),rightSource(0)
+RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate)
+   : Operator(expectedOutputCardinality),value1(value1),value3(value3),const1(const1),const3(const3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),op1(0),op2(0),
+     firstSource(0),secondSource(0),entryPool(0),rightCount(0)
    // Constructor
 {
+	bound1=false;
+	bound3=false;
 }
 //---------------------------------------------------------------------------
 RegularPathScan::~RegularPathScan()
    // Destructor
 {
-	if (left)
-		delete left;
-	if (right)
-		delete right;
+	if (op1)
+		delete op1;
+	if (op2)
+		delete op2;
+	if (entryPool)
+		delete entryPool;
+}
+//---------------------------------------------------------------------------
+void RegularPathScan::buildStorage(){
+	storage.reserve(1024);
+   for (unsigned leftCount=op1->first();leftCount;leftCount=op1->next()) {
+      Entry* e=entryPool->alloc();
+      e->key=firstSource->value;
+      for (unsigned i=0;i<firstBinding.size();i++)
+      	e->values[i]=firstBinding[i]->value;
+      e->count=leftCount;
+      storage.push_back(e);
+   }
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::first()
 {
-	cerr<<"first"<<endl;
-	if (left&&left->first()){
-		for (auto t:leftBinding)
-			cerr<<t->value<<endl;
-		cerr<<leftSource->value<<endl;
+	buildStorage();
+
+	if ((rightCount=op2->first())==0){
+		return 0;
 	}
+
+	storageIterator=storage.begin();
 	return next();
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::next()
 {
-	if (left){
-		while (left->next()){
-			for (auto t:leftBinding)
-				cerr<<t->value<<" ";
-			cerr<<leftSource->value<<endl;
-			// HACK
-			this->value3->value=leftBinding[0]->value;
+   /*	if (op1){
+		while (op1->next()&&op2->next()){
+			this->value3->value=firstSource->value;
+			this->value1->value=secondSource->value;
 			return 1;
 		}
 	}
+	*/
+	while (true){
+		for (;storageIterator!=storage.end();++storageIterator){
+			unsigned leftCount=(*storageIterator)->count;
+			firstSource->value=(*storageIterator)->key;
+			// IF ! reachable continue
+			if ((firstSource->value+secondSource->value)%2 != 0){
+				continue;
+			}
+			this->value1->value=firstSource->value;
+			this->value3->value=secondSource->value;
+         for (unsigned index=0,limit=firstBinding.size();index<limit;++index)
+         	firstBinding[index]->value=(*storageIterator)->values[index];
+         ++storageIterator;
+         return rightCount*leftCount;
+		}
 
+		if ((rightCount=op2->next())==0)
+			return 0;
+		storageIterator=storage.begin();
+	}
+	return 0;
+}
+//---------------------------------------------------------------------------
+class RegularPathScan::RPConstant: public RegularPathScan {
+private:
+	/// is the second variable in the triple pattern bounded?
+	/// (bounded = defined in other triple patterns)
+	bool bounded;
+	/// matching along the inverse edges?
+	bool inverse;
+public:
+	RPConstant(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,bool inverse): RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmod,predicate){bounded=false;this->inverse=inverse;};
+	unsigned first();
+	unsigned next();
+
+	void setBounded(bool b){bounded=b;}
+};
+//---------------------------------------------------------------------------
+unsigned RegularPathScan::RPConstant::first(){
+	// ASSUME (assert) value1 is constant
+	if (op1){
+		if (op1->first()){
+			// bounded scan: check that value1 reaches nodes from value3
+			this->value3->value=firstSource->value;
+			cerr<<value1->value<<" "<<value3->value<<endl;
+			return 1;
+		}
+	} else{
+		// unbounded scan for all nodes reachable from value1
+	}
+	return 0;
+}
+//---------------------------------------------------------------------------
+unsigned RegularPathScan::RPConstant::next(){
+	// ASSUME (assert?) value1 is constant
+	if (op1){
+		// bounded scan: check that value1 reaches nodes from value3
+		while (op1->next()){
+			this->value3->value=firstSource->value;
+			// TODO: check reachability here
+			return 1;
+		}
+	} else{
+		// unbounded scan for all nodes reachable from value1
+		// TODO: check reachability here
+	}
 	return 0;
 }
 //---------------------------------------------------------------------------
@@ -80,16 +161,18 @@ RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,
 {
    // Setup the slot bindings
    Register* value1=0,*value3=0;
-   bool bound1=false,bound3=false;
+   bool const1=false,const3=false;
+   bool reverse=false;
    switch (order) {
       case Database::Order_Subject_Predicate_Object:
          value1=subject; value3=object;
-         bound1=subjectBound; bound3=objectBound;
+         const1=subjectBound; const3=objectBound;
          break;
       case Database::Order_Object_Predicate_Subject:
     	   // reachability on reversed edges
          value1=object;  value3=subject;
-         bound1=objectBound;  bound3=subjectBound;
+         const1=objectBound;  const3=subjectBound;
+         reverse=true;
          break;
       case Database::Order_Subject_Object_Predicate:
       case Database::Order_Object_Subject_Predicate:
@@ -98,28 +181,48 @@ RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,
     	  return 0; //never happens
    }
    // Construct the appropriate operator
-   RegularPathScan* result = new RegularPathScan(db,order,value1,bound1,value3,bound3,expectedOutputCardinality,pathmode,predicate);
+   RegularPathScan* result=0;
+
+   if (const1||const3){
+   	result=new RPConstant(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,reverse);
+   }
+   else{
+   	result = new RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate);
+   }
    return result;
 }
-
-void RegularPathScan::setLeftInput(Operator* left){
-	this->left=left;
+//---------------------------------------------------------------------------
+void RegularPathScan::setFirstInput(Operator* op){
+	this->op1=op;
+	if (const1) bound3=true;
+	else bound1=true;
+}
+//---------------------------------------------------------------------------
+void RegularPathScan::setSecondInput(Operator* op){
+	this->op2=op;
+	if (!bound1) bound1=true;
+	else bound3=true;
+}
+//---------------------------------------------------------------------------
+bool RegularPathScan::isFirstInputSet(){
+	return this->op1!=0;
+}
+//---------------------------------------------------------------------------
+void RegularPathScan::setFirstBinding(std::vector<Register*>& firstBinding){
+	this->firstBinding=firstBinding;
+}
+//---------------------------------------------------------------------------
+void RegularPathScan::setSecondBinding(std::vector<Register*>& secondBinding){
+	this->secondBinding=secondBinding;
+	this->entryPool=new VarPool<RegularPathScan::Entry>(firstBinding.size()*sizeof(unsigned));
+}
+//---------------------------------------------------------------------------
+void RegularPathScan::setFirstSource(Register* r){
+	this->firstSource=r;
+}
+//---------------------------------------------------------------------------
+void RegularPathScan::setSecondSource(Register* r){
+	this->secondSource=r;
 }
 
-void RegularPathScan::setRightInput(Operator* right){
-	this->right=right;
-}
-
-void RegularPathScan::setLeftBinding(std::vector<Register*>& leftBinding){
-	this->leftBinding=leftBinding;
-}
-
-void RegularPathScan::setLeftSource(Register* left){
-	this->leftSource=left;
-	// hack!
-	//this->value3=leftBinding[1];
-//	this->value3=left;
-}
-
-
-
+//---------------------------------------------------------------------------

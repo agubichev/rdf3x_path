@@ -318,13 +318,13 @@ void PlanGen::buildRegularPath(const QueryGraph::SubQuery& query,Problem* result
 	plan->op=Plan::RegularPath;
 	plan->right=0;
 	plan->next=0;
-	plan->cardinality=~0u/2;
-	plan->costs=~0u/2;
+	plan->cardinality=~0u;
+	plan->costs=~0u;
 
 	if (!~value3){
 		plan->opArg=Database::Order_Object_Predicate_Subject;
 	}
-	else if (!~value1){
+	else /*if (!~value1)*/{
 		plan->opArg=Database::Order_Subject_Predicate_Object;
 	}
    plan=buildFilters(plans,query,plan,value1,~0u,value3);
@@ -570,9 +570,6 @@ PlanGen::Problem* PlanGen::buildScan(const QueryGraph::SubQuery& query,const Que
     			 ind=it-fullQuery->getQuery().nodes.begin();
     	 }
     	 iter2->left=static_cast<Plan*>(0)+id;
-//    	 cerr<<"left ID: "<<id<<endl;
-//    	 cerr<<"right NODE: "<<fullQuery->getQuery().nodes[ind].predicate<<endl;
-//    	 cerr<<"order: " <<iter->opArg<<" "<<iter->ordering<<endl;
     	 iter2->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Node*>(&(fullQuery->getQuery().nodes[ind])));
       }
    }
@@ -1011,7 +1008,10 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                               p->right=rightPlan;
 			      p->next=0;
                               if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
-                              p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
+                              if (leftPlan->op==Plan::RegularPath||rightPlan->op==Plan::RegularPath)
+                              	p->costs=~0u-1;
+                              else
+                              	p->costs=leftPlan->costs+rightPlan->costs+Costs::mergeJoin(leftPlan->cardinality,rightPlan->cardinality);
                               p->ordering=leftPlan->ordering;
                               addPlan(problem,p);
                               break;
@@ -1027,7 +1027,10 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->right=rightPlan;
 			p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
-                        p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
+                        if (leftPlan->op==Plan::RegularPath||rightPlan->op==Plan::RegularPath)
+                        	p->costs=~0u-1;
+                        else
+                        	p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
                         // Second order
@@ -1038,7 +1041,10 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->right=leftPlan;
 			p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
-                        p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(rightPlan->cardinality,leftPlan->cardinality);
+                        if (leftPlan->op==Plan::RegularPath||rightPlan->op==Plan::RegularPath)
+                        	p->costs=~0u-1;
+                        else
+                        	p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(rightPlan->cardinality,leftPlan->cardinality);
                         p->ordering=~0u;
                         addPlan(problem,p);
                      } else {
@@ -1124,7 +1130,6 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       best=p;
    }
 
-//   best->print(0);
    return best;
 }
 //---------------------------------------------------------------------------

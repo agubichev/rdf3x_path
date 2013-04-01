@@ -162,7 +162,6 @@ static Operator* translateIndexScan(Runtime& runtime,const map<unsigned,Register
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,0,node,subject,constSubject);
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,1,node,predicate,constPredicate);
    resolveScanVariable(runtime,context,projection,bindings.valuebinding,registers.valueregister,2,node,object,constObject);
-   cerr<<"size of binding: "<<bindings.valuebinding.size()<<endl;
    // And return the operator
    if (runtime.hasDifferentialIndex())
       return runtime.getDifferentialIndex().createScan(static_cast<Database::DataOrder>(plan->opArg),subject,constSubject,predicate,constPredicate,object,constObject,plan->cardinality);
@@ -363,7 +362,20 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Reg
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
+static void setRegularPathSubtree(Operator* result, Operator* subTree, vector<Register*> tail, Register* r){
+	RegularPathScan* regularResult= dynamic_cast<RegularPathScan*>(result);
+	if (!regularResult->isFirstInputSet()){
+		regularResult->setFirstInput(subTree);
+		regularResult->setFirstBinding(tail);
+		regularResult->setFirstSource(r);
+	} else {
+		regularResult->setSecondInput(subTree);
+		regularResult->setSecondBinding(tail);
+		regularResult->setSecondSource(r);
+	}
+}
+//---------------------------------------------------------------------------
+static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan*& plan,QueryGraph::Filter* pathfilter)
    // Translate a merge join into an operator tree
 {
    // Get the join variables (if any)
@@ -378,15 +390,11 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    Binding leftBindings,rightBindings;
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left,pathfilter);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right,pathfilter);
+   assert(rightTree);
+   assert(leftTree);
    mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    Operator* result = 0;
-   cerr<<"left binding: ";
-   for (auto t:leftBindings.valuebinding) cerr<<t.first<<" ";
-   cerr<<endl;
-   cerr<<"right binding: ";
-   for (auto t:rightBindings.valuebinding) cerr<<t.first<<" ";
-   cerr<<endl;
 
 	// Prepare the tails
 	vector<Register*> leftTail,rightTail;
@@ -399,13 +407,12 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
 
    if (plan->left->op==Plan::RegularPath){
    	result=leftTree;
-   	RegularPathScan* regularResult = dynamic_cast<RegularPathScan*>(result);
-   	regularResult->setLeftInput(rightTree);
-   	regularResult->setLeftBinding(rightTail);
-   	regularResult->setLeftSource(rightBindings.valuebinding[joinOn]);
+   	plan->op=Plan::RegularPath;
+   	setRegularPathSubtree(leftTree,rightTree,rightTail,rightBindings.valuebinding[joinOn]);
    } else if (plan->right->op==Plan::RegularPath){
    	result=rightTree;
-   	dynamic_cast<RegularPathScan*>(result)->setLeftInput(leftTree);
+   	plan->op=Plan::RegularPath;
+   	setRegularPathSubtree(rightTree,leftTree,leftTail,leftBindings.valuebinding[joinOn]);
    } else {
    	// Build the operator
    	result=new MergeJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,plan->cardinality);
@@ -416,7 +423,7 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
    return result;
 }
 //---------------------------------------------------------------------------
-static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan* plan,QueryGraph::Filter* pathfilter)
+static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,Binding& bindings,const MapRegister& registers,Plan*& plan,QueryGraph::Filter* pathfilter)
    // Translate a hash join into an operator tree
 {
    // Get the join variables (if any)
@@ -442,11 +449,23 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
          rightTail.push_back((*iter).second);
 
    // Build the operator
-   Operator* result=new HashJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
+   Operator* result=0;
 
-   // And apply additional selections if necessary
-   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
+   if (plan->left->op==Plan::RegularPath){
+   	result=leftTree;
+   	plan->op=Plan::RegularPath;
+   	setRegularPathSubtree(result,rightTree,rightTail,rightBindings.valuebinding[joinOn]);
+   }
+   else if (plan->right->op==Plan::RegularPath){
+   	result=rightTree;
+   	plan->op=Plan::RegularPath;
+   	setRegularPathSubtree(result,leftTree,leftTail,leftBindings.valuebinding[joinOn]);
+   } else {
+   	result=new HashJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
 
+   	// And apply additional selections if necessary
+   	result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
+   }
    return result;
 }
 //---------------------------------------------------------------------------
