@@ -15,6 +15,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 //--------------------------------------------------------------------------------------------------
 class Graph {
@@ -26,6 +27,10 @@ private:
   std::vector<unsigned> indeg;            // number of incoming edges
   std::deque<unsigned> leaves;            // leaf nodes
   std::vector<unsigned> roots;            // root nodes
+
+  // mappings to internal IDs and back
+  std::map<unsigned,unsigned> name2id;
+  std::vector<unsigned> id2name;
 public:
   Graph(const std::string& filename);
   Graph(const std::vector<std::pair<unsigned,unsigned> >& edge_list,unsigned nodes);

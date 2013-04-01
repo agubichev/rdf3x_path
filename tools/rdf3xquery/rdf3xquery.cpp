@@ -14,6 +14,10 @@
 #include "rts/ferrari/IntervalList.h"
 #include "rts/segment/FactsSegment.hpp"
 #include "rts/segment/FullyAggregatedFactsSegment.hpp"
+#include "rts/operator/AggregatedIndexScan.hpp"
+#include "rts/segment/DictionarySegment.hpp"
+#include "rts/operator/IndexScan.hpp"
+#include "rts/operator/MergeJoin.hpp"
 #ifdef CONFIG_LINEEDITOR
 #include "lineeditor/LineInput.hpp"
 #endif
@@ -38,6 +42,21 @@ bool smallAddressSpace()
    // Is the address space too small?
 {
    return sizeof(void*)<8;
+}
+//---------------------------------------------------------------------------
+static string lookupId(Database& db,unsigned id)
+   // Lookup a string id
+{
+   const char* start=0,*stop=0; Type::ID type; unsigned subType;
+   db.getDictionary().lookupById(id,start,stop,type,subType);
+   return string(start,stop);
+}
+//---------------------------------------------------------------------------
+static bool contains(const vector<unsigned>& allNodes,unsigned id)
+   // Is the id in the list?
+{
+   vector<unsigned>::const_iterator pos=lower_bound(allNodes.begin(),allNodes.end(),id);
+   return ((pos!=allNodes.end())&&((*pos)==id));
 }
 //---------------------------------------------------------------------------
 static string readInput(istream& in)
@@ -140,7 +159,31 @@ static void runQuery(Database& db,const string& query,bool explain)
    delete operatorTree;
 }
 //---------------------------------------------------------------------------
-static void prepareFerrari(Database& db){
+static void findPredicates(Database& db, vector<unsigned>& predicates){
+	predicates.clear();
+   Register ls,lo,lp,rs,ro,rp;
+   ls.reset(); lp.reset(); lo.reset(); rs.reset(); rp.reset(); ro.reset();
+   AggregatedIndexScan* scan1=AggregatedIndexScan::create(db,Database::Order_Object_Predicate_Subject,0,false,&lp,false,&lo,false,0);
+   AggregatedIndexScan* scan2=AggregatedIndexScan::create(db,Database::Order_Subject_Predicate_Object,&rs,false,&rp,false,0,false,0);
+   vector<Register*> lt,rt; lt.push_back(&lp); rt.push_back(&rp);
+   MergeJoin join(scan1,&lo,lt,scan2,&rs,rt,0);
+
+   map<unsigned,unsigned> predCount;
+   if (join.first()) do {
+      if (lp.value==rp.value){
+      	predCount[lp.value]++;
+      }
+   } while (join.next());
+
+   for (auto t:predCount){
+   	cerr<<lookupId(db,t.first)<<" "<<t.second<<endl;
+   	if (t.second>10)
+   		predicates.push_back(t.first);
+   }
+   cerr<<"#predicates: "<<predicates.size()<<endl;
+}
+//---------------------------------------------------------------------------
+static void prepareFerrari(Database& db,vector<unsigned>& predicates){
    vector<Graph*> graphs;
    unsigned nodeCount=0;
    {
@@ -152,24 +195,44 @@ static void prepareFerrari(Database& db){
    }
    nodeCount++;
    cerr<<"nodes: "<<nodeCount<<endl;
+
    {
       FactsSegment::Scan scan;
       unsigned current=~0u;
+      bool global = true;
+      unsigned seeds=5;
+      unsigned minId=~0u,maxId=0;
       vector<pair<unsigned,unsigned> > edge_list;
       if (scan.first(db.getFacts(Database::Order_Predicate_Subject_Object),0,0,0)) do {
          // A new node?
          if (scan.getValue1()!=current) {
          	// add new Graph
-         	if (~current){
-            	cerr<<edge_list.size()<<endl;
+         	if (~current&&contains(predicates,current)){
+            	//cerr<<edge_list.size()<<endl;
+            	cerr<<"predicate: "<<lookupId(db,current)<<endl;
+            	Timestamp t1;
             	Graph* g = new Graph(edge_list, nodeCount);
-            	graphs.push_back(g);
+            	Timestamp t2;
+            	cerr<<"   time to build the graph: "<<t2-t1<<" ms"<<endl;
+            	// construct an index
+            	Timestamp a;
+            	Index bm(g, seeds, ~0u, global);
+            	bm.build();
+            	Timestamp b;
+            	cerr<<"   time to construct ferrari: "<<b-a<<" ms"<<endl;
+            	//cerr<<"min, max: "<<minId<<" "<<maxId<<endl;
+            	delete g;
          	}
             current=scan.getValue1();
          	edge_list.clear();
+         	minId=~0u; maxId=0;
          }
+         minId=std::min(std::min(scan.getValue3(),scan.getValue2()),minId);
+         maxId=std::max(std::max(scan.getValue3(),scan.getValue2()),maxId);
+
          edge_list.push_back({scan.getValue2(),scan.getValue3()});
       } while (scan.next());
+
    }
 }
 //---------------------------------------------------------------------------
@@ -196,7 +259,9 @@ int main(int argc,char* argv[])
       return 1;
    }
 
-   prepareFerrari(db);
+   vector<unsigned> predicates;
+   findPredicates(db,predicates);
+   prepareFerrari(db,predicates);
 
    // Execute a single query?
    if (argc==3) {
