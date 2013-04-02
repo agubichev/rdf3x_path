@@ -34,9 +34,9 @@ void RegularPathScan::print(PlanPrinter& out)
    out.endOperator();
 }
 //---------------------------------------------------------------------------
-RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate,Index* ferrari)
+RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate,bool inverse,Index* ferrari)
    : Operator(expectedOutputCardinality),value1(value1),value3(value3),const1(const1),const3(const3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),ferrari(ferrari),op1(0),op2(0),
-     firstSource(0),secondSource(0),entryPool(0),rightCount(0)
+     firstSource(0),secondSource(0),inverse(inverse),entryPool(0),rightCount(0)
    // Constructor
 {
 	bound1=false;
@@ -69,6 +69,7 @@ void RegularPathScan::buildStorage(){
 unsigned RegularPathScan::first()
 {
 	buildStorage();
+	cerr<<"inverse: "<<inverse<<endl;
 
 	if ((rightCount=op2->first())==0){
 		return 0;
@@ -93,11 +94,18 @@ unsigned RegularPathScan::next()
 			unsigned leftCount=(*storageIterator)->count;
 			firstSource->value=(*storageIterator)->key;
 			// IF ! reachable continue
-			if ((firstSource->value+secondSource->value)%2 != 0){
-				continue;
-			}
 			this->value1->value=firstSource->value;
 			this->value3->value=secondSource->value;
+
+			if (!inverse){
+//				cerr<<value1->value<<" "<<value3->value<<endl;
+				if (!ferrari->reachable(value1->value,value3->value))
+					continue;
+			} else {
+				if (!ferrari->reachable(value3->value,value1->value))
+					continue;
+			}
+
          for (unsigned index=0,limit=firstBinding.size();index<limit;++index)
          	firstBinding[index]->value=(*storageIterator)->values[index];
          ++storageIterator;
@@ -116,10 +124,8 @@ private:
 	/// is the second variable in the triple pattern bounded?
 	/// (bounded = defined in other triple patterns)
 	bool bounded;
-	/// matching along the inverse edges?
-	bool inverse;
 public:
-	RPConstant(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,bool inverse,Index* ferrari): RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmod,predicate,ferrari){bounded=false;this->inverse=inverse;};
+	RPConstant(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,bool inverse,Index* ferrari): RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmod,predicate,inverse,ferrari){bounded=false;};
 	unsigned first();
 	unsigned next();
 
@@ -201,7 +207,7 @@ RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,
    	result=new RPConstant(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,reverse,ferrari);
    }
    else{
-   	result = new RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,ferrari);
+   	result = new RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,reverse,ferrari);
    }
    return result;
 }

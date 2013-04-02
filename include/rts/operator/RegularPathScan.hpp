@@ -42,11 +42,12 @@ class RegularPathScan : public Operator
    Database::DataOrder order;
    /// DB dictionary
    DictionarySegment dict;
-   /// Ferrari index
    Index* ferrari;
    /// Operator-input
    Operator* op1, *op2;
    Register* firstSource,*secondSource;
+	/// matching along the inverse edges?
+	bool inverse;
 
    std::vector<Register*> firstBinding,secondBinding;
 
@@ -73,7 +74,7 @@ class RegularPathScan : public Operator
    class RPConstant;
    class RPBounded;
    /// Constructor
-   RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,Index* ferrari);
+   RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,bool inverse,Index* ferrari);
 
 
    public:
