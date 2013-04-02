@@ -125,6 +125,9 @@ bool Index::reachable_bfs(unsigned x, unsigned y) {
 //--------------------------------------------------------------------------------------------------
 bool Index::reachable(unsigned x, unsigned y) {
   ++queryId;
+
+  x=g->getNodeId(x);
+  y=g->getNodeId(y);
   if (!intervals[x]) {
     return x == y;
   }

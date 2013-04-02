@@ -17,6 +17,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "infra/util/VarPool.hpp"
+#include "rts/ferrari/Index.h"
 #include <vector>
 #include <map>
 //---------------------------------------------------------------------------
@@ -41,6 +42,8 @@ class RegularPathScan : public Operator
    Database::DataOrder order;
    /// DB dictionary
    DictionarySegment dict;
+   /// Ferrari index
+   Index* ferrari;
    /// Operator-input
    Operator* op1, *op2;
    Register* firstSource,*secondSource;
@@ -70,7 +73,7 @@ class RegularPathScan : public Operator
    class RPConstant;
    class RPBounded;
    /// Constructor
-   RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
+   RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,Index* ferrari);
 
 
    public:
@@ -103,7 +106,7 @@ class RegularPathScan : public Operator
 
    bool isFirstInputSet();
    /// Create a suitable operator
-   static RegularPathScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,Modifier pathmod,unsigned predicate);
+   static RegularPathScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,Index* ferrari);
 };
 //---------------------------------------------------------------------------
 

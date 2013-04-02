@@ -15,10 +15,12 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "rts/ferrari/Index.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <map>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -121,7 +123,8 @@ static void runQuery(DifferentialIndex& diffIndex,const string& query)
    // Build a physical plan
    TemporaryDictionary tempDict(diffIndex);
    Runtime runtime(diffIndex.getDatabase(),&diffIndex,&tempDict);
-   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,false);
+   map<unsigned,Index*> ferrari;
+   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,ferrari,false);
    dynamic_cast<ResultsPrinter*>(operatorTree)->setOutputMode(ResultsPrinter::Embedded);
 
    // Execute it
@@ -379,7 +382,8 @@ static void explainQuery(DifferentialIndex& diffIndex,const string& query)
         << "indent operator arguments expectedcardinality" << endl;
    Runtime runtime(diffIndex.getDatabase(),&diffIndex);
    ExplainPrinter out(runtime);
-   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,false);
+   map<unsigned,Index*> ferrari;
+   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,ferrari,false);
    dynamic_cast<ResultsPrinter*>(operatorTree)->getInput()->print(out);
    cout << "\\." << endl;
    cout.flush();

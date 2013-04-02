@@ -11,7 +11,9 @@
 // San Francisco, California, 94105, USA.
 //---------------------------------------------------------------------------
 #include <set>
+#include <map>
 #include <vector>
+#include "rts/ferrari/Index.h"
 //---------------------------------------------------------------------------
 class Operator;
 class Plan;
@@ -37,9 +39,9 @@ class CodeGen
    /// Collect all variables contained in a plan
    static void collectVariables(std::set<unsigned>& variables,Plan* plan);
    /// Translate an execution plan into an operator tree without output generation
-   static Operator* translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,Output& output);
+   static Operator* translateIntern(Runtime& runtime,const QueryGraph& query,Plan* plan,Output& output,std::map<unsigned,Index*>& ferrari);
    /// Translate an execution plan into an operator tree
-   static Operator* translate(Runtime& runtime,const QueryGraph& query,Plan* plan,bool silent=false);
+   static Operator* translate(Runtime& runtime,const QueryGraph& query,Plan* plan,std::map<unsigned,Index*>& ferrari,bool silent=false);
 };
 //---------------------------------------------------------------------------
 #endif

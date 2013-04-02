@@ -25,6 +25,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <vector>
+#include <map>
 #include <algorithm>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -98,7 +99,7 @@ static void showHelp()
         << "exit          exits the query interface" << endl;
 }
 //---------------------------------------------------------------------------
-static void runQuery(Database& db,const string& query,bool explain)
+static void runQuery(Database& db,const string& query,bool explain, map<unsigned,Index*>& ferrari)
    // Evaluate a query
 {
    QueryGraph queryGraph;
@@ -139,7 +140,7 @@ static void runQuery(Database& db,const string& query,bool explain)
 
    // Build a physical plan
    Runtime runtime(db);
-   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,false);
+   Operator* operatorTree=CodeGen().translate(runtime,queryGraph,plan,ferrari,false);
 
    // Explain if requested
    if (explain) {
@@ -183,7 +184,7 @@ static void findPredicates(Database& db, vector<unsigned>& predicates){
    cerr<<"#predicates: "<<predicates.size()<<endl;
 }
 //---------------------------------------------------------------------------
-static void prepareFerrari(Database& db,vector<unsigned>& predicates){
+static void prepareFerrari(Database& db,vector<unsigned>& predicates,map<unsigned,Index*>& ferrari){
    vector<Graph*> graphs;
    unsigned nodeCount=0;
    {
@@ -195,7 +196,6 @@ static void prepareFerrari(Database& db,vector<unsigned>& predicates){
    }
    nodeCount++;
    cerr<<"nodes: "<<nodeCount<<endl;
-
    {
       FactsSegment::Scan scan;
       unsigned current=~0u;
@@ -209,19 +209,20 @@ static void prepareFerrari(Database& db,vector<unsigned>& predicates){
          	// add new Graph
          	if (~current&&contains(predicates,current)){
             	//cerr<<edge_list.size()<<endl;
-            	cerr<<"predicate: "<<lookupId(db,current)<<endl;
+            	cerr<<"predicate: "<<lookupId(db,current)<<" "<<current<<endl;
             	Timestamp t1;
             	Graph* g = new Graph(edge_list, nodeCount);
             	Timestamp t2;
             	cerr<<"   time to build the graph: "<<t2-t1<<" ms"<<endl;
             	// construct an index
             	Timestamp a;
-            	Index bm(g, seeds, ~0u, global);
-            	bm.build();
+            	Index *bm = new Index(g, seeds, ~0u, global);
+            	bm->build();
+            	ferrari[current]=bm;
             	Timestamp b;
             	cerr<<"   time to construct ferrari: "<<b-a<<" ms"<<endl;
             	//cerr<<"min, max: "<<minId<<" "<<maxId<<endl;
-            	delete g;
+            	//delete g;
          	}
             current=scan.getValue1();
          	edge_list.clear();
@@ -234,6 +235,7 @@ static void prepareFerrari(Database& db,vector<unsigned>& predicates){
       } while (scan.next());
 
    }
+   cerr<<"number of indexes: "<<ferrari.size()<<endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])
@@ -260,8 +262,9 @@ int main(int argc,char* argv[])
    }
 
    vector<unsigned> predicates;
+   map<unsigned,Index*> ferrari;
    findPredicates(db,predicates);
-   prepareFerrari(db,predicates);
+   prepareFerrari(db,predicates,ferrari);
 
    // Execute a single query?
    if (argc==3) {
@@ -272,10 +275,10 @@ int main(int argc,char* argv[])
       }
       string query=readInput(in);
       if (query.substr(0,8)=="explain ") {
-         runQuery(db,query.substr(8),true);
+         runQuery(db,query.substr(8),true,ferrari);
       } else {
-    	 Timestamp t1;
-         runQuery(db,query,false);
+    	   Timestamp t1;
+         runQuery(db,query,false,ferrari);
          Timestamp t2;
          cerr<<"TIME: "<<t2-t1<<" ms"<<endl;
       }
@@ -293,9 +296,9 @@ int main(int argc,char* argv[])
          } else if (query=="help") {
             showHelp();
          } else if (query.substr(0,8)=="explain ") {
-            runQuery(db,query.substr(8),true);
+            runQuery(db,query.substr(8),true,ferrari);
          } else {
-            runQuery(db,query,false);
+            runQuery(db,query,false,ferrari);
          }
          cout.flush();
       }

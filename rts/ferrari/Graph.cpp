@@ -141,12 +141,12 @@ Graph::Graph(const std::vector<std::pair<unsigned,unsigned> >& edge_list,unsigne
 
 	for (auto edge: edge_list){
 		if (!visited.count(edge.first)){
-			strongcomponent(edge.first,adjList,visited,lowlink,stack,setnodes,scc,id,sccId);
+			strongcomponent(edge.first,adjList,visited,lowlink,stack,setnodes,name2id,id,sccId);
 		}
 	}
 	for (auto edge:edge_list){
-		if (scc[edge.first]!=scc[edge.second]){
-			edges.push_back({scc[edge.first],scc[edge.second]});
+		if (name2id[edge.first]!=name2id[edge.second]){
+			edges.push_back({name2id[edge.first],name2id[edge.second]});
 		}
 	}
 
@@ -154,8 +154,13 @@ Graph::Graph(const std::vector<std::pair<unsigned,unsigned> >& edge_list,unsigne
 	eliminateDuplicates(edges);
 
 	n=sccId+1;
+	id2name.resize(n);
+	for (auto id:name2id){
+		id2name[id.second]=id.first;
+	}
 	cerr<<"   nodes: "<<n<<endl;
 	cerr<<"   edges: "<<edges.size()<<endl;
+	cerr<<"   name2id: "<<name2id.size()<<endl;
 
 	nb = std::vector<std::vector<unsigned> >(n);
    pd = std::vector<std::vector<unsigned> >(n);

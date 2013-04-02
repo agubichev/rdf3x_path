@@ -17,6 +17,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <iostream>
 //--------------------------------------------------------------------------------------------------
 class Graph {
 private:
@@ -58,6 +59,10 @@ public:
 
   inline unsigned num_nodes() const {
     return n;
+  }
+
+  inline unsigned getNodeId(unsigned n) {
+	  return name2id[n];
   }
 };
 //--------------------------------------------------------------------------------------------------

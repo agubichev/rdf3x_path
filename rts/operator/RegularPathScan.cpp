@@ -4,6 +4,7 @@
 #include "rts/segment/FactsSegment.hpp"
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/segment/DictionarySegment.hpp"
+#include "rts/ferrari/Graph.h"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -33,8 +34,8 @@ void RegularPathScan::print(PlanPrinter& out)
    out.endOperator();
 }
 //---------------------------------------------------------------------------
-RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate)
-   : Operator(expectedOutputCardinality),value1(value1),value3(value3),const1(const1),const3(const3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),op1(0),op2(0),
+RegularPathScan::RegularPathScan(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmode,unsigned predicate,Index* ferrari)
+   : Operator(expectedOutputCardinality),value1(value1),value3(value3),const1(const1),const3(const3),pathmode(pathmode),predicate(predicate),order(order),dict(db.getDictionary()),ferrari(ferrari),op1(0),op2(0),
      firstSource(0),secondSource(0),entryPool(0),rightCount(0)
    // Constructor
 {
@@ -118,7 +119,7 @@ private:
 	/// matching along the inverse edges?
 	bool inverse;
 public:
-	RPConstant(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,bool inverse): RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmod,predicate){bounded=false;this->inverse=inverse;};
+	RPConstant(Database& db,Database::DataOrder order,Register* value1,bool const1,Register* value3,bool const3,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,bool inverse,Index* ferrari): RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmod,predicate,ferrari){bounded=false;this->inverse=inverse;};
 	unsigned first();
 	unsigned next();
 
@@ -131,13 +132,18 @@ unsigned RegularPathScan::RPConstant::first(){
 		if (op1->first()){
 			// bounded scan: check that value1 reaches nodes from value3
 			this->value3->value=firstSource->value;
-			cerr<<value1->value<<" "<<value3->value<<endl;
-			return 1;
+			if (!inverse&&ferrari->reachable(value1->value,value3->value)){
+				return 1;
+			}
+			if (inverse&&ferrari->reachable(value3->value,value1->value)){
+				cerr<<value1->value<<" "<<value3->value<<endl;
+				return 1;
+			}
 		}
 	} else{
 		// unbounded scan for all nodes reachable from value1
 	}
-	return 0;
+	return next();
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::RPConstant::next(){
@@ -146,8 +152,16 @@ unsigned RegularPathScan::RPConstant::next(){
 		// bounded scan: check that value1 reaches nodes from value3
 		while (op1->next()){
 			this->value3->value=firstSource->value;
-			// TODO: check reachability here
-			return 1;
+			//cerr<<value1->value<<" "<<value3->value<<endl;
+			//assert(ferrari->get_graph()!=0);
+			Graph* g=ferrari->get_graph();
+			//cerr<<"bound: "<<const1<<" "<<const3<<endl;
+
+			//cerr<<g->getNodeId(value1->value)<<" "<<g->getNodeId(value3->value)<<endl;
+			if (!inverse&&ferrari->reachable(value1->value,value3->value))
+				return 1;
+			if (inverse&&ferrari->reachable(value3->value,value1->value))
+				return 1;
 		}
 	} else{
 		// unbounded scan for all nodes reachable from value1
@@ -156,7 +170,7 @@ unsigned RegularPathScan::RPConstant::next(){
 	return 0;
 }
 //---------------------------------------------------------------------------
-RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* object,bool objectBound,double expectedOutputCardinality,Modifier pathmode,unsigned predicate)
+RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,Register* subject,bool subjectBound,Register* object,bool objectBound,double expectedOutputCardinality,Modifier pathmode,unsigned predicate,Index* ferrari)
    // Constructor
 {
    // Setup the slot bindings
@@ -184,10 +198,10 @@ RegularPathScan* RegularPathScan::create(Database& db,Database::DataOrder order,
    RegularPathScan* result=0;
 
    if (const1||const3){
-   	result=new RPConstant(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,reverse);
+   	result=new RPConstant(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,reverse,ferrari);
    }
    else{
-   	result = new RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate);
+   	result = new RegularPathScan(db,order,value1,const1,value3,const3,expectedOutputCardinality,pathmode,predicate,ferrari);
    }
    return result;
 }
