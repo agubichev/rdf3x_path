@@ -106,6 +106,11 @@ class RegularPathScan : public Operator
    void setSecondBinding(std::vector<Register*>& secondBinding);
 
    bool isFirstInputSet();
+   bool isSecondInputSet();
+
+   // swap two subtrees so that the "cheapest" one is on the left
+   void checkAndSwap();
+
    /// Create a suitable operator
    static RegularPathScan* create(Database& db,Database::DataOrder order,Register* subjectRegister,bool subjectBound,Register* objectRegister,bool objectBound,double expectedOutputCardinality,Modifier pathmod,unsigned predicate,Index* ferrari);
 };

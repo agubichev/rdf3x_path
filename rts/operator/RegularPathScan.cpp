@@ -59,8 +59,9 @@ void RegularPathScan::buildStorage(){
    for (unsigned leftCount=op1->first();leftCount;leftCount=op1->next()) {
       Entry* e=entryPool->alloc();
       e->key=firstSource->value;
-      for (unsigned i=0;i<firstBinding.size();i++)
+      for (unsigned i=0;i<firstBinding.size();i++){
       	e->values[i]=firstBinding[i]->value;
+      }
       e->count=leftCount;
       storage.push_back(e);
    }
@@ -68,6 +69,7 @@ void RegularPathScan::buildStorage(){
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::first()
 {
+	cerr<<"before storage"<<endl;
 	buildStorage();
 	cerr<<"inverse: "<<inverse<<endl;
 
@@ -102,6 +104,7 @@ unsigned RegularPathScan::next()
 				if (!ferrari->reachable(value1->value,value3->value))
 					continue;
 			} else {
+				//cerr<<value3->value<<" "<<value1->value<<endl;
 				if (!ferrari->reachable(value3->value,value1->value))
 					continue;
 			}
@@ -142,7 +145,7 @@ unsigned RegularPathScan::RPConstant::first(){
 				return 1;
 			}
 			if (inverse&&ferrari->reachable(value3->value,value1->value)){
-				cerr<<value1->value<<" "<<value3->value<<endl;
+				//cerr<<value1->value<<" "<<value3->value<<endl;
 				return 1;
 			}
 		}
@@ -160,7 +163,7 @@ unsigned RegularPathScan::RPConstant::next(){
 			this->value3->value=firstSource->value;
 			//cerr<<value1->value<<" "<<value3->value<<endl;
 			//assert(ferrari->get_graph()!=0);
-			Graph* g=ferrari->get_graph();
+			//Graph* g=ferrari->get_graph();
 			//cerr<<"bound: "<<const1<<" "<<const3<<endl;
 
 			//cerr<<g->getNodeId(value1->value)<<" "<<g->getNodeId(value3->value)<<endl;
@@ -222,19 +225,24 @@ void RegularPathScan::setSecondInput(Operator* op){
 	this->op2=op;
 	if (!bound1) bound1=true;
 	else bound3=true;
+//	cerr<<"expected card "<<op1->getExpectedOutputCardinality()<<" "<<op2->getExpectedOutputCardinality()<<endl;
 }
 //---------------------------------------------------------------------------
 bool RegularPathScan::isFirstInputSet(){
 	return this->op1!=0;
 }
 //---------------------------------------------------------------------------
+bool RegularPathScan::isSecondInputSet(){
+	return this->op2!=0;
+}
+//---------------------------------------------------------------------------
 void RegularPathScan::setFirstBinding(std::vector<Register*>& firstBinding){
 	this->firstBinding=firstBinding;
+	this->entryPool=new VarPool<RegularPathScan::Entry>(firstBinding.size()*sizeof(unsigned));
 }
 //---------------------------------------------------------------------------
 void RegularPathScan::setSecondBinding(std::vector<Register*>& secondBinding){
 	this->secondBinding=secondBinding;
-	this->entryPool=new VarPool<RegularPathScan::Entry>(firstBinding.size()*sizeof(unsigned));
 }
 //---------------------------------------------------------------------------
 void RegularPathScan::setFirstSource(Register* r){
@@ -245,3 +253,16 @@ void RegularPathScan::setSecondSource(Register* r){
 	this->secondSource=r;
 }
 //---------------------------------------------------------------------------
+void RegularPathScan::checkAndSwap(){
+	if (op1->getExpectedOutputCardinality()>op2->getExpectedOutputCardinality()){
+		swap(firstSource,secondSource);
+		swap(firstBinding,secondBinding);
+		swap(op1,op2);
+		inverse=!inverse;
+		if (entryPool){
+			/// Do it only once
+			delete entryPool;
+			entryPool=new VarPool<RegularPathScan::Entry>(firstBinding.size()*sizeof(unsigned));
+		}
+	}
+}

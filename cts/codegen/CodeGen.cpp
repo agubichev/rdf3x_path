@@ -363,16 +363,24 @@ static Operator* translateNestedLoopJoin(Runtime& runtime,const map<unsigned,Reg
    return result;
 }
 //---------------------------------------------------------------------------
-static void setRegularPathSubtree(Operator* result, Operator* subTree, vector<Register*> tail, Register* r){
+static void setRegularPathSubtree(Operator* result, Operator* subTree, vector<Register*> tail, Register* r,unsigned slot){
 	RegularPathScan* regularResult= dynamic_cast<RegularPathScan*>(result);
-	if (!regularResult->isFirstInputSet()){
+	cerr<<"slot "<<slot<<endl;
+	switch(slot){
+	case 0:
 		regularResult->setFirstInput(subTree);
 		regularResult->setFirstBinding(tail);
 		regularResult->setFirstSource(r);
-	} else {
+		break;
+	case 2:
 		regularResult->setSecondInput(subTree);
 		regularResult->setSecondBinding(tail);
 		regularResult->setSecondSource(r);
+		break;
+	}
+
+	if (regularResult->isFirstInputSet()&&regularResult->isSecondInputSet()){
+		regularResult->checkAndSwap();
 	}
 }
 //---------------------------------------------------------------------------
@@ -407,13 +415,26 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
 			rightTail.push_back((*iter).second);
 
    if (plan->left->op==Plan::RegularPath){
+   	cerr<<"reachability on the left"<<endl;
+      const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->left->right);
+      cerr<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
+
    	result=leftTree;
    	plan->op=Plan::RegularPath;
-   	setRegularPathSubtree(leftTree,rightTree,rightTail,rightBindings.valuebinding[joinOn]);
+   	plan->right=plan->left->right;
+   	unsigned slot=(node.subject==joinOn)?0:2;
+   	setRegularPathSubtree(leftTree,rightTree,rightTail,rightBindings.valuebinding[joinOn],slot);
    } else if (plan->right->op==Plan::RegularPath){
+   	cerr<<"reachability on the right"<<endl;
+      const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right->right);
+      cerr<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
+
    	result=rightTree;
    	plan->op=Plan::RegularPath;
-   	setRegularPathSubtree(rightTree,leftTree,leftTail,leftBindings.valuebinding[joinOn]);
+   	plan->right=plan->right->right;
+   	unsigned slot=(node.subject==joinOn)?0:2;
+
+   	setRegularPathSubtree(rightTree,leftTree,leftTail,leftBindings.valuebinding[joinOn],slot);
    } else {
    	// Build the operator
    	result=new MergeJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,plan->cardinality);
@@ -442,25 +463,41 @@ static Operator* translateHashJoin(Runtime& runtime,const map<unsigned,Register*
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
+   Register *regJoin=0;
    for (map<unsigned,Register*>::const_iterator iter=leftBindings.valuebinding.begin(),limit=leftBindings.valuebinding.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          leftTail.push_back((*iter).second);
+      else
+      	regJoin=(*iter).second;
    for (map<unsigned,Register*>::const_iterator iter=rightBindings.valuebinding.begin(),limit=rightBindings.valuebinding.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          rightTail.push_back((*iter).second);
 
    // Build the operator
    Operator* result=0;
+	cerr<<"hash join on: "<<joinOn<<" variable number "<<regJoin-runtime.getRegister(0)<<endl;
 
    if (plan->left->op==Plan::RegularPath){
    	result=leftTree;
+   	cerr<<"reachability on the left"<<endl;
+      const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->left->right);
+      cerr<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
    	plan->op=Plan::RegularPath;
-   	setRegularPathSubtree(result,rightTree,rightTail,rightBindings.valuebinding[joinOn]);
+   	plan->right=plan->left->right;
+   	unsigned slot=(node.subject==joinOn)?0:2;
+
+   	setRegularPathSubtree(result,rightTree,rightTail,rightBindings.valuebinding[joinOn],slot);
    }
    else if (plan->right->op==Plan::RegularPath){
    	result=rightTree;
+   	cerr<<"reachability on the right"<<endl;
+      const QueryGraph::Node& node=*reinterpret_cast<QueryGraph::Node*>(plan->right->right);
+      cerr<<node.subject<<" "<<node.predicate<<" "<<node.object<<endl;
+   	plan->right=plan->right->right;
    	plan->op=Plan::RegularPath;
-   	setRegularPathSubtree(result,leftTree,leftTail,leftBindings.valuebinding[joinOn]);
+   	unsigned slot=(node.subject==joinOn)?0:2;
+
+   	setRegularPathSubtree(result,leftTree,leftTail,leftBindings.valuebinding[joinOn],slot);
    } else {
    	result=new HashJoin(leftTree,leftBindings.valuebinding[joinOn],leftTail,rightTree,rightBindings.valuebinding[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
 
@@ -904,6 +941,7 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
 
       // Remember the output registers
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter){
+      	cerr<<"proj: "<<*iter<<endl;
          if (bindings.valuebinding.count(*iter)){
          	output.order.push_back(0);
             output.valueoutput.push_back(bindings.valuebinding[*iter]);

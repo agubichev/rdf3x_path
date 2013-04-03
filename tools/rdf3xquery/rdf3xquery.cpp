@@ -178,7 +178,7 @@ static void findPredicates(Database& db, vector<unsigned>& predicates){
 
    for (auto t:predCount){
    	cerr<<lookupId(db,t.first)<<" "<<t.second<<endl;
-   	if (t.second>10)
+   	if (t.second>10 && t.first<10)
    		predicates.push_back(t.first);
    }
    cerr<<"#predicates: "<<predicates.size()<<endl;
@@ -278,9 +278,10 @@ int main(int argc,char* argv[])
          runQuery(db,query.substr(8),true,ferrari);
       } else {
     	   Timestamp t1;
+    	   for (unsigned i=0; i < 10; i++)
          runQuery(db,query,false,ferrari);
          Timestamp t2;
-         cerr<<"TIME: "<<t2-t1<<" ms"<<endl;
+         cerr<<"TIME: "<<(t2-t1)/10<<" ms"<<endl;
       }
    } else {
       // No, accept user input

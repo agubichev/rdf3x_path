@@ -1129,7 +1129,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       p->ordering=~0u;
       best=p;
    }
-
+   best->print(0);
    return best;
 }
 //---------------------------------------------------------------------------
