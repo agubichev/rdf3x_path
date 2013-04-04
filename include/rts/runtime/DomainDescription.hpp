@@ -19,7 +19,7 @@ class DomainDescription
 {
    protected:
    /// The desired bloom filter size
-   static const unsigned filterSize = 128;
+   static const unsigned filterSize = 256;
    /// An filter entry
    typedef unsigned long FilterEntry;
    /// Bits in a filter entry

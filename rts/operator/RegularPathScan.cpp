@@ -29,6 +29,8 @@ void RegularPathScan::print(PlanPrinter& out)
    out.beginOperator("RegularPathScan",expectedOutputCardinality,observedOutputCardinality);
    out.addScanAnnotation(value1,const1);
    out.addScanAnnotation(value3,const3);
+   out.addScanAnnotation(firstSource,const1);
+   out.addScanAnnotation(secondSource,const3);
    if (op1) op1->print(out);
    if (op2) op2->print(out);
    out.endOperator();
@@ -56,7 +58,20 @@ RegularPathScan::~RegularPathScan()
 //---------------------------------------------------------------------------
 void RegularPathScan::buildStorage(){
 	storage.reserve(1024);
+
+   // Prepare relevant domain information
+   vector<Register*> domainRegs;
+   if (secondSource->domain){
+      domainRegs.push_back(secondSource);
+   }
+   ObservedDomainDescription observedDomain;
+
    for (unsigned leftCount=op1->first();leftCount;leftCount=op1->next()) {
+   	vector<unsigned> reachable;
+   	ferrari->get_reachable(firstSource->value,reachable);
+   	for (auto node: reachable)
+   		observedDomain.add(node);
+
       Entry* e=entryPool->alloc();
       e->key=firstSource->value;
       for (unsigned i=0;i<firstBinding.size();i++){
@@ -65,13 +80,13 @@ void RegularPathScan::buildStorage(){
       e->count=leftCount;
       storage.push_back(e);
    }
+   // Update the domains
+   secondSource->domain->restrictTo(observedDomain);
 }
 //---------------------------------------------------------------------------
 unsigned RegularPathScan::first()
 {
-	cerr<<"before storage"<<endl;
 	buildStorage();
-	cerr<<"inverse: "<<inverse<<endl;
 
 	if ((rightCount=op2->first())==0){
 		return 0;

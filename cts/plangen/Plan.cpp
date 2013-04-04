@@ -1,4 +1,5 @@
 #include "cts/plangen/Plan.hpp"
+#include "rts/database/Database.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -34,7 +35,22 @@ void Plan::print(unsigned indent) const
    for (unsigned index=0;index<indent;index++)
       cout << ' ';
    switch (op) {
-      case IndexScan: cout << "IndexScan"; break;
+      case IndexScan: cout << "IndexScan [" ;
+      	switch (opArg){
+      	case Database::Order_Subject_Predicate_Object:
+      		cout<<"Subject_Predicate_Object]";break;
+      	case Database::Order_Subject_Object_Predicate:
+      		cout<<"Subject_Object_Predicate] ";break;
+      	case Database::Order_Predicate_Subject_Object:
+      		cout<<"Predicate_Subject_Object]"; break;
+      	case Database::Order_Predicate_Object_Subject:
+      		cout<<"Predicate_Object_Subject]"; break;
+      	case Database::Order_Object_Predicate_Subject:
+      		cout<<"Object_Predicate_Subject]"; break;
+      	case Database::Order_Object_Subject_Predicate:
+      		cout<<"Object_Subject_Predicate]"; break;
+      	}
+      break;
       case AggregatedIndexScan: cout << "AggregatedIndexScan"; break;
       case FullyAggregatedIndexScan: cout << "FullyAggregatedIndexScan"; break;
       case NestedLoopJoin: cout << "NestedLoopJoin"; break;

@@ -126,11 +126,9 @@ unsigned ResultsPrinter::first()
 
 	  for (vector<Register*>::const_iterator iter=output.valueoutput.begin(),limit=output.valueoutput.end();iter!=limit;++iter) {
          unsigned id=(*iter)->value;
-         cerr<<id<<" ";
          results.push_back(id);
          if (~id) stringCache[id];
       }
-	  cerr<<endl;
 
       for (vector<VectorRegister*>::const_iterator iter=output.pathoutput.begin(),limit=output.pathoutput.end();iter!=limit;++iter){
     	  list<unsigned>& path=(*iter)->value;

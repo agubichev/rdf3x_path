@@ -68,6 +68,7 @@ private:
 
   // reachable ids
   std::vector<unsigned> id_;
+  std::vector<unsigned> id2node;
 
   // intervals
   std::vector<IntervalList*> intervals;
@@ -105,6 +106,7 @@ public:
   bool reachable_dfs(unsigned x, unsigned y);
   bool reachable_bfs(unsigned x, unsigned y);
   unsigned reset();
+  void get_reachable(unsigned x, std::vector<unsigned>& nodes);
 
   // helpers
   bool path(unsigned x, unsigned y, std::vector<unsigned>* p);

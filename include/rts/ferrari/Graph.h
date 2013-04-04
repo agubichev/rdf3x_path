@@ -64,6 +64,10 @@ public:
   inline unsigned getNodeId(unsigned n) {
 	  return name2id[n];
   }
+
+  inline unsigned getNodeById(unsigned id){
+	  return id2name[id];
+  }
 };
 //--------------------------------------------------------------------------------------------------
 #endif /* GRAPH_H_ */

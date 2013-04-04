@@ -360,6 +360,8 @@ void PlanGen::buildIndexScan(const QueryGraph::SubQuery& query,Database::DataOrd
    }
    unsigned pages=1+static_cast<unsigned>(db->getFacts(order).getPages()*(static_cast<double>(scanned)/static_cast<double>(db->getFacts(order).getCardinality())));
    plan->costs=Costs::seekBtree()+Costs::scan(pages);
+   if (plan->opArg==Database::Order_Predicate_Object_Subject)
+   	plan->costs=Costs::seekBtree()+1.3*Costs::scan(pages);
 
    // Apply filters
    plan=buildFilters(plans,query,plan,value1,value2,value3);
@@ -1129,7 +1131,7 @@ Plan* PlanGen::translate(Database& db,const QueryGraph& query)
       p->ordering=~0u;
       best=p;
    }
-   best->print(0);
+
    return best;
 }
 //---------------------------------------------------------------------------

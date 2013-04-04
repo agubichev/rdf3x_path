@@ -56,6 +56,7 @@ void Index::build() {
 
   // reachable ids
   id_ = std::vector<unsigned>(n_, ~0u);
+  id2node = std::vector<unsigned>(n_, ~0u);
 
   // topological ordering
   ordered_nodes_ = std::vector<unsigned>();
@@ -79,6 +80,23 @@ void Index::build() {
 bool Index::reachable_dfs(unsigned x, unsigned y) {
   ++queryId;
   return __reachable_dfs(x, y);
+}
+//--------------------------------------------------------------------------------------------------
+void Index::get_reachable(unsigned x, std::vector<unsigned>& nodes){
+	x=g->getNodeId(x);
+
+	if (!intervals[x])
+		return;
+
+	IntervalList* intlist = intervals[x];
+	const std::vector<unsigned>& lower=intlist->get_lower();
+	const std::vector<unsigned>& upper=intlist->get_upper();
+
+	for (unsigned i=0; i < lower.size(); i++){
+		for (unsigned node=lower[i]; node<=upper[i];++node){
+			nodes.push_back(g->getNodeById(id2node[node]));
+		}
+	}
 }
 //--------------------------------------------------------------------------------------------------
 bool Index::__reachable_dfs(unsigned x, unsigned y) {
@@ -313,6 +331,7 @@ void Index::assign_sketches_global() {
     if (mid[v] < ~0u && next_child[v] >= nb->size()) {
       stack.pop_back();
       id_[v] = _id++;
+      id2node[_id-1]=v;
       intervals[v] = new IntervalList(mid[v], id_[v]);
     } else {
       mid[v] = _id;
