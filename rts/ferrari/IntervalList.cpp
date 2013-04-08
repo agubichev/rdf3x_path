@@ -8,7 +8,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //--------------------------------------------------------------------------------------------------
-#include "rts/ferrari/IntervalList.h"
+#include "rts/ferrari/IntervalList.hpp"
 //--------------------------------------------------------------------------------------------------
 #include <algorithm>
 #include <assert.h>

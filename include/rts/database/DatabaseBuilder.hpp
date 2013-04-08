@@ -169,6 +169,9 @@ class DatabaseBuilder
    /// Compute the path selectivities
    void computePathSelectivity(std::vector<unsigned>& back_selectivity, std::vector<unsigned>& forw_selectivity);
 
+   /// Compute FERRARI reachability index (after loading)
+   void computeFerrari();
+
 };
 //---------------------------------------------------------------------------
 #endif

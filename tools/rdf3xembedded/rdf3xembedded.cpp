@@ -15,7 +15,7 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/TemporaryDictionary.hpp"
 #include "rts/segment/DictionarySegment.hpp"
-#include "rts/ferrari/Index.h"
+#include "rts/ferrari/Index.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>

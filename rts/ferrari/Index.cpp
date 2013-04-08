@@ -8,7 +8,7 @@
 // or send a letter to Creative Commons, 171 Second Street, Suite 300,
 // San Francisco, California, 94105, USA.
 //--------------------------------------------------------------------------------------------------
-#include "rts/ferrari/Index.h"
+#include "rts/ferrari/Index.hpp"
 //--------------------------------------------------------------------------------------------------
 #include <assert.h>
 #include <iostream>

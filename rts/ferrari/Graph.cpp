@@ -11,7 +11,7 @@
  * @date 2012/10/31
  */
 //--------------------------------------------------------------------------------------------------
-#include "rts/ferrari/Graph.h"
+#include "rts/ferrari/Graph.hpp"
 #include <assert.h>
 #include <fstream>
 #include <iostream>

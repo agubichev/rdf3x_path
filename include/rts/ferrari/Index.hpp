@@ -11,8 +11,8 @@
 #ifndef FERRARI_INDEX_H_
 #define FERRARI_INDEX_H_
 //--------------------------------------------------------------------------------------------------
-#include "rts/ferrari/Graph.h"
-#include "rts/ferrari/IntervalList.h"
+#include "rts/ferrari/Graph.hpp"
+#include "rts/ferrari/IntervalList.hpp"
 //--------------------------------------------------------------------------------------------------
 #include <set>
 #include <vector>

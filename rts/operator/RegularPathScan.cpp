@@ -4,7 +4,7 @@
 #include "rts/segment/FactsSegment.hpp"
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/segment/DictionarySegment.hpp"
-#include "rts/ferrari/Graph.h"
+#include "rts/ferrari/Graph.hpp"
 #include <iostream>
 #include <vector>
 #include <map>

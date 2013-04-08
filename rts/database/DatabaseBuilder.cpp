@@ -11,6 +11,7 @@
 #include "rts/segment/PathSelectivitySegment.hpp"
 #include "rts/segment/Segment.hpp"
 #include "rts/pathstat/PathSelectivity.hpp"
+#include "rts/segment/FerrariSegment.hpp"
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -553,5 +554,13 @@ void DatabaseBuilder::computePathSelectivity(vector<unsigned>& back_selectivity,
    // compute path scan selectivity
 {
 	PathSelectivity().computeSelectivity(out,back_selectivity,forw_selectivity);
+}
+//---------------------------------------------------------------------------
+void DatabaseBuilder::computeFerrari()
+	// compute FERRARI reachability
+{
+	FerrariSegment* seg=new FerrariSegment(out.getFirstPartition());
+	out.getFirstPartition().addSegment(seg,DatabasePartition::Tag_Ferrari);
+	seg->computeFerrari(out);
 }
 //---------------------------------------------------------------------------

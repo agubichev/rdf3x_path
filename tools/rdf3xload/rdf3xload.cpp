@@ -654,6 +654,13 @@ static void loadStatistics(DatabaseBuilder& builder,TempFile& facts)
    builder.computeExactStatistics(tmp.getFile().c_str());
 }
 //---------------------------------------------------------------------------
+static void loadFerrari(DatabaseBuilder& builder)
+	// Compute Ferrari reachability index
+{
+	cout<<"Loading reachability index..."<<endl;
+	builder.computeFerrari();
+}
+//---------------------------------------------------------------------------
 static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)
    // Load the database
 {
@@ -668,6 +675,9 @@ static void loadDatabase(const char* name,TempFile& facts,TempFile& stringTable)
 
    // Compute the statistics
    loadStatistics(builder,facts);
+
+   // Compute FERRARI
+   loadFerrari(builder);
 }
 //---------------------------------------------------------------------------
 int main(int argc,char* argv[])

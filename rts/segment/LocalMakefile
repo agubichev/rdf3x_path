@@ -5,6 +5,7 @@ src_rts_segment:=					\
 	rts/segment/DictionarySegment.cpp		\
 	rts/segment/ExactStatisticsSegment.cpp		\
 	rts/segment/FactsSegment.cpp			\
+	rts/segment/FerrariSegment.cpp	\
 	rts/segment/FullyAggregatedFactsSegment.cpp	\
 	rts/segment/PredicateSetSegment.cpp		\
 	rts/segment/SegmentInventorySegment.cpp		\

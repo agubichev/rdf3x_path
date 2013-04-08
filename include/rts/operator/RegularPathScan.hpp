@@ -17,7 +17,7 @@
 #include "cts/infra/QueryGraph.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include "infra/util/VarPool.hpp"
-#include "rts/ferrari/Index.h"
+#include "rts/ferrari/Index.hpp"
 #include <vector>
 #include <map>
 //---------------------------------------------------------------------------

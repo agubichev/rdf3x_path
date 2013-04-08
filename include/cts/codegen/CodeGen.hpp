@@ -13,7 +13,7 @@
 #include <set>
 #include <map>
 #include <vector>
-#include "rts/ferrari/Index.h"
+#include "rts/ferrari/Index.hpp"
 //---------------------------------------------------------------------------
 class Operator;
 class Plan;

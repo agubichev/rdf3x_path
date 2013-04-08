@@ -10,6 +10,7 @@
 #include "rts/segment/SpaceInventorySegment.hpp"
 #include "rts/segment/PredicateSetSegment.hpp"
 #include "rts/segment/PathSelectivitySegment.hpp"
+#include "rts/segment/FerrariSegment.hpp"
 #include <cassert>
 //---------------------------------------------------------------------------
 // RDF-3X
@@ -78,9 +79,9 @@ void DatabasePartition::open()
    for (vector<pair<Segment::Type,unsigned> >::const_iterator iter=segmentTypes.begin(),limit=segmentTypes.end();iter!=limit;++iter) {
       Segment* seg=0;
       switch ((*iter).first) {
-      	 case Segment::Unused: segments.push_back(pair<Segment*,unsigned>(0,0)); continue;
-	 	 case Segment::Type_SpaceInventory: seg=new SpaceInventorySegment(*this); break;
-	 	 case Segment::Type_SegmentInventory: seg=new SegmentInventorySegment(*this); break;
+      	case Segment::Unused: segments.push_back(pair<Segment*,unsigned>(0,0)); continue;
+	 	   case Segment::Type_SpaceInventory: seg=new SpaceInventorySegment(*this); break;
+	 	   case Segment::Type_SegmentInventory: seg=new SegmentInventorySegment(*this); break;
          case Segment::Type_Facts: seg=new FactsSegment(*this); break;
          case Segment::Type_AggregatedFacts: seg=new AggregatedFactsSegment(*this); break;
          case Segment::Type_FullyAggregatedFacts: seg=new FullyAggregatedFactsSegment(*this); break;
@@ -89,6 +90,7 @@ void DatabasePartition::open()
          case Segment::Type_BTree: break; // Pseudo-Type
          case Segment::Type_PredicateSet: seg=new PredicateSetSegment(*this); break;
          case Segment::Type_PathSelectivity: seg=new PathSelectivitySegment(*this); break;
+         case Segment::Type_Ferrari: seg=new FerrariSegment(*this); break;
       }
       assert(seg);
       seg->id=id++;

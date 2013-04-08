@@ -26,7 +26,7 @@ class Segment
 {
    public:
    /// Known segment types
-   enum Type { Unused, Type_SpaceInventory, Type_SegmentInventory, Type_Facts, Type_AggregatedFacts, Type_FullyAggregatedFacts, Type_Dictionary, Type_ExactStatistics, Type_BTree, Type_PredicateSet, Type_PathSelectivity };
+   enum Type { Unused, Type_SpaceInventory, Type_SegmentInventory, Type_Facts, Type_AggregatedFacts, Type_FullyAggregatedFacts, Type_Dictionary, Type_ExactStatistics, Type_BTree, Type_PredicateSet, Type_PathSelectivity, Type_Ferrari };
 
    private:
    /// The containing database partition
