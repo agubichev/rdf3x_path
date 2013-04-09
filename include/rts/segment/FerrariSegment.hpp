@@ -15,6 +15,7 @@
 class AggregatedFactsSegment;
 class Database;
 class DatabaseBuilder;
+class Graph;
 //---------------------------------------------------------------------------
 /// FERRARI reachability index segment
 class FerrariSegment : public Segment
@@ -22,15 +23,23 @@ class FerrariSegment : public Segment
 
 private:
    friend class DatabaseBuilder;
+   /// Position of the directory
+   unsigned directoryPage;
 
+   // compute the index
    void computeFerrari(Database& db);
+   // serialize the graph
+   unsigned packGraph(Graph* g);
+
    FerrariSegment(const FerrariSegment&);
    void operator=(const FerrariSegment&);
-
+   /// Refresh segment info stored in the partition
+   void refreshInfo();
    public:
    FerrariSegment(DatabasePartition& partition);
    /// Get type
    Type getType() const;
+   class Dumper;
 
 };
 

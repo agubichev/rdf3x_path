@@ -11,6 +11,7 @@
 #ifndef FERRARI_GRAPH_H_
 #define FERRARI_GRAPH_H_
 //--------------------------------------------------------------------------------------------------
+#include "rts/segment/FerrariSegment.hpp"
 #include <deque>
 #include <map>
 #include <string>
@@ -32,6 +33,8 @@ private:
   // mappings to internal IDs and back
   std::map<unsigned,unsigned> name2id;
   std::vector<unsigned> id2name;
+
+  friend class FerrariSegment;
 public:
   Graph(const std::string& filename);
   Graph(const std::vector<std::pair<unsigned,unsigned> >& edge_list,unsigned nodes);
